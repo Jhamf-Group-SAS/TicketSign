@@ -2,11 +2,7 @@ version: "3.7"
 
 services:
   ticketsign-client:
-    image: ghcr.io/${GITHUB_USER}/ticketsign-client:latest # Ajustar con usuario real
-    build:
-      context: ./client
-      args:
-        - VITE_API_URL=https://api-ticketsign.jhamf.com
+    image: ghcr.io/JhamfGit/ticketsign-client:latest
     networks:
       - jhamfstack
     deploy:
@@ -23,7 +19,7 @@ services:
         - traefik.http.routers.ticketsign.tls.certresolver=letsencryptresolver
 
   ticketsign-server:
-    image: ghcr.io/${GITHUB_USER}/ticketsign-server:latest # Ajustar con usuario real
+    image: ghcr.io/JhamfGit/ticketsign-server:latest
     networks:
       - jhamfstack
     environment:
