@@ -193,8 +193,8 @@ function App() {
                     className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-all active:scale-[0.98]"
                     onClick={() => setView('home')}
                 >
-                    <div className="bg-[#0f172a] p-1.5 rounded-xl shadow-lg border border-slate-200 dark:border-white/10 group-hover:shadow-blue-500/10 transition-all">
-                        <img src="/logo.png" className="h-8 w-auto object-contain" alt="jhamf" />
+                    <div className="bg-white p-1.5 rounded-xl shadow-lg border border-slate-200 dark:border-white/10 group-hover:shadow-blue-500/10 transition-all">
+                        <img src="/logo-jhamf.png" className="h-8 w-auto object-contain" alt="jhamf" />
                     </div>
                     <div className="hidden sm:block leading-tight">
                         <span className="font-black text-lg tracking-tight block text-slate-900 dark:text-white transition-colors">Ticket<span className="text-blue-500">Sign</span></span>

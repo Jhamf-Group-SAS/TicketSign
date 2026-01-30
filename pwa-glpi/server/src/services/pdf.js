@@ -18,7 +18,7 @@ export const generateMaintenancePDF = async (actData) => {
   const isPreventive = actData.type === 'PREVENTIVO';
 
   // Obtener la ruta del logo
-  const logoPath = path.join(process.cwd(), 'src', 'assets', 'logo.png');
+  const logoPath = path.join(process.cwd(), 'src', 'assets', 'logo-jhamf.png');
   let logoBase64 = '';
   try {
     const logoBuffer = fs.readFileSync(logoPath);
@@ -242,7 +242,7 @@ export const generateConsolidatedPDF = async (clientName, acts) => {
   const page = await browser.newPage();
 
   // Obtener la ruta del logo
-  const logoPath = path.join(process.cwd(), 'src', 'assets', 'logo.png');
+  const logoPath = path.join(process.cwd(), 'src', 'assets', 'logo-jhamf.png');
   let logoBase64 = '';
   try {
     const logoBuffer = fs.readFileSync(logoPath);

@@ -43,8 +43,8 @@ const Login = ({ onLoginSuccess }) => {
 
             <div className="w-full max-w-sm space-y-8 relative z-10 animate-in fade-in zoom-in-95 duration-700">
                 <div className="text-center">
-                    <div className="bg-[#0f172a] p-3 rounded-2xl shadow-xl dark:shadow-2xl border border-slate-200 dark:border-white/20 inline-block mb-6">
-                        <img src="/logo.png" className="h-12 w-auto object-contain" alt="Logo" />
+                    <div className={`bg-white p-3 rounded-2xl shadow-xl dark:shadow-2xl border border-slate-200 dark:border-white/20 inline-block mb-6`}>
+                        <img src="/logo-jhamf.png" className="h-12 w-auto object-contain" alt="Logo" />
                     </div>
                     <h2 className="text-3xl font-black tracking-tighter text-slate-900 dark:text-white transition-colors">Ticket<span className="text-blue-500">Sign</span></h2>
                     <p className="text-slate-400 dark:text-slate-500 text-sm mt-2 font-medium uppercase tracking-[0.2em] transition-colors">Acceso Técnicos TI</p>
