@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './store/db'
 import MaintenanceForm from './components/MaintenanceForm'
 import MaintenancePreview from './components/MaintenancePreview'
@@ -13,9 +14,11 @@ function App() {
     const [user, setUser] = useState(null)
     const [view, setView] = useState('home') // home, form-preventive, form-corrective, preview, consolidated
     const [selectedAct, setSelectedAct] = useState(null)
-    const [pendingActs, setPendingActs] = useState([])
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const [theme, setTheme] = useState(localStorage.getItem('glpi_pro_theme') || 'dark')
+
+    // Reactive query for recent acts
+    const pendingActs = useLiveQuery(() => db.acts.orderBy('createdAt').reverse().limit(10).toArray()) || []
 
     useEffect(() => {
         // Apply theme
@@ -38,17 +41,11 @@ function App() {
         window.addEventListener('online', handleOnline)
         window.addEventListener('offline', handleOffline)
 
-        const loadPending = async () => {
-            const acts = await db.acts.orderBy('createdAt').reverse().limit(10).toArray()
-            setPendingActs(acts)
-        }
-        loadPending()
-
         return () => {
             window.removeEventListener('online', handleOnline)
             window.removeEventListener('offline', handleOffline)
         }
-    }, [theme, view])
+    }, [theme])
 
     const renderHome = () => (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -196,7 +193,7 @@ function App() {
                     className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-all active:scale-[0.98]"
                     onClick={() => setView('home')}
                 >
-                    <div className="bg-white p-1.5 rounded-xl shadow-lg border border-slate-200 dark:border-white/10 group-hover:shadow-blue-500/10 transition-all">
+                    <div className="bg-[#0f172a] p-1.5 rounded-xl shadow-lg border border-slate-200 dark:border-white/10 group-hover:shadow-blue-500/10 transition-all">
                         <img src="/logo.png" className="h-8 w-auto object-contain" alt="jhamf" />
                     </div>
                     <div className="hidden sm:block leading-tight">
