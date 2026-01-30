@@ -32,6 +32,8 @@ jobs:
           context: ./pwa-glpi/client
           push: true
           tags: ghcr.io/jhamfgit/ticketsign-client:latest
+          build-args: |
+            VITE_API_URL=https://api-ticketsign.jhamf.com
       
       - name: Build and push server image
         uses: docker/build-push-action@v5
