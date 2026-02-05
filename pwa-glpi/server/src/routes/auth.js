@@ -50,8 +50,7 @@ router.post('/login', async (req, res) => {
                 {
                     username,
                     displayName: fullName,
-                    glpi_session: sessionToken,
-                    role: 'tecnico'
+                    glpi_session: sessionToken
                 },
                 process.env.JWT_SECRET,
                 { expiresIn: '30d' }
@@ -60,7 +59,7 @@ router.post('/login', async (req, res) => {
             return res.status(200).json({
                 status: 'success',
                 token,
-                user: { username, name: fullName, role: 'tecnico' }
+                user: { username, name: fullName }
             });
         }
 
@@ -68,14 +67,14 @@ router.post('/login', async (req, res) => {
         // Fallback para usuario de prueba SOLAMENTE si falla GLPI y es el usuario admin
         if (username === 'admin' && password === 'admin123') {
             const token = jwt.sign(
-                { username, role: 'tecnico', is_test: true },
+                { username, is_test: true },
                 process.env.JWT_SECRET,
                 { expiresIn: '30d' }
             );
             return res.status(200).json({
                 status: 'success',
                 token,
-                user: { username: 'Admin Prueba', role: 'tecnico' }
+                user: { username: 'Admin Prueba' }
             });
         }
 

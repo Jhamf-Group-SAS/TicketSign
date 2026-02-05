@@ -1,12 +1,18 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { clsx } from 'clsx'
+import { twMerge } from 'tailwind-merge'
 import { db } from './store/db'
 import MaintenanceForm from './components/MaintenanceForm'
 import MaintenancePreview from './components/MaintenancePreview'
 import ClientConsolidated from './components/ClientConsolidated'
 import Login from './components/Login'
 import HistoryList from './components/HistoryList'
-import { Plus, History, Wifi, WifiOff, Settings, Calendar, User, ClipboardList, LogOut, Users, FileText } from 'lucide-react'
+import TaskBoard from './components/TaskBoard'
+import DashboardSummary from './components/DashboardSummary'
+import { Plus, History, Wifi, WifiOff, Settings, Calendar, User, ClipboardList, LogOut, Users, FileText, Kanban, LayoutDashboard, Bell } from 'lucide-react'
+
+const cn = (...inputs) => twMerge(clsx(inputs));
 
 function App() {
     const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -15,7 +21,13 @@ function App() {
     const [view, setView] = useState('home') // home, form-preventive, form-corrective, preview, consolidated
     const [selectedAct, setSelectedAct] = useState(null)
     const [isMenuOpen, setIsMenuOpen] = useState(false)
+    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
     const [theme, setTheme] = useState(localStorage.getItem('glpi_pro_theme') || 'dark')
+    const [notifications, setNotifications] = useState([])
+
+    // Referencias para manejo de estado sin re-render
+    const processingRef = useRef(new Set());
+    const audioContextRef = useRef(null);
 
     // Reactive query for recent acts
     const pendingActs = useLiveQuery(() => db.acts.orderBy('createdAt').reverse().limit(10).toArray()) || []
@@ -47,49 +59,170 @@ function App() {
         }
     }, [theme])
 
+    // Inicializar audio y permisos en la primera interacción
+    useEffect(() => {
+        const initAudioAndPermissions = () => {
+            // Audio Context
+            if (!audioContextRef.current) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    audioContextRef.current = new AudioContext();
+                }
+            }
+
+            if (audioContextRef.current) {
+                audioContextRef.current.resume().then(() => {
+                    console.log('AudioContext resumed successfully');
+                }).catch(e => console.error('AudioContext resume failed', e));
+            }
+
+            // Notification Permissions
+            if ('Notification' in window && Notification.permission !== 'granted') {
+                Notification.requestPermission();
+            }
+
+            // Remover listeners solo si el audio está corriendo o si ya se interactuó
+            window.removeEventListener('click', initAudioAndPermissions);
+            window.removeEventListener('touchstart', initAudioAndPermissions);
+        };
+
+        window.addEventListener('click', initAudioAndPermissions);
+        window.addEventListener('touchstart', initAudioAndPermissions);
+
+        return () => {
+            window.removeEventListener('click', initAudioAndPermissions);
+            window.removeEventListener('touchstart', initAudioAndPermissions);
+        };
+    }, []);
+
+    // Sonido de notificación robusto (Doble Beep Alerta)
+    const playNotificationSound = () => {
+        try {
+            if (!audioContextRef.current) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioContextRef.current = new AudioContext();
+            }
+
+            const ctx = audioContextRef.current;
+            if (!ctx) return;
+
+            if (ctx.state === 'suspended') ctx.resume();
+
+            // Oscilador para el primer beep
+            const oscillator1 = ctx.createOscillator();
+            const gainNode1 = ctx.createGain();
+            oscillator1.connect(gainNode1);
+            gainNode1.connect(ctx.destination);
+
+            oscillator1.type = 'sawtooth'; // Onda más notoria que sine
+            oscillator1.frequency.setValueAtTime(900, ctx.currentTime);
+            gainNode1.gain.setValueAtTime(0.6, ctx.currentTime);
+            gainNode1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+
+            oscillator1.start(ctx.currentTime);
+            oscillator1.stop(ctx.currentTime + 0.15);
+
+            // Oscilador para el segundo beep (más agudo, breve pausa)
+            const oscillator2 = ctx.createOscillator();
+            const gainNode2 = ctx.createGain();
+            oscillator2.connect(gainNode2);
+            gainNode2.connect(ctx.destination);
+
+            oscillator2.type = 'sawtooth';
+            oscillator2.frequency.setValueAtTime(1200, ctx.currentTime + 0.2);
+            gainNode2.gain.setValueAtTime(0.6, ctx.currentTime + 0.2);
+            gainNode2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+
+            oscillator2.start(ctx.currentTime + 0.2);
+            oscillator2.stop(ctx.currentTime + 0.4);
+
+        } catch (e) {
+            console.error("Error reproduciendo sonido:", e);
+        }
+    };
+
+
+
+    // Global Reminder Watcher Mejorado y Anti-Duplicados
+    useEffect(() => {
+        const checkReminders = async () => {
+            const now = new Date().getTime();
+
+            const tasksWithReminders = await db.tasks
+                .where('reminder_at')
+                .notEqual('')
+                .and(t => !t.reminder_sent && t.status !== 'COMPLETADA' && t.status !== 'CANCELADA')
+                .toArray();
+
+            for (const task of tasksWithReminders) {
+                if (processingRef.current.has(task.id)) continue;
+
+                const reminderTime = new Date(task.reminder_at).getTime();
+
+                if (reminderTime <= now) {
+                    processingRef.current.add(task.id);
+
+                    try {
+                        playNotificationSound();
+
+                        const newNotification = {
+                            id: Date.now() + Math.random(),
+                            title: 'Recordatorio de Tarea',
+                            message: `Es hora de: ${task.title}`,
+                            time: 'Ahora',
+                            type: 'warning',
+                            task_id: task.id
+                        };
+
+                        setNotifications(prev => {
+                            const exists = prev.some(n => n.task_id === task.id && n.time === 'Ahora');
+                            if (exists) return prev;
+                            return [newNotification, ...prev];
+                        });
+
+                        if ('Notification' in window && Notification.permission === 'granted') {
+                            try {
+                                const notification = new Notification('⏰ Recordatorio de Tarea', {
+                                    body: `Es hora de: ${task.title}`,
+                                    icon: '/logo.png',
+                                    vibrate: [200, 100, 200],
+                                    tag: `task-${task.id}`,
+                                    requireInteraction: true
+                                });
+
+                                notification.onclick = (e) => {
+                                    e.preventDefault();
+                                    window.focus();
+                                    notification.close();
+                                    setTimeout(() => setView('kanban'), 100);
+                                };
+                            } catch (e) {
+                                console.error("Error lanzando notificación nativa:", e);
+                            }
+                        }
+
+                        await db.tasks.update(task.id, { reminder_sent: true });
+                    } catch (err) {
+                        console.error("Error procesando recordatorio:", err);
+                    }
+
+                    setTimeout(() => {
+                        if (processingRef.current) processingRef.current.delete(task.id);
+                    }, 5000);
+                }
+            }
+        };
+
+        const interval = setInterval(checkReminders, 10000);
+        checkReminders();
+
+        return () => clearInterval(interval);
+    }, []);
+
     const renderHome = () => (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Hero Section / Quick Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <button
-                    onClick={() => setView('form-preventive')}
-                    className="group relative overflow-hidden bg-gradient-to-br from-blue-600 to-blue-800 p-8 rounded-3xl shadow-2xl flex flex-col items-start gap-4 transition-all hover:scale-[1.02] active:scale-95 border border-white/10"
-                >
-                    <div className="bg-white/10 p-4 rounded-2xl group-hover:bg-white/20 transition-colors">
-                        <ClipboardList className="text-white" size={32} />
-                    </div>
-                    <div className="text-left text-white">
-                        <span className="text-xl font-bold block">Preventivo</span>
-                        <p className="text-sm text-blue-100/70">Mantenimiento de rutina.</p>
-                    </div>
-                </button>
-
-                <button
-                    onClick={() => setView('form-corrective')}
-                    className="group relative overflow-hidden bg-gradient-to-br from-orange-500 to-red-600 p-8 rounded-3xl shadow-2xl flex flex-col items-start gap-4 transition-all hover:scale-[1.02] active:scale-95 border border-white/10"
-                >
-                    <div className="bg-white/10 p-4 rounded-2xl group-hover:bg-white/20 transition-colors">
-                        <Plus className="text-white" size={32} />
-                    </div>
-                    <div className="text-left text-white">
-                        <span className="text-xl font-bold block">Correctivo</span>
-                        <p className="text-sm text-red-100/70">Fallas y diagnósticos.</p>
-                    </div>
-                </button>
-
-                <button
-                    onClick={() => setView('history')}
-                    className="group relative overflow-hidden bg-white dark:bg-slate-900/40 p-8 rounded-3xl shadow-xl dark:shadow-none flex flex-col items-start gap-4 transition-all hover:scale-[1.02] active:scale-95 border border-slate-200 dark:border-white/5"
-                >
-                    <div className="bg-purple-500/10 p-4 rounded-2xl group-hover:bg-purple-500/20 transition-colors">
-                        <History size={32} className="text-purple-500" />
-                    </div>
-                    <div className="text-left">
-                        <span className="text-xl font-bold block text-slate-900 dark:text-white">Historial</span>
-                        <p className="text-sm text-slate-400 dark:text-slate-500">Bitácora de procesos.</p>
-                    </div>
-                </button>
-            </div>
+            {/* New Dashboard Summary Section */}
+            <DashboardSummary onNavigate={setView} />
 
             {/* Consolidated Reports Quick Link */}
             <div className="bg-white dark:bg-slate-900/40 p-6 rounded-[2.5rem] border border-slate-200 dark:border-white/5 backdrop-blur-md flex items-center justify-between group cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all active:scale-95 shadow-sm dark:shadow-xl" onClick={() => setView('consolidated')}>
@@ -109,12 +242,12 @@ function App() {
 
             {/* Recent List */}
             <section>
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-slate-400 dark:text-slate-300 flex items-center gap-2 transition-colors">
-                        <History size={18} />
+                <div className="flex justify-between items-center mb-4 px-2">
+                    <h3 className="font-black text-xs uppercase tracking-[0.2em] text-blue-500 flex items-center gap-2 transition-colors">
+                        <History size={14} />
                         Actividad Reciente
                     </h3>
-                    <button onClick={() => setView('history')} className="text-xs text-blue-500 font-bold hover:underline transition-all">Ver todo</button>
+                    <button onClick={() => setView('history')} className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-blue-500 transition-all">Ver todo</button>
                 </div>
 
                 <div className="space-y-3">
@@ -125,37 +258,39 @@ function App() {
                                 setSelectedAct(act)
                                 setView('preview')
                             }}
-                            className="bg-slate-900/30 backdrop-blur-sm p-5 rounded-2xl border border-white/5 hover:bg-slate-800/50 transition-all group cursor-pointer active:scale-[0.98]"
+                            className="bg-white/40 dark:bg-slate-900/10 backdrop-blur-sm p-5 rounded-[2rem] border border-slate-200 dark:border-white/5 hover:bg-white dark:hover:bg-slate-900/40 transition-all group cursor-pointer active:scale-[0.99] shadow-sm"
                         >
                             <div className="flex justify-between items-start mb-3">
                                 <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-500' : 'bg-orange-500/10 text-orange-500'}`}>
-                                        <ClipboardList size={18} />
+                                    <div className={`p-2.5 rounded-xl ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-500' : 'bg-orange-500/10 text-orange-500'}`}>
+                                        <ClipboardList size={20} />
                                     </div>
                                     <div>
-                                        <h4 className="font-bold text-sm">Ticket #{act.glpi_ticket_id || '---'}</h4>
-                                        <p className="text-xs text-slate-500 flex items-center gap-2">
+                                        <h4 className="font-black text-sm text-slate-900 dark:text-white">Ticket #{act.glpi_ticket_id || '---'}</h4>
+                                        <p className="text-[11px] text-slate-500 font-bold flex items-center gap-2">
                                             {act.client_name || 'Sin cliente'}
-                                            <span className="text-[9px] text-blue-400 font-bold bg-blue-500/5 px-2 py-0.5 rounded border border-blue-500/10">
+                                            <span className="text-[9px] text-blue-400 font-black bg-blue-500/10 px-2.5 py-0.5 rounded-lg border border-blue-500/20">
                                                 {act.inventory_number || 'S/E'}
                                             </span>
                                         </p>
                                     </div>
                                 </div>
-                                <span className={`text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-widest ${act.status === 'BORRADOR' ? 'bg-slate-800 text-slate-400' :
-                                    act.status === 'PENDIENTE_SINCRONIZACION' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
-                                        'bg-green-500/10 text-green-500 border border-green-500/20'
+                                <span className={`text-[9px] px-3 py-1 rounded-full font-black uppercase tracking-widest border ${act.status === 'BORRADOR'
+                                    ? 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-950 dark:text-slate-500 dark:border-white/5'
+                                    : act.status === 'PENDIENTE_SINCRONIZACION'
+                                        ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
+                                        : 'bg-green-500/10 text-green-600 border-green-500/20'
                                     }`}>
                                     {act.status}
                                 </span>
                             </div>
-                            <div className="flex justify-between items-center pt-3 border-t border-slate-800/50">
-                                <div className="flex gap-4">
-                                    <span className="flex items-center gap-1 text-[10px] text-slate-500">
-                                        <Calendar size={12} /> {new Date(act.createdAt).toLocaleDateString()}
+                            <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-white/5 mt-1">
+                                <div className="flex gap-5">
+                                    <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                        <Calendar size={12} className="text-blue-500" /> {new Date(act.createdAt).toLocaleDateString()}
                                     </span>
-                                    <span className="flex items-center gap-1 text-[10px] text-slate-500">
-                                        <User size={12} /> {act.technical_name || 'Técnico'}
+                                    <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                        <User size={12} className="text-blue-500" /> {act.technical_name || 'Técnico'}
                                     </span>
                                 </div>
                             </div>
@@ -164,7 +299,7 @@ function App() {
                         <div className="p-12 text-center bg-slate-900/20 border-2 border-dashed border-slate-800/50 rounded-3xl">
                             <ClipboardList className="mx-auto text-slate-700 mb-2" size={40} />
                             <p className="text-slate-500 text-sm">No hay registros aún.</p>
-                            <p className="text-slate-700 text-[11px] mt-1">Inicia un mantenimiento arriba.</p>
+                            <p className="text-slate-700 text-[11px] mt-1">Realiza un servicio desde el menú superior.</p>
                         </div>
                     )}
                 </div>
@@ -179,6 +314,14 @@ function App() {
         }} />
     }
 
+    const navItems = [
+        { id: 'home', label: 'Inicio', icon: LayoutDashboard },
+        { id: 'form-preventive', label: 'Preventivo', icon: ClipboardList, color: 'text-blue-500', bg: 'hover:bg-blue-500/10' },
+        { id: 'form-corrective', label: 'Correctivo', icon: Plus, color: 'text-orange-500', bg: 'hover:bg-orange-500/10' },
+        { id: 'kanban', label: 'Tareas', icon: Kanban, color: 'text-indigo-500', bg: 'hover:bg-indigo-500/10' },
+        { id: 'history', label: 'Historial', icon: History, color: 'text-purple-500', bg: 'hover:bg-purple-500/10' },
+    ];
+
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-300">
             {/* Dynamic Background elements */}
@@ -187,29 +330,109 @@ function App() {
                 <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full"></div>
             </div>
 
-            {/* Navbar Premium */}
-            <nav className="p-4 bg-white/40 dark:bg-slate-950/40 backdrop-blur-xl sticky top-0 z-50 border-b border-slate-200 dark:border-white/5 flex justify-between items-center shadow-sm dark:shadow-2xl">
+            {/* Navbar Premium con Quick Actions incorporados */}
+            <nav className="p-3 sm:p-4 bg-white/40 dark:bg-slate-950/40 backdrop-blur-xl sticky top-0 z-50 border-b border-slate-200 dark:border-white/5 flex justify-between items-center shadow-sm dark:shadow-2xl">
                 <div
-                    className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-all active:scale-[0.98]"
+                    className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-all active:scale-[0.98] shrink-0"
                     onClick={() => setView('home')}
                 >
                     <div className="bg-[#0f172a] p-1.5 rounded-xl shadow-lg border border-slate-200 dark:border-white/10 group-hover:shadow-blue-500/10 transition-all">
-                        <img src="/logo-white.png" className="h-8 w-auto object-contain" alt="jhamf" />
-                    </div>
-                    <div className="hidden sm:block leading-tight">
-                        <span className="font-black text-lg tracking-tight block text-slate-900 dark:text-white transition-colors">Ticket<span className="text-blue-500">Sign</span></span>
-                        <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-slate-400 dark:text-slate-500">Mantenimiento TI</span>
+                        <img src="/logo-white.png" className="h-7 sm:h-8 w-auto object-contain" alt="jhamf" />
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors ${isOnline ? 'bg-green-500/10 text-green-500 ring-1 ring-green-500/20' : 'bg-red-500/10 text-red-500 ring-1 ring-red-500/20'
-                        }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`}></span>
-                        {isOnline ? 'En Línea' : 'Sin Red'}
+                {/* Quick Actions Menu - Global en Navbar */}
+                <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-white/5 p-1 rounded-[1.2rem] border border-slate-200/50 dark:border-white/5 max-w-[50%] xs:max-w-[60%] sm:max-w-none overflow-x-auto no-scrollbar">
+                    {navItems.map(item => (
+                        <button
+                            key={item.id}
+                            onClick={() => setView(item.id)}
+                            className={cn(
+                                "flex items-center gap-2 px-3 sm:px-4 py-2 rounded-2xl transition-all active:scale-95 group/nav shrink-0",
+                                view === item.id
+                                    ? "bg-white dark:bg-white/10 shadow-sm text-blue-500"
+                                    : `text-slate-500 hover:text-slate-900 dark:hover:text-white ${item.bg}`
+                            )}
+                        >
+                            <item.icon size={16} className={cn(
+                                "transition-transform group-hover/nav:scale-110",
+                                "transition-transform group-hover/nav:scale-110",
+                                view === item.id ? "text-blue-500" : item.color
+                            )} />
+                            <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">{item.label}</span>
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex items-center gap-2 sm:gap-3">
+                    <div
+                        className="relative"
+                        onMouseEnter={() => setIsNotificationsOpen(true)}
+                        onMouseLeave={() => setIsNotificationsOpen(false)}
+                    >
+                        <button
+                            onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                            className="relative p-2 text-slate-500 hover:text-blue-500 hover:bg-blue-500/5 rounded-xl transition-all active:scale-90 group"
+                        >
+                            <Bell size={20} />
+                            {notifications.length > 0 && (
+                                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-950 shadow-sm animate-in zoom-in px-1">
+                                    {notifications.length}
+                                </span>
+                            )}
+                        </button>
+
+                        {isNotificationsOpen && (
+                            <div className="absolute right-0 top-full pt-2 w-[280px] xs:w-80 z-20">
+                                <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+                                    <div className="p-4 border-b border-slate-100 dark:border-white/5 flex justify-between items-center bg-slate-50/50 dark:bg-white/5">
+                                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500">Notificaciones</h4>
+                                        <span className="text-[9px] font-bold bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-lg">{notifications.length} Nuevas</span>
+                                    </div>
+                                    <div className="max-h-[350px] overflow-y-auto no-scrollbar">
+                                        {notifications.length > 0 ? (
+                                            notifications.map(n => (
+                                                <div key={n.id} className="p-4 border-b border-slate-100 dark:border-white/5 last:border-0 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer group">
+                                                    <div className="flex justify-between items-start mb-1">
+                                                        <span className={cn(
+                                                            "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md",
+                                                            n.type === 'warning' ? "bg-amber-500/10 text-amber-600" :
+                                                                n.type === 'success' ? "bg-green-500/10 text-green-600" :
+                                                                    "bg-blue-500/10 text-blue-600"
+                                                        )}>
+                                                            {n.title}
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-400 font-bold">{n.time}</span>
+                                                    </div>
+                                                    <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium leading-relaxed group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{n.message}</p>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="p-10 text-center">
+                                                <Bell className="mx-auto text-slate-300 dark:text-slate-800 mb-2" size={32} />
+                                                <p className="text-slate-400 text-xs font-bold">Sin alertas nuevas</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="p-3 bg-slate-50/50 dark:bg-white/5 border-t border-slate-100 dark:border-white/5">
+                                        <button className="w-full py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-500 transition-colors">Ver todas las alertas</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    <div className="relative">
+                    <div className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-colors ${isOnline ? 'bg-green-500/10 text-green-500 ring-1 ring-green-500/20' : 'bg-red-500/10 text-red-500 ring-1 ring-red-500/20'
+                        }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`}></span>
+                        <span className="hidden xs:inline">{isOnline ? 'En Línea' : 'Sin Red'}</span>
+                    </div>
+
+                    <div
+                        className="relative"
+                        onMouseEnter={() => setIsMenuOpen(true)}
+                        onMouseLeave={() => setIsMenuOpen(false)}
+                    >
                         <button
                             onClick={() => setIsMenuOpen(!isMenuOpen)}
                             className="flex items-center gap-2 md:gap-3 px-2 md:px-3 py-1.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-2xl border border-slate-200 dark:border-white/5 transition-all active:scale-95"
@@ -217,16 +440,15 @@ function App() {
                             <div className="bg-blue-500/10 p-2 rounded-xl text-blue-500">
                                 <User size={18} />
                             </div>
-                            <div className="text-left hidden xs:block">
+                            <div className="text-left hidden xs:block lg:hidden xl:block">
                                 <p className="text-[9px] uppercase font-black text-slate-400 dark:text-slate-500 leading-none mb-1">Técnico</p>
-                                <p className="text-xs font-bold text-slate-900 dark:text-white leading-none truncate max-w-[100px]">{user?.name || user?.username || 'Usuario'}</p>
+                                <p className="text-xs font-bold text-slate-900 dark:text-white leading-none truncate max-w-[80px]">{user?.name || user?.username || 'Usuario'}</p>
                             </div>
                         </button>
 
                         {isMenuOpen && (
-                            <>
-                                <div className="fixed inset-0 z-10" onClick={() => setIsMenuOpen(false)}></div>
-                                <div className="absolute right-0 mt-3 w-48 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl backdrop-blur-3xl z-20 animate-in fade-in zoom-in-95 duration-200 p-1">
+                            <div className="absolute right-0 top-full pt-2 w-48 z-20">
+                                <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-200 p-1">
                                     <div className="p-3 border-b border-slate-100 dark:border-white/5 xs:hidden">
                                         <p className="text-[9px] uppercase font-black text-slate-400 dark:text-slate-500 mb-1">Técnico</p>
                                         <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{user?.name || user?.username}</p>
@@ -267,7 +489,7 @@ function App() {
                                         <span className="text-xs font-bold uppercase tracking-wider">Cerrar Sesión</span>
                                     </button>
                                 </div>
-                            </>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -298,6 +520,12 @@ function App() {
 
                 {view === 'consolidated' && (
                     <ClientConsolidated
+                        onBack={() => setView('home')}
+                    />
+                )}
+
+                {view === 'kanban' && (
+                    <TaskBoard
                         onBack={() => setView('home')}
                     />
                 )}

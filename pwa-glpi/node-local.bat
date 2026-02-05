@@ -1,5 +1,5 @@
 @echo off
-set "NODE_PATH=C:\Users\cgongora\Documents\mantenimiento glpi\node-root\node-v20.11.0-win-x64"
+set "NODE_PATH=c:\Users\cgongora\Documents\Proyectos\mantenimiento glpi\node-root\node-v20.11.0-win-x64"
 set "PATH=%NODE_PATH%;%PATH%"
 
 if "%1"=="npm" (

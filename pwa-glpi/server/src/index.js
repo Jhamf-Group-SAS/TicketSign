@@ -4,16 +4,16 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import mongoose from 'mongoose';
 
 import syncRoutes from './routes/sync.js';
 import authRoutes from './routes/auth.js';
 import reportsRoutes from './routes/reports.js';
+import tasksRoutes from './routes/tasks.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// MongoDB Connection
-import mongoose from 'mongoose';
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/ticketsign';
 
 mongoose.connect(MONGO_URI)
@@ -27,6 +27,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/tasks', tasksRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
