@@ -50,6 +50,8 @@ export const SyncService = {
         if (!navigator.onLine) return;
 
         const token = localStorage.getItem('glpi_pro_token');
+        if (!token || token.split('.').length !== 3) return;
+
         try {
             // Sincronizar Actas
             const responseActs = await fetch(`${API_BASE_URL}/sync/maintenance?limit=50`, {
@@ -72,7 +74,6 @@ export const SyncService = {
                 const remoteTasks = await responseTasks.json();
                 if (remoteTasks && remoteTasks.length > 0) {
                     const { db } = await import('../store/db');
-                    // Actualización simple por ahora, se puede mejorar la lógica de merge
                     await db.tasks.bulkPut(remoteTasks.map(t => ({ ...t, id: t.id || t._id })));
                     console.log(`Sincronizadas ${remoteTasks.length} tareas del servidor.`);
                 }

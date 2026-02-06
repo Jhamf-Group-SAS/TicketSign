@@ -267,17 +267,22 @@ class GLPIConnector {
             const eligibleUsersMap = new Map();
 
             for (const entry of response.data) {
-                // Con expand_dropdowns=true, entry contiene labels
-                // dependemos de cómo responda esta API específica
-                const profileName = (entry.profiles_id || '').toString();
-                const userName = (entry.users_id || '').toString();
-                const userId = entry.users_id_id || entry.id; // Fallback al propio ID del vínculo si no hay ID de usuario separado
+                // Con expand_dropdowns=true, profiles_id suele traer el nombre del perfil o un ID
+                const profileLabel = (entry.profiles_id || '').toString();
+                const userName = (entry.users_id || 'Usuario GLPI').toString();
 
+                // Extraer ID de usuario (numérico)
+                const userId = entry.users_id_id || entry.users_id;
+
+                if (!userId || isNaN(userId)) continue;
+
+                // Validar contra perfiles objetivo
                 const matches = targetProfiles.some(tp =>
-                    profileName.toLowerCase().includes(tp.toLowerCase())
+                    profileLabel.toLowerCase().includes(tp.toLowerCase()) ||
+                    (entry.profiles_id_name && entry.profiles_id_name.toLowerCase().includes(tp.toLowerCase()))
                 );
 
-                if (matches && userId) {
+                if (matches) {
                     if (!eligibleUsersMap.has(userId)) {
                         eligibleUsersMap.set(userId, {
                             id: userId,
