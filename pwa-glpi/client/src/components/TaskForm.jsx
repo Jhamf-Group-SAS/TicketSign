@@ -428,7 +428,7 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                                 </div>
 
                                 {isTechListOpen && canEditFull && (
-                                    <div className="absolute top-full left-0 w-full z-[70] bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl p-2 max-h-60 overflow-y-auto mt-1 animate-in slide-in-from-top-2">
+                                    <div className="absolute top-full left-0 w-full z-[70] bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl p-2 max-h-60 overflow-y-auto mt-1 animate-in slide-in-from-top-2 no-scrollbar">
                                         {filteredTechs.length === 0 ? (
                                             <div className="p-4 text-center text-slate-500 text-xs font-bold">No se encontraron técnicos</div>
                                         ) : (
@@ -445,7 +445,6 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                                                 >
                                                     <div className="flex flex-col">
                                                         <span>{t.fullName}</span>
-                                                        <span className="text-[10px] opacity-60 font-medium">@{t.name}</span>
                                                     </div>
                                                     {formData.assigned_technicians.includes(t.fullName) && <Check size={16} />}
                                                 </div>

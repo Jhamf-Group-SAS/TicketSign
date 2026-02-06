@@ -302,9 +302,16 @@ class GLPIConnector {
                             headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
                         });
                         const userData = userRes.data;
+
+                        // Construir nombre completo (Nombre Apellido)
+                        const fname = userData.firstname || '';
+                        const lname = userData.realname || '';
+                        tech.fullName = `${fname} ${lname}`.trim() || userData.name;
+                        tech.name = userData.name; // Username
+                        tech.username = userData.name;
+
                         // GLPI suele guardar el móvil en mobile, phone, o phone2. Probamos mobile primero.
                         tech.mobile = userData.mobile || userData.phone || '';
-                        tech.username = userData.name;
                     } catch (err) {
                         console.warn(`[GLPI] No se pudo obtener detalle para técnico ${tech.id}`);
                     }
