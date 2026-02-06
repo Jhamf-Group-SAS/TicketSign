@@ -9,12 +9,14 @@ export const SyncService = {
     async syncPendingActs() {
         if (!navigator.onLine) return;
 
+        const token = localStorage.getItem('glpi_pro_token');
+        if (!token || token === 'undefined' || token.length < 20) return;
+
         const pending = await getPendingSync();
         if (pending.length === 0) return;
 
         console.log(`Iniciando sincronización de ${pending.length} actas...`);
 
-        const token = localStorage.getItem('glpi_pro_token');
         for (const act of pending) {
             try {
                 const response = await fetch(`${API_BASE_URL}/sync/maintenance`, {

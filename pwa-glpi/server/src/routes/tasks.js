@@ -150,8 +150,14 @@ router.patch('/:id', async (req, res) => {
         const updates = req.body;
         const userProfile = req.user.profile || '';
 
-        const existingTask = await Task.findById(id);
-        if (!existingTask) return res.status(404).json({ message: 'Tarea no encontrada' });
+        // Validar si el ID es un ObjectId válido de MongoDB para evitar CastError
+        if (id.length !== 24 && !id.startsWith('temp_')) {
+            console.warn(`[Tasks] ID no válido recibido para PATCH: ${id}. Ignorando proceso de DB.`);
+            return res.status(404).json({ message: 'ID de tarea no válido para el servidor' });
+        }
+
+        const existingTask = (id.length === 24) ? await Task.findById(id) : null;
+        if (!existingTask && id.length === 24) return res.status(404).json({ message: 'Tarea no encontrada' });
 
         // Reglas de permisos:
         // Admin-Mesa y Super-Admin: Todo.

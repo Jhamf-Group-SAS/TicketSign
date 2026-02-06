@@ -19,7 +19,12 @@ class WhatsAppService {
         const { phoneId, token, templateName, lang } = this.config();
 
         if (!to || !phoneId || !token) {
-            console.error('[WhatsApp] Falta configuración o destinatario');
+            console.error('[WhatsApp] Falta configuración crítica:', {
+                tieneDestinatario: !!to,
+                tienePhoneId: !!phoneId,
+                tieneToken: !!token,
+                tokenPrefijo: token ? token.substring(0, 10) + '...' : 'nulo'
+            });
             return false;
         }
 
@@ -27,16 +32,16 @@ class WhatsAppService {
         const cleanTo = to.replace(/\D/g, '');
 
         try {
-            const url = `https://graph.facebook.com/v18.0/${this.phoneId}/messages`;
+            const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
 
             const payload = {
                 messaging_product: "whatsapp",
                 to: cleanTo,
                 type: "template",
                 template: {
-                    name: this.templateName,
+                    name: templateName,
                     language: {
-                        code: this.lang
+                        code: lang
                     },
                     components: [
                         {
@@ -54,7 +59,7 @@ class WhatsAppService {
 
             const response = await axios.post(url, payload, {
                 headers: {
-                    'Authorization': `Bearer ${this.token}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
             });

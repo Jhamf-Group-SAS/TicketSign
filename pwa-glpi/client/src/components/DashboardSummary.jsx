@@ -25,8 +25,19 @@ const DashboardSummary = ({ onNavigate }) => {
         // Filtrar tareas por usuario si no es Admin
         const myTasks = allTasks.filter(t => {
             if (isAdmin) return true;
-            const isCreator = t.createdBy === user.username;
-            const isAssigned = (t.assigned_technicians || []).includes(user.name) || (t.assigned_technicians || []).includes(user.displayName);
+
+            const myNames = [
+                (user.name || '').toLowerCase(),
+                (user.displayName || '').toLowerCase(),
+                (user.username || '').toLowerCase()
+            ].filter(Boolean);
+
+            const isCreator = myNames.includes((t.createdBy || '').toLowerCase());
+
+            const isAssigned = (t.assigned_technicians || []).some(tech =>
+                myNames.some(name => (tech || '').toLowerCase().includes(name) || name.includes((tech || '').toLowerCase()))
+            );
+
             return isCreator || isAssigned;
         });
 
@@ -37,8 +48,9 @@ const DashboardSummary = ({ onNavigate }) => {
 
         const tasksToday = myTasks.filter(t => {
             if (!t.scheduled_at) return false;
-            const scheduledDate = new Date(t.scheduled_at).toISOString().split('T')[0];
-            const todayStr = now.toISOString().split('T')[0];
+            // Usar fecha local para comparar "Hoy"
+            const scheduledDate = new Date(t.scheduled_at).toLocaleDateString();
+            const todayStr = now.toLocaleDateString();
             return scheduledDate === todayStr && t.status !== 'COMPLETADA';
         }).length;
 
