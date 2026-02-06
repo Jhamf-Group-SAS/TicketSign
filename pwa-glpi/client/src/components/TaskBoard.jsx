@@ -72,8 +72,18 @@ const TaskBoard = ({ onBack }) => {
     const filteredTasks = tasks.filter(task => {
         // Filtrar por pertenencia si no es admin
         if (!isAdmin) {
-            const isCreator = task.createdBy === user.username;
-            const isAssigned = (task.assigned_technicians || []).includes(user.name) || (task.assigned_technicians || []).includes(user.displayName);
+            const myNames = [
+                (user.name || '').toLowerCase(),
+                (user.displayName || '').toLowerCase(),
+                (user.username || '').toLowerCase()
+            ].filter(Boolean);
+
+            const isCreator = myNames.includes((task.createdBy || '').toLowerCase());
+
+            const isAssigned = (task.assigned_technicians || []).some(tech =>
+                myNames.some(name => (tech || '').toLowerCase().includes(name) || name.includes((tech || '').toLowerCase()))
+            );
+
             if (!isCreator && !isAssigned) return false;
         }
 

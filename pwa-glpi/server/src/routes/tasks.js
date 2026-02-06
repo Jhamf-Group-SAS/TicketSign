@@ -76,7 +76,11 @@ router.post('/', async (req, res) => {
                     const allTechs = await glpi.getEligibleTechnicians();
 
                     for (const techName of newTask.assigned_technicians) {
-                        const techData = allTechs.find(t => t.fullName === techName || t.name === techName);
+                        const techData = allTechs.find(t =>
+                            (t.fullName || '').toLowerCase() === techName.toLowerCase() ||
+                            (t.name || '').toLowerCase() === techName.toLowerCase() ||
+                            (t.username || '').toLowerCase() === techName.toLowerCase()
+                        );
 
                         if (techData && techData.mobile) {
                             const dateObj = new Date(newTask.scheduled_at);
@@ -85,6 +89,7 @@ router.post('/', async (req, res) => {
                                 hour: '2-digit', minute: '2-digit', hour12: true
                             });
 
+                            console.log(`[WhatsApp] Intentando enviar a ${techName} (${techData.mobile})`);
                             await whatsapp.sendTaskNotification(techData.mobile, {
                                 techName: techData.fullName || techData.name,
                                 title: newTask.title,
@@ -92,7 +97,7 @@ router.post('/', async (req, res) => {
                                 date: formattedDate
                             });
                         } else {
-                            console.warn(`[WhatsApp] No se encontró móvil para técnico: ${techName}`);
+                            console.warn(`[WhatsApp] No se pudo notificar a "${techName}". Razón: ${!techData ? 'Nombre no coincide exactamente con técnicos de GLPI' : 'No tiene teléfono móvil registrado en GLPI'}`);
                         }
                     }
                 } catch (notifyErr) {
