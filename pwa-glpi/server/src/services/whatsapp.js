@@ -57,6 +57,7 @@ class WhatsAppService {
                 }
             };
 
+            console.log(`[WhatsApp] Intentando enviar a ${cleanTo} usando plantilla "${templateName}" [${lang}]`);
             const response = await axios.post(url, payload, {
                 headers: {
                     'Authorization': `Bearer ${token}`,

@@ -266,10 +266,6 @@ class GLPIConnector {
 
             const eligibleUsersMap = new Map();
 
-            if (response.data && response.data.length > 0) {
-                console.log('[GLPI] Debug - Primera entrada de Profile_User:', JSON.stringify(response.data[0]));
-            }
-
             for (const entry of response.data) {
                 // Con expand_dropdowns=true, profiles_id suele traer el nombre del perfil
                 const profileLabel = (entry.profiles_id || '').toString();
@@ -325,11 +321,6 @@ class GLPIConnector {
                             headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
                         });
                         const userData = userRes.data;
-
-                        if (i === 0 && tech === batch[0]) {
-                            console.log('[GLPI] Debug - Detalle de usuario (campos):', Object.keys(userData).join(', '));
-                            console.log('[GLPI] Debug - Datos de ejemplo:', { name: userData.name, fname: userData.firstname, rname: userData.realname });
-                        }
 
                         // Construir nombre completo (Nombre Apellido)
                         const fname = userData.firstname || '';
