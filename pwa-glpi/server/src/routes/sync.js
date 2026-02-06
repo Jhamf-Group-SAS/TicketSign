@@ -4,17 +4,23 @@ import glpi from '../services/glpi.js';
 import fs from 'fs/promises';
 import path from 'path';
 import Act from '../models/Act.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// Aplicar autenticación a todas las rutas de sincronización
+router.use(authenticateToken);
 
 // Nuevo endpoint para obtener historial
 router.get('/maintenance', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 50;
-        const acts = await Act.find()
-            .sort({ createdAt: -1 })
-            .limit(limit);
-
+        let acts = [];
+        try {
+            acts = await Act.find().sort({ createdAt: -1 }).limit(limit);
+        } catch (dbErr) {
+            console.warn('[Sync] No se pudo acceder a DB local, devolviendo lista vacía.');
+        }
         res.json(acts);
     } catch (error) {
         console.error('Error obteniendo historial:', error);
@@ -39,18 +45,18 @@ router.post('/maintenance', async (req, res) => {
         await fs.writeFile(tempPath, pdfBuffer);
 
         // 0. Guardar en MongoDB
-        // 0. Guardar en MongoDB
-
-        // Buscar si ya existe para actualizar o crear nuevo
-        let act = await Act.findOne({ glpi_ticket_id: actData.glpi_ticket_id });
-        if (!act) {
-            act = new Act(actData);
-        } else {
-            Object.assign(act, actData);
-            act.updatedAt = new Date();
+        try {
+            let act = await Act.findOne({ glpi_ticket_id: actData.glpi_ticket_id });
+            if (!act) {
+                act = new Act(actData);
+            } else {
+                Object.assign(act, actData);
+                act.updatedAt = new Date();
+            }
+            await act.save();
+        } catch (dbErr) {
+            console.warn('[Sync] Saltando guardado en DB (modo local)');
         }
-        await act.save();
-        console.log(`Acta guardada en DB: ${act._id}`);
 
         // 2. Subir a GLPI
         const docResult = await glpi.uploadDocument(actData.glpi_ticket_id, tempPath, fileName);

@@ -14,13 +14,14 @@ export const SyncService = {
 
         console.log(`Iniciando sincronización de ${pending.length} actas...`);
 
+        const token = localStorage.getItem('glpi_pro_token');
         for (const act of pending) {
             try {
                 const response = await fetch(`${API_BASE_URL}/sync/maintenance`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        // 'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify(act)
                 });
@@ -46,9 +47,12 @@ export const SyncService = {
     async pullRemoteChanges() {
         if (!navigator.onLine) return;
 
+        const token = localStorage.getItem('glpi_pro_token');
         try {
             // Sincronizar Actas
-            const responseActs = await fetch(`${API_BASE_URL}/sync/maintenance?limit=50`);
+            const responseActs = await fetch(`${API_BASE_URL}/sync/maintenance?limit=50`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             if (responseActs.ok) {
                 const remoteActs = await responseActs.json();
                 if (remoteActs && remoteActs.length > 0) {
@@ -59,7 +63,9 @@ export const SyncService = {
             }
 
             // Sincronizar Tareas
-            const responseTasks = await fetch(`${API_BASE_URL}/tasks`);
+            const responseTasks = await fetch(`${API_BASE_URL}/tasks`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             if (responseTasks.ok) {
                 const remoteTasks = await responseTasks.json();
                 if (remoteTasks && remoteTasks.length > 0) {
@@ -81,26 +87,50 @@ export const SyncService = {
         if (!navigator.onLine) return;
 
         const { db } = await import('../store/db');
+        const token = localStorage.getItem('glpi_pro_token');
+
         // Por ahora enviamos todas las tareas locales para asegurar consistencia
-        // Idealmente solo las cambiadas
         const localTasks = await db.tasks.toArray();
         if (localTasks.length === 0) return;
 
         try {
             const response = await fetch(`${API_BASE_URL}/tasks/sync`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ tasks: localTasks })
             });
 
             if (response.ok) {
                 const syncedTasks = await response.json();
-                // Actualizar IDs locales si cambiaron (mongo ids)
                 await db.tasks.bulkPut(syncedTasks.map(t => ({ ...t, id: t.id || t._id })));
                 console.log('Tareas locales sincronizadas con el servidor.');
             }
         } catch (error) {
             console.error('Error sincronizando tareas:', error);
+        }
+    },
+
+    /**
+     * Obtiene los técnicos elegibles del servidor
+     */
+    async getTechnicians() {
+        if (!navigator.onLine) return [];
+
+        const token = localStorage.getItem('glpi_pro_token');
+        try {
+            const response = await fetch(`${API_BASE_URL}/tasks/technicians`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                return await response.json();
+            }
+            return [];
+        } catch (error) {
+            console.error('Error fetching technicians:', error);
+            return [];
         }
     },
 

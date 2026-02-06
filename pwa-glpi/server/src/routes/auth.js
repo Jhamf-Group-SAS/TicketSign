@@ -42,39 +42,72 @@ router.post('/login', async (req, res) => {
                 if (glpiSession.glpifirstname || glpiSession.glpirealname) {
                     fullName = `${glpiSession.glpifirstname || ''} ${glpiSession.glpirealname || ''}`.trim();
                 }
+
+                // Extraer perfil activo
+                const activeProfile = glpiSession.glpiactiveprofile?.name || '';
+
+                const token = jwt.sign(
+                    {
+                        username,
+                        displayName: fullName,
+                        profile: activeProfile,
+                        glpi_session: sessionToken
+                    },
+                    process.env.JWT_SECRET,
+                    { expiresIn: '30d' }
+                );
+
+                return res.status(200).json({
+                    status: 'success',
+                    token,
+                    user: { username, name: fullName, profile: activeProfile }
+                });
             } catch (pErr) {
-                console.warn('No se pudo obtener el nombre completo, usando username:', pErr.message);
+                console.warn('No se pudo obtener el nombre completo o perfil, usando username:', pErr.message);
+
+                const token = jwt.sign(
+                    {
+                        username,
+                        displayName: fullName,
+                        glpi_session: sessionToken
+                    },
+                    process.env.JWT_SECRET,
+                    { expiresIn: '30d' }
+                );
+
+                return res.status(200).json({
+                    status: 'success',
+                    token,
+                    user: { username, name: fullName }
+                });
             }
-
-            const token = jwt.sign(
-                {
-                    username,
-                    displayName: fullName,
-                    glpi_session: sessionToken
-                },
-                process.env.JWT_SECRET,
-                { expiresIn: '30d' }
-            );
-
-            return res.status(200).json({
-                status: 'success',
-                token,
-                user: { username, name: fullName }
-            });
         }
 
     } catch (error) {
-        // Fallback para usuario de prueba SOLAMENTE si falla GLPI y es el usuario admin
+        // Fallback para usuarios de prueba SOLAMENTE si falla GLPI
         if (username === 'admin' && password === 'admin123') {
             const token = jwt.sign(
-                { username, is_test: true },
+                { username, displayName: 'Admin Prueba', profile: 'Super-Admin', is_test: true },
                 process.env.JWT_SECRET,
                 { expiresIn: '30d' }
             );
             return res.status(200).json({
                 status: 'success',
                 token,
-                user: { username: 'Admin Prueba' }
+                user: { username, name: 'Admin Prueba', profile: 'Super-Admin' }
+            });
+        }
+
+        if (username === 'especialista' && password === 'esp123') {
+            const token = jwt.sign(
+                { username, displayName: 'Técnico Especialista', profile: 'Especialistas', is_test: true },
+                process.env.JWT_SECRET,
+                { expiresIn: '30d' }
+            );
+            return res.status(200).json({
+                status: 'success',
+                token,
+                user: { username, name: 'Técnico Especialista', profile: 'Especialistas' }
             });
         }
 

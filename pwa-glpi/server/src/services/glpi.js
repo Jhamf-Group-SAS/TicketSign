@@ -229,6 +229,95 @@ class GLPIConnector {
             console.error(`[GLPI] Error en addFollowup para ${itemtype}:`, error.response?.data || error.message);
         }
     }
+
+    /**
+     * Obtiene técnicos elegibles basados en sus perfiles
+     */
+    async getEligibleTechnicians() {
+        if (!this.sessionToken) await this.initSession();
+        const { apiUrl, appToken } = this.config;
+
+        try {
+            console.log('[GLPI] Buscando técnicos mediante Profile_User...');
+            const targetProfiles = ['Super-Admin', 'Especialistas', 'Admin-Mesa', 'Administrativo'];
+
+            // 1. Obtener todas las asociaciones de perfiles
+            // Expandimos dropdowns para tener los nombres de perfiles y usuarios
+            const response = await axios.get(`${apiUrl}/Profile_User`, {
+                params: {
+                    range: '0-1000',
+                    expand_dropdowns: true
+                },
+                headers: {
+                    'App-Token': appToken,
+                    'Session-Token': this.sessionToken
+                }
+            });
+
+            if (!Array.isArray(response.data)) {
+                // Si la respuesta no es un array directo, puede que esté envuelta (v1 de la API antigua)
+                const data = Array.isArray(response.data) ? response.data : (response.data.data || []);
+                if (!Array.isArray(data)) {
+                    console.error('[GLPI] Error: /Profile_User no devolvió un array');
+                    return [];
+                }
+                response.data = data;
+            }
+
+            const eligibleUsersMap = new Map();
+
+            for (const entry of response.data) {
+                // Con expand_dropdowns=true, entry contiene labels
+                // dependemos de cómo responda esta API específica
+                const profileName = (entry.profiles_id || '').toString();
+                const userName = (entry.users_id || '').toString();
+                const userId = entry.users_id_id || entry.id; // Fallback al propio ID del vínculo si no hay ID de usuario separado
+
+                const matches = targetProfiles.some(tp =>
+                    profileName.toLowerCase().includes(tp.toLowerCase())
+                );
+
+                if (matches && userId) {
+                    if (!eligibleUsersMap.has(userId)) {
+                        eligibleUsersMap.set(userId, {
+                            id: userId,
+                            name: userName,
+                            fullName: userName
+                        });
+                    }
+                }
+            }
+
+            const eligibleUsers = Array.from(eligibleUsersMap.values());
+            console.log(`[GLPI] Identificados ${eligibleUsers.length} técnicos por perfil. Obteniendo detalles adicionales (móvil)...`);
+
+            // Obtener detalles (especialmente el móvil) para cada técnico encontrado
+            // Lo hacemos en batches para no saturar
+            const BATCH_SIZE = 10;
+            for (let i = 0; i < eligibleUsers.length; i += BATCH_SIZE) {
+                const batch = eligibleUsers.slice(i, i + BATCH_SIZE);
+                await Promise.all(batch.map(async (tech) => {
+                    try {
+                        const userRes = await axios.get(`${apiUrl}/User/${tech.id}`, {
+                            headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                        });
+                        const userData = userRes.data;
+                        // GLPI suele guardar el móvil en mobile, phone, o phone2. Probamos mobile primero.
+                        tech.mobile = userData.mobile || userData.phone || '';
+                        tech.username = userData.name;
+                    } catch (err) {
+                        console.warn(`[GLPI] No se pudo obtener detalle para técnico ${tech.id}`);
+                    }
+                }));
+            }
+
+            console.log(`[GLPI] Búsqueda finalizada. ${eligibleUsers.length} técnicos listos.`);
+            return eligibleUsers;
+        } catch (error) {
+            console.error('[GLPI] Error en getEligibleTechnicians:', error.response?.data || error.message);
+            return [];
+        }
+    }
 }
 
 export default new GLPIConnector();

@@ -5,13 +5,15 @@ import {
     ClipboardList,
     CheckCircle2,
     Clock,
-    AlertCircle,
     TrendingUp,
     Calendar as CalendarIcon,
     ArrowUpRight
 } from 'lucide-react';
 
 const DashboardSummary = ({ onNavigate }) => {
+    const [user] = React.useState(JSON.parse(localStorage.getItem('glpi_pro_user') || '{}'));
+    const isAdmin = (user.profile || '').includes('Super-Admin') || (user.profile || '').includes('Admin-Mesa');
+
     const stats = useLiveQuery(async () => {
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
@@ -20,19 +22,27 @@ const DashboardSummary = ({ onNavigate }) => {
         const allActs = await db.acts.toArray();
         const allTasks = await db.tasks.toArray();
 
+        // Filtrar tareas por usuario si no es Admin
+        const myTasks = allTasks.filter(t => {
+            if (isAdmin) return true;
+            const isCreator = t.createdBy === user.username;
+            const isAssigned = (t.assigned_technicians || []).includes(user.name) || (t.assigned_technicians || []).includes(user.displayName);
+            return isCreator || isAssigned;
+        });
+
         const actsToday = allActs.filter(a => a.createdAt >= startOfDay).length;
         const actsMonth = allActs.filter(a => a.createdAt >= startOfMonth).length;
         const pendingSync = allActs.filter(a => a.status === 'PENDIENTE_SINCRONIZACION').length;
         const drafts = allActs.filter(a => a.status === 'BORRADOR').length;
 
-        const tasksToday = allTasks.filter(t => {
+        const tasksToday = myTasks.filter(t => {
             if (!t.scheduled_at) return false;
             const scheduledDate = new Date(t.scheduled_at).toISOString().split('T')[0];
             const todayStr = now.toISOString().split('T')[0];
             return scheduledDate === todayStr && t.status !== 'COMPLETADA';
         }).length;
 
-        const upcomingTasks = allTasks.filter(t => {
+        const upcomingTasks = myTasks.filter(t => {
             if (!t.scheduled_at) return false;
             return new Date(t.scheduled_at) > now && t.status !== 'COMPLETADA';
         }).length;

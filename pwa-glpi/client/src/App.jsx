@@ -10,7 +10,7 @@ import Login from './components/Login'
 import HistoryList from './components/HistoryList'
 import TaskBoard from './components/TaskBoard'
 import DashboardSummary from './components/DashboardSummary'
-import { Plus, History, Wifi, WifiOff, Settings, Calendar, User, ClipboardList, LogOut, Users, FileText, Kanban, LayoutDashboard, Bell } from 'lucide-react'
+import { Plus, History, Wifi, WifiOff, Settings, Calendar, User, ClipboardList, LogOut, Users, FileText, Kanban, LayoutDashboard, Bell, Menu, X } from 'lucide-react'
 
 const cn = (...inputs) => twMerge(clsx(inputs));
 
@@ -24,6 +24,24 @@ function App() {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
     const [theme, setTheme] = useState(localStorage.getItem('glpi_pro_theme') || 'dark')
     const [notifications, setNotifications] = useState([])
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+
+    // Refs para cerrar menús al hacer clic fuera
+    const notificationsRef = useRef(null);
+    const userMenuRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+                setIsNotificationsOpen(false);
+            }
+            if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+                setIsMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // Referencias para manejo de estado sin re-render
     const processingRef = useRef(new Set());
@@ -146,12 +164,21 @@ function App() {
     // Global Reminder Watcher Mejorado y Anti-Duplicados
     useEffect(() => {
         const checkReminders = async () => {
+            if (!user) return;
             const now = new Date().getTime();
 
             const tasksWithReminders = await db.tasks
                 .where('reminder_at')
                 .notEqual('')
-                .and(t => !t.reminder_sent && t.status !== 'COMPLETADA' && t.status !== 'CANCELADA')
+                .and(t => {
+                    const isCreator = t.createdBy === user.username;
+                    const isAssigned = (t.assigned_technicians || []).includes(user.name) || (t.assigned_technicians || []).includes(user.displayName);
+                    // También chequear por username en técnicos si es posible, pero usualmente guardamos nombres reales
+                    return !t.reminder_sent &&
+                        t.status !== 'COMPLETADA' &&
+                        t.status !== 'CANCELADA' &&
+                        (isCreator || isAssigned);
+                })
                 .toArray();
 
             for (const task of tasksWithReminders) {
@@ -330,19 +357,84 @@ function App() {
                 <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full"></div>
             </div>
 
+            {/* Mobile Sidebar Overlay */}
+            {isSidebarOpen && (
+                <div className="fixed inset-0 z-[100] sm:hidden">
+                    <div
+                        className="absolute inset-0 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-300"
+                        onClick={() => setIsSidebarOpen(false)}
+                    />
+                    <div className="absolute top-0 left-0 w-[280px] h-full bg-white dark:bg-[#020617] border-r border-slate-200 dark:border-white/5 shadow-2xl animate-in slide-in-from-left duration-300 flex flex-col overflow-hidden">
+                        <div className="p-6 border-b border-slate-100 dark:border-white/5 flex justify-between items-center bg-slate-50 dark:bg-white/5">
+                            <div className="bg-[#0f172a] p-1.5 rounded-xl border border-white/10">
+                                <img src="/logo-white.png" className="h-6 w-auto" alt="logo" />
+                            </div>
+                            <button onClick={() => setIsSidebarOpen(false)} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
+                            <p className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4">Navegación</p>
+                            {navItems.map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => { setView(item.id); setIsSidebarOpen(false); }}
+                                    className={cn(
+                                        "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all active:scale-[0.98] font-black text-xs uppercase tracking-widest",
+                                        view === item.id
+                                            ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
+                                            : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5"
+                                    )}
+                                >
+                                    <item.icon size={20} className={view === item.id ? "text-white" : item.color} />
+                                    <span>{item.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="p-6 border-t border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Modo Oscuro</span>
+                                <button
+                                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                                    className={cn(
+                                        "w-12 h-6 rounded-full transition-all relative",
+                                        theme === 'dark' ? "bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.4)]" : "bg-slate-300"
+                                    )}
+                                >
+                                    <div className={cn(
+                                        "absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-md",
+                                        theme === 'dark' ? "left-7" : "left-1"
+                                    )} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Navbar Premium con Quick Actions incorporados */}
             <nav className="p-3 sm:p-4 bg-white/40 dark:bg-slate-950/40 backdrop-blur-xl sticky top-0 z-50 border-b border-slate-200 dark:border-white/5 flex justify-between items-center shadow-sm dark:shadow-2xl">
-                <div
-                    className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-all active:scale-[0.98] shrink-0"
-                    onClick={() => setView('home')}
-                >
-                    <div className="bg-[#0f172a] p-1.5 rounded-xl shadow-lg border border-slate-200 dark:border-white/10 group-hover:shadow-blue-500/10 transition-all">
-                        <img src="/logo-white.png" className="h-7 sm:h-8 w-auto object-contain" alt="jhamf" />
+                <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                    {/* Botón Hamburguesa - Solo visible en móvil */}
+                    <button
+                        onClick={() => setIsSidebarOpen(true)}
+                        className="flex sm:hidden p-2.5 bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-blue-500 rounded-[1.2rem] transition-all active:scale-90 border border-slate-200/50 dark:border-white/5"
+                    >
+                        <Menu size={22} />
+                    </button>
+
+                    <div
+                        className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-all active:scale-[0.98]"
+                        onClick={() => setView('home')}
+                    >
+                        <div className="bg-[#0f172a] p-1.5 rounded-xl shadow-lg border border-slate-200 dark:border-white/10 group-hover:shadow-blue-500/10 transition-all">
+                            <img src="/logo-white.png" className="h-6 sm:h-8 w-auto object-contain" alt="jhamf" />
+                        </div>
                     </div>
                 </div>
 
-                {/* Quick Actions Menu - Global en Navbar */}
-                <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-white/5 p-1 rounded-[1.2rem] border border-slate-200/50 dark:border-white/5 max-w-[50%] xs:max-w-[60%] sm:max-w-none overflow-x-auto no-scrollbar">
+                {/* Quick Actions Menu - Oculto en móvil muy pequeño o adaptado */}
+                <div className="hidden sm:flex items-center gap-1 bg-slate-100/50 dark:bg-white/5 p-1 rounded-[1.2rem] border border-slate-200/50 dark:border-white/5 max-w-[50%] xs:max-w-[60%] sm:max-w-none overflow-x-auto no-scrollbar">
                     {navItems.map(item => (
                         <button
                             key={item.id}
@@ -365,11 +457,7 @@ function App() {
                 </div>
 
                 <div className="flex items-center gap-2 sm:gap-3">
-                    <div
-                        className="relative"
-                        onMouseEnter={() => setIsNotificationsOpen(true)}
-                        onMouseLeave={() => setIsNotificationsOpen(false)}
-                    >
+                    <div className="relative" ref={notificationsRef}>
                         <button
                             onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
                             className="relative p-2 text-slate-500 hover:text-blue-500 hover:bg-blue-500/5 rounded-xl transition-all active:scale-90 group"
@@ -428,11 +516,7 @@ function App() {
                         <span className="hidden xs:inline">{isOnline ? 'En Línea' : 'Sin Red'}</span>
                     </div>
 
-                    <div
-                        className="relative"
-                        onMouseEnter={() => setIsMenuOpen(true)}
-                        onMouseLeave={() => setIsMenuOpen(false)}
-                    >
+                    <div className="relative" ref={userMenuRef}>
                         <button
                             onClick={() => setIsMenuOpen(!isMenuOpen)}
                             className="flex items-center gap-2 md:gap-3 px-2 md:px-3 py-1.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-2xl border border-slate-200 dark:border-white/5 transition-all active:scale-95"

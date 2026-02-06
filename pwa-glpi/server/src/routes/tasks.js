@@ -1,14 +1,30 @@
 import express from 'express';
 import Task from '../models/Task.js';
+import glpi from '../services/glpi.js';
+import whatsapp from '../services/whatsapp.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// Middleware de autenticación para todas las rutas de tareas
+router.use(authenticateToken);
+
+// Obtener técnicos elegibles de GLPI
+router.get('/technicians', async (req, res) => {
+    try {
+        const technicians = await glpi.getEligibleTechnicians();
+        res.json(technicians);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
 
 // Obtener todas las tareas (con filtros)
 router.get('/', async (req, res) => {
     try {
         const { technician, status, priority } = req.query;
         const query = {};
-        
+
         if (technician) query.assigned_technicians = technician;
         if (status) query.status = status;
         if (priority) query.priority = priority;
@@ -23,10 +39,71 @@ router.get('/', async (req, res) => {
 // Crear nueva tarea
 router.post('/', async (req, res) => {
     try {
-        const task = new Task(req.body);
-        const newTask = await task.save();
+        // Solo perfiles autorizados pueden crear tareas (según el usuario: Especialistas, Super-Admin, Admin-Mesa)
+        const allowedToCreate = ['Super-Admin', 'Admin-Mesa', 'Especialistas'];
+        const userProfile = req.user.profile || '';
+
+        if (!allowedToCreate.some(p => userProfile.includes(p))) {
+            return res.status(403).json({ message: 'No tienes permisos para crear tareas' });
+        }
+
+        const taskData = {
+            ...req.body,
+            createdBy: req.user.username
+        };
+
+        // Limpiar fecha si viene vacía para evitar error de Mongoose
+        if (taskData.scheduled_at === '') {
+            delete taskData.scheduled_at;
+        }
+
+        let newTask;
+        try {
+            const task = new Task(taskData);
+            newTask = await task.save();
+            console.log('[Tasks] Tarea guardada en base de datos.');
+        } catch (dbErr) {
+            console.warn('[Tasks] Modo local (sin DB). Procesando notificación sin guardar en servidor.');
+            newTask = { ...taskData, _id: 'temp_' + Date.now() };
+        }
+
+        // Enviar notificaciones de WhatsApp si hay técnicos asignados
+        if (newTask.assigned_technicians && newTask.assigned_technicians.length > 0) {
+            // Ejecutar en segundo plano para no bloquear la respuesta
+            setImmediate(async () => {
+                try {
+                    console.log(`[WhatsApp] Iniciando notificaciones para: ${newTask.assigned_technicians.join(', ')}`);
+                    const allTechs = await glpi.getEligibleTechnicians();
+
+                    for (const techName of newTask.assigned_technicians) {
+                        const techData = allTechs.find(t => t.fullName === techName || t.name === techName);
+
+                        if (techData && techData.mobile) {
+                            const dateObj = new Date(newTask.scheduled_at);
+                            const formattedDate = isNaN(dateObj.getTime()) ? 'Pendiente' : dateObj.toLocaleString('es-ES', {
+                                day: '2-digit', month: '2-digit', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit', hour12: true
+                            });
+
+                            await whatsapp.sendTaskNotification(techData.mobile, {
+                                techName: techData.fullName || techData.name,
+                                title: newTask.title,
+                                description: newTask.description || 'Sin descripción adicional',
+                                date: formattedDate
+                            });
+                        } else {
+                            console.warn(`[WhatsApp] No se encontró móvil para técnico: ${techName}`);
+                        }
+                    }
+                } catch (notifyErr) {
+                    console.error('[WhatsApp] Fallo en proceso de notificación:', notifyErr.message);
+                }
+            });
+        }
+
         res.status(201).json(newTask);
     } catch (error) {
+        console.error('[Tasks] Error in POST /:', error);
         res.status(400).json({ message: error.message });
     }
 });
@@ -39,11 +116,15 @@ router.post('/sync', async (req, res) => {
 
         for (const taskData of tasks) {
             const { _id, ...updateData } = taskData;
-            
+
             let task;
             if (_id && _id.length === 24) { // MongoDB ID
+                // Solo Admin-Mesa y Super-Admin pueden editar por completo en sync
+                // Especialistas solo pueden cambiar estado - Validaremos esto en el cliente preferiblemente
+                // pero aquí registramos quién lo hizo o mantenemos consistencia.
                 task = await Task.findByIdAndUpdate(_id, updateData, { new: true, upsert: true });
             } else {
+                updateData.createdBy = req.user.username;
                 task = new Task(updateData);
                 await task.save();
             }
@@ -52,6 +133,7 @@ router.post('/sync', async (req, res) => {
 
         res.json(results);
     } catch (error) {
+        console.error('[Tasks] Error in /sync:', error);
         res.status(400).json({ message: error.message });
     }
 });
@@ -61,22 +143,94 @@ router.patch('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const updates = req.body;
+        const userProfile = req.user.profile || '';
+
+        const existingTask = await Task.findById(id);
+        if (!existingTask) return res.status(404).json({ message: 'Tarea no encontrada' });
+
+        // Reglas de permisos:
+        // Admin-Mesa y Super-Admin: Todo.
+        // Especialistas: Solo status.
+        const isAdmin = ['Super-Admin', 'Admin-Mesa'].some(p => userProfile.includes(p));
+        const isSpec = ['Especialistas'].some(p => userProfile.includes(p));
+
+        if (!isAdmin) {
+            if (isSpec) {
+                // Si es especialista, solo puede cambiar el estado
+                const allowedUpdates = ['status', 'updatedAt'];
+                const keys = Object.keys(updates);
+                const isOnlyStatus = keys.every(k => allowedUpdates.includes(k));
+
+                if (!isOnlyStatus) {
+                    return res.status(403).json({ message: 'Como Especialista, solo puedes cambiar el estado de la tarea' });
+                }
+            } else {
+                return res.status(403).json({ message: 'No tienes permisos para editar esta tarea' });
+            }
+        }
 
         // Regla de Negocio: PROGRAMADA -> ASIGNADA se maneja implícitamente por el cliente
-        // Pero validaremos el completado aquí también por seguridad
         if (updates.status === 'COMPLETADA' && !updates.acta_id) {
-             const existingTask = await Task.findById(id);
-             if (!existingTask.acta_id) {
+            if (!existingTask.acta_id) {
                 return res.status(400).json({ message: 'No se puede completar una tarea sin un acta firmada vinculada.' });
-             }
+            }
         }
 
         const task = await Task.findByIdAndUpdate(id, updates, { new: true });
-        if (!task) return res.status(404).json({ message: 'Tarea no encontrada' });
-        
+
+        // Si se asignaron técnicos en la actualización, notificar
+        if (updates.assigned_technicians && updates.assigned_technicians.length > 0) {
+            setImmediate(async () => {
+                try {
+                    const technicians = await glpi.getEligibleTechnicians();
+                    for (const techName of updates.assigned_technicians) {
+                        const techData = technicians.find(t => t.fullName === techName || t.name === techName);
+                        if (techData && techData.mobile) {
+                            const dateObj = new Date(task.scheduled_at);
+                            const formattedDate = isNaN(dateObj.getTime()) ? 'Pendiente' : dateObj.toLocaleString('es-ES', {
+                                day: '2-digit', month: '2-digit', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit', hour12: true
+                            });
+
+                            await whatsapp.sendTaskNotification(techData.mobile, {
+                                techName: techData.fullName || techData.name,
+                                title: task.title,
+                                description: task.description || 'Sin descripción adicional',
+                                date: formattedDate
+                            });
+                        }
+                    }
+                } catch (notifyErr) {
+                    console.warn('[WhatsApp] Error en notificación de actualización:', notifyErr.message);
+                }
+            });
+        }
+
         res.json(task);
     } catch (error) {
+        console.error('[Tasks] Error in PATCH /:', error);
         res.status(400).json({ message: error.message });
+    }
+});
+
+// Eliminar tarea
+router.delete('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userProfile = req.user.profile || '';
+
+        // Solo Admin-Mesa y Super-Admin pueden eliminar
+        const isAdmin = ['Super-Admin', 'Admin-Mesa'].some(p => userProfile.includes(p));
+        if (!isAdmin) {
+            return res.status(403).json({ message: 'No tienes permisos para eliminar tareas' });
+        }
+
+        const task = await Task.findByIdAndDelete(id);
+        if (!task) return res.status(404).json({ message: 'Tarea no encontrada' });
+
+        res.json({ message: 'Tarea eliminada exitosamente' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
 });
 

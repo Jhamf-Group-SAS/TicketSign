@@ -23,6 +23,7 @@ const taskSchema = new mongoose.Schema({
     glpi_ticket_id: String,
     equipment_service: String,
     acta_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Act' },
+    createdBy: { type: String, required: true }, // Username del creador
 
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
