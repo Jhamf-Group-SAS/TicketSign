@@ -335,9 +335,12 @@ function App() {
     )
 
     if (!isAuthenticated) {
-        return <Login onLoginSuccess={(u) => {
+        return <Login onLoginSuccess={async (u) => {
             setIsAuthenticated(true)
             setUser(u)
+            // Disparar sincronización inicial inmediatamente después del login
+            const { SyncService } = await import('./services/SyncService');
+            SyncService.pullRemoteChanges().catch(console.error);
         }} />
     }
 

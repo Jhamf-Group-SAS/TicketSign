@@ -267,14 +267,12 @@ class GLPIConnector {
             const eligibleUsersMap = new Map();
 
             for (const entry of response.data) {
-                // Con expand_dropdowns=true, profiles_id suele traer el nombre del perfil o un ID
+                // Con expand_dropdowns=true, profiles_id suele traer el nombre del perfil
                 const profileLabel = (entry.profiles_id || '').toString();
-                const userName = (entry.users_id || 'Usuario GLPI').toString();
+                // users_id_id contiene el ID numérico real
+                const userId = entry.users_id_id;
 
-                // Extraer ID de usuario (numérico)
-                const userId = entry.users_id_id || entry.users_id;
-
-                if (!userId || isNaN(userId)) continue;
+                if (!userId) continue;
 
                 // Validar contra perfiles objetivo
                 const matches = targetProfiles.some(tp =>
@@ -286,8 +284,8 @@ class GLPIConnector {
                     if (!eligibleUsersMap.has(userId)) {
                         eligibleUsersMap.set(userId, {
                             id: userId,
-                            name: userName,
-                            fullName: userName
+                            name: (entry.users_id || 'Técnico').toString(),
+                            fullName: (entry.users_id || 'Técnico').toString()
                         });
                     }
                 }
