@@ -271,13 +271,30 @@ class GLPIConnector {
             }
 
             for (const entry of response.data) {
-                // Probamos varias formas de obtener el nombre del perfil y el ID del usuario
-                const profileLabel = (entry.profiles_id || entry.profiles_id_name || '').toString();
-                const userId = entry.users_id_id || entry.users_id;
+                // Con expand_dropdowns=true, profiles_id suele traer el nombre del perfil
+                const profileLabel = (entry.profiles_id || '').toString();
+
+                // Intentar obtener el ID del usuario de forma robusta
+                let userId = entry.users_id_id;
+
+                // Si no hay users_id_id, intentar extraer del link "User"
+                if (!userId && entry.links) {
+                    const userLink = entry.links.find(l => l.rel === 'User');
+                    if (userLink) {
+                        const parts = userLink.href.split('/');
+                        const lastPart = parts[parts.length - 1];
+                        if (!isNaN(lastPart)) userId = parseInt(lastPart);
+                    }
+                }
+
+                // Fallback al "id" si es número (en algunas versiones este es el user id si viene filtrado)
+                if (!userId && !isNaN(entry.id)) {
+                    userId = parseInt(entry.id);
+                }
 
                 if (!userId) continue;
 
-                // Validar contra perfiles objetivo
+                // Validar contra perfiles objetivo (por nombre de perfil)
                 const matches = targetProfiles.some(tp =>
                     profileLabel.toLowerCase().includes(tp.toLowerCase()) ||
                     (entry.profiles_id_name && entry.profiles_id_name.toLowerCase().includes(tp.toLowerCase()))
@@ -287,8 +304,8 @@ class GLPIConnector {
                     if (!eligibleUsersMap.has(userId)) {
                         eligibleUsersMap.set(userId, {
                             id: userId,
-                            name: (entry.users_id || 'Técnico').toString(),
-                            fullName: (entry.users_id || 'Técnico').toString()
+                            name: (entry.users_id || 'Usuario').toString(),
+                            fullName: (entry.users_id || 'Usuario').toString()
                         });
                     }
                 }
@@ -308,6 +325,11 @@ class GLPIConnector {
                             headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
                         });
                         const userData = userRes.data;
+
+                        if (i === 0 && tech === batch[0]) {
+                            console.log('[GLPI] Debug - Detalle de usuario (campos):', Object.keys(userData).join(', '));
+                            console.log('[GLPI] Debug - Datos de ejemplo:', { name: userData.name, fname: userData.firstname, rname: userData.realname });
+                        }
 
                         // Construir nombre completo (Nombre Apellido)
                         const fname = userData.firstname || '';

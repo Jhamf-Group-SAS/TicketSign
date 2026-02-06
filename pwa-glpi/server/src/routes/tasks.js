@@ -13,6 +13,7 @@ router.use(authenticateToken);
 router.get('/technicians', async (req, res) => {
     try {
         const technicians = await glpi.getEligibleTechnicians();
+        console.log(`[Tasks] Enviando ${technicians.length} técnicos al cliente.`);
         res.json(technicians);
     } catch (error) {
         res.status(500).json({ message: error.message });

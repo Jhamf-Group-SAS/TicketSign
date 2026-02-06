@@ -123,6 +123,8 @@ export const SyncService = {
         if (!navigator.onLine) return [];
 
         const token = localStorage.getItem('glpi_pro_token');
+        if (!token || token.split('.').length !== 3) return [];
+
         try {
             const response = await fetch(`${API_BASE_URL}/tasks/technicians`, {
                 headers: { 'Authorization': `Bearer ${token}` }
