@@ -266,11 +266,14 @@ class GLPIConnector {
 
             const eligibleUsersMap = new Map();
 
+            if (response.data && response.data.length > 0) {
+                console.log('[GLPI] Debug - Primera entrada de Profile_User:', JSON.stringify(response.data[0]));
+            }
+
             for (const entry of response.data) {
-                // Con expand_dropdowns=true, profiles_id suele traer el nombre del perfil
-                const profileLabel = (entry.profiles_id || '').toString();
-                // users_id_id contiene el ID numérico real
-                const userId = entry.users_id_id;
+                // Probamos varias formas de obtener el nombre del perfil y el ID del usuario
+                const profileLabel = (entry.profiles_id || entry.profiles_id_name || '').toString();
+                const userId = entry.users_id_id || entry.users_id;
 
                 if (!userId) continue;
 
