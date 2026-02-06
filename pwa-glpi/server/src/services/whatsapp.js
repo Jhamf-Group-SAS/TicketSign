@@ -5,7 +5,7 @@ class WhatsAppService {
         return {
             phoneId: process.env.WHATSAPP_PHONE_ID,
             token: process.env.WHATSAPP_TOKEN,
-            templateName: process.env.WHATSAPP_TEMPLATE_NAME || 'notificacion_de_tarea_asignada',
+            templateName: process.env.WHATSAPP_TEMPLATE_NAME || 'notificacion_tarea',
             lang: process.env.WHATSAPP_LANG || 'es'
         };
     }
