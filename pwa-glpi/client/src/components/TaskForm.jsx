@@ -15,7 +15,7 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
 
     // Reglas de permisos
     const isAdmin = (user.profile || '').includes('Super-Admin') || (user.profile || '').includes('Admin-Mesa');
-    const isSpecialist = (user.profile || '').includes('Especialistas');
+    const isSpecialist = ['Especialistas', 'Administrativo', 'Admin'].some(p => (user.profile || '').includes(p));
 
     // ¿Puede editar campos que no sea el estado?
     const canEditFull = isAdmin || (!isEditing && isSpecialist);

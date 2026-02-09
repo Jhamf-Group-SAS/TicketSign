@@ -67,7 +67,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         // Solo perfiles autorizados pueden crear tareas (según el usuario: Especialistas, Super-Admin, Admin-Mesa)
-        const allowedToCreate = ['Super-Admin', 'Admin-Mesa', 'Especialistas'];
+        const allowedToCreate = ['Super-Admin', 'Admin-Mesa', 'Especialistas', 'Admin', 'Administrativo'];
         const userProfile = req.user.profile || '';
 
         if (!allowedToCreate.some(p => userProfile.includes(p))) {
@@ -191,7 +191,7 @@ router.patch('/:id', async (req, res) => {
         // Admin-Mesa y Super-Admin: Todo.
         // Especialistas: Solo status.
         const isAdmin = ['Super-Admin', 'Admin-Mesa'].some(p => userProfile.includes(p));
-        const isSpec = ['Especialistas'].some(p => userProfile.includes(p));
+        const isSpec = ['Especialistas', 'Administrativo', 'Admin'].some(p => userProfile.includes(p));
 
         if (!isAdmin) {
             if (isSpec) {

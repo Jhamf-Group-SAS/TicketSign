@@ -132,7 +132,31 @@ export const SyncService = {
 
             if (response.ok) {
                 const syncedTasks = await response.json();
-                await db.tasks.bulkPut(syncedTasks.map(t => ({ ...t, id: t.id || t._id })));
+
+                // Actualizar tareas locales con los IDs del servidor y otros datos
+                // PERO conservando el ID local (dexie PK)
+                const updates = [];
+                for (const remote of syncedTasks) {
+                    // Buscar tarea local que coincida (por id "temporal" o si ya tenia _id)
+                    // Como syncedTasks viene del servidor, DEBERÍA tener _id
+                    if (remote._id) {
+                        try {
+                            const localMatch = await db.tasks.get({ _id: remote._id });
+                            if (localMatch) {
+                                updates.push({ ...remote, id: localMatch.id });
+                            } else {
+                                // Si no existe por _id, tal vez es una de las que acabamos de enviar?
+                                // Es difícil saber cuál es cuál sin un ID temporal compartido.
+                                // Por ahora, asumimos que si sync devuelve algo es una actualización de lo que enviamos
+                                // OJO: La estrategia de "enviar todo" de arriba es peligrosa si no mapeamos bien.
+                            }
+                        } catch (e) { console.warn(e); }
+                    }
+                }
+
+                if (updates.length > 0) {
+                    await db.tasks.bulkPut(updates);
+                }
                 console.log('Tareas locales sincronizadas con el servidor.');
             }
         } catch (error) {
