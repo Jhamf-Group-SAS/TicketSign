@@ -88,28 +88,28 @@ function App() {
                 }
             }
 
-            if (audioContextRef.current) {
+            if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
                 audioContextRef.current.resume().then(() => {
                     console.log('AudioContext resumed successfully');
                 }).catch(e => console.error('AudioContext resume failed', e));
             }
 
-            // Notification Permissions
-            if ('Notification' in window && Notification.permission !== 'granted') {
-                Notification.requestPermission();
+            // Notification Permissions - Force request
+            if ('Notification' in window) {
+                if (Notification.permission === 'default' || Notification.permission === 'denied') {
+                    Notification.requestPermission().then(permission => {
+                        console.log('Notification permission:', permission);
+                    });
+                }
             }
-
-            // Remover listeners solo si el audio está corriendo o si ya se interactuó
-            window.removeEventListener('click', initAudioAndPermissions);
-            window.removeEventListener('touchstart', initAudioAndPermissions);
         };
 
-        window.addEventListener('click', initAudioAndPermissions);
-        window.addEventListener('touchstart', initAudioAndPermissions);
+        // Listeners para iniciar audio en cualquier interacción
+        const events = ['click', 'touchstart', 'touchend', 'keydown'];
+        events.forEach(event => window.addEventListener(event, initAudioAndPermissions));
 
         return () => {
-            window.removeEventListener('click', initAudioAndPermissions);
-            window.removeEventListener('touchstart', initAudioAndPermissions);
+            events.forEach(event => window.removeEventListener(event, initAudioAndPermissions));
         };
     }, []);
 
@@ -171,13 +171,16 @@ function App() {
                 .where('reminder_at')
                 .notEqual('')
                 .and(t => {
+                    // Verificación de fecha válida y no enviada
+                    if (!t.reminder_at || t.reminder_sent || t.status === 'COMPLETADA' || t.status === 'CANCELADA') return false;
+
+                    // Verificación de asignación
                     const isCreator = t.createdBy === user.username;
-                    const isAssigned = (t.assigned_technicians || []).includes(user.name) || (t.assigned_technicians || []).includes(user.displayName);
-                    // También chequear por username en técnicos si es posible, pero usualmente guardamos nombres reales
-                    return !t.reminder_sent &&
-                        t.status !== 'COMPLETADA' &&
-                        t.status !== 'CANCELADA' &&
-                        (isCreator || isAssigned);
+                    const isAssigned = (t.assigned_technicians || []).some(tech =>
+                        tech === user.name || tech === user.username || tech === user.displayName
+                    );
+
+                    return isCreator || isAssigned;
                 })
                 .toArray();
 

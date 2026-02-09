@@ -290,8 +290,8 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                                     {formData.isPrivate ? <Lock size={14} className="mr-1" /> : <Globe size={14} className="mr-1" />}
                                     <span className="text-[10px] font-black uppercase">{formData.isPrivate ? 'Privada' : 'Pública'}</span>
                                 </div>
-                                <div className={cn("w-1/2 text-center text-[10px] font-black uppercase", !formData.isPrivate ? "opacity-40" : "hidden")}>Pública</div>
-                                <div className={cn("w-1/2 text-center text-[10px] font-black uppercase ml-auto", formData.isPrivate ? "opacity-40" : "hidden")}>Privada</div>
+                                <div className={cn("w-1/2 text-center text-[10px] font-black uppercase", !formData.isPrivate ? "" : "hidden")}>Pública</div>
+                                <div className={cn("w-1/2 text-center text-[10px] font-black uppercase ml-auto", formData.isPrivate ? "" : "hidden")}>Privada</div>
                             </button>
                         </div>
 
