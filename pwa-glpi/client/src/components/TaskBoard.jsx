@@ -38,7 +38,7 @@ const TaskBoard = ({ onBack }) => {
 
     // Reglas de permisos
     const isAdmin = (user.profile || '').includes('Super-Admin') || (user.profile || '').includes('Admin-Mesa');
-    const isSpecialist = (user.profile || '').includes('Especialistas');
+    const isSpecialist = ['Especialistas', 'Administrativo', 'Admin'].some(p => (user.profile || '').includes(p));
     const canCreate = isAdmin || isSpecialist;
     const canMove = isAdmin || isSpecialist;
 

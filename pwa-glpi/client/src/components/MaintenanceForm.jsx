@@ -2,7 +2,7 @@ import { useState } from 'react';
 import SignaturePad from './SignaturePad';
 import PhotoCapture from './PhotoCapture';
 import Toast from './Toast';
-import { saveDraftAct, db } from '../store/db';
+import { saveDraftAct, markForSync, db } from '../store/db';
 import { CheckCircle, AlertTriangle, Save, X, ChevronLeft, HardDrive } from 'lucide-react';
 
 const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
@@ -89,9 +89,10 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
             return;
         }
 
+        let actId;
         try {
             // Guardar localmente primero (Always safety first)
-            const actId = await saveDraftAct({ ...formData, type });
+            actId = await saveDraftAct({ ...formData, type });
 
             if (navigator.onLine) {
                 setToast({ message: 'Sincronizando con GLPI...', type: 'info' });
@@ -117,12 +118,14 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
                     throw new Error(result.message || 'Error en la sincronización');
                 }
             } else {
-                setToast({ message: 'Acta guardada localmente (Modo Offline)', type: 'success' });
+                await markForSync(actId);
+                setToast({ message: 'Acta guardada localmente. Sincronización Pendiente.', type: 'warning' });
                 setTimeout(() => onSave(), 2000);
             }
         } catch (error) {
             console.error('Error al sincronizar:', error);
-            setToast({ message: `Error: ${error.message}. Se guardó localmente.`, type: 'error' });
+            if (actId) await markForSync(actId);
+            setToast({ message: `Guardada localmente (Pendiente de Sync). Error: ${error.message}`, type: 'warning' });
             setTimeout(() => onSave(), 3000);
         }
     };
