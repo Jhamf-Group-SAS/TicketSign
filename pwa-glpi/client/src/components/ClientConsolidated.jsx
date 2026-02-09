@@ -44,7 +44,10 @@ const ClientConsolidated = ({ onBack }) => {
         try {
             const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/reports/export-consolidated`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
+                },
                 body: JSON.stringify({
                     client_name: selectedClient,
                     acts: clientActs
@@ -81,7 +84,10 @@ const ClientConsolidated = ({ onBack }) => {
         try {
             const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/reports/consolidated`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
+                },
                 body: JSON.stringify({
                     client_name: selectedClient,
                     acts: clientActs,

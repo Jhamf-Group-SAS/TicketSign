@@ -214,6 +214,10 @@ function App() {
         if (savedToken && savedUser) {
             setIsAuthenticated(true)
             setUser(JSON.parse(savedUser))
+            // Inicializar servicio de sincronización si hay sesión
+            import('./services/SyncService').then(({ SyncService }) => {
+                SyncService.init();
+            }).catch(console.error);
         }
 
         const handleOnline = () => setIsOnline(true)
@@ -357,9 +361,9 @@ function App() {
         return <Login onLoginSuccess={async (u) => {
             setIsAuthenticated(true)
             setUser(u)
-            // Disparar sincronización inicial inmediatamente después del login
+            // Disparar sincronización inicial inmediatamente después del login e inicializar
             const { SyncService } = await import('./services/SyncService');
-            SyncService.pullRemoteChanges().catch(console.error);
+            SyncService.init(); // init() ya llama a pullRemoteChanges internally
         }} />
     }
 

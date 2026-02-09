@@ -59,7 +59,7 @@ export const SyncService = {
             });
             if (responseActs.ok) {
                 const remoteActs = await responseActs.json();
-                if (remoteActs && remoteActs.length > 0) {
+                if (remoteActs) {
                     const { saveRemoteActs } = await import('../store/db');
                     await saveRemoteActs(remoteActs);
                     console.log(`Sincronizados ${remoteActs.length} registros de actas del servidor.`);
@@ -72,7 +72,7 @@ export const SyncService = {
             });
             if (responseTasks.ok) {
                 const remoteTasks = await responseTasks.json();
-                if (remoteTasks && remoteTasks.length > 0) {
+                if (remoteTasks) {
                     const { db } = await import('../store/db');
 
                     // Estrategia Anti-Duplicados:
@@ -129,6 +129,7 @@ export const SyncService = {
 
         const { db } = await import('../store/db');
         const token = localStorage.getItem('glpi_pro_token');
+        if (!token || token.split('.').length !== 3) return;
 
         // Por ahora enviamos todas las tareas locales para asegurar consistencia
         const localTasks = await db.tasks.toArray();

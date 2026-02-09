@@ -152,10 +152,8 @@ router.post('/sync', async (req, res) => {
 
             let task;
             if (_id && _id.length === 24) { // MongoDB ID
-                // Solo Admin-Mesa y Super-Admin pueden editar por completo en sync
-                // Especialistas solo pueden cambiar estado - Validaremos esto en el cliente preferiblemente
-                // pero aquí registramos quién lo hizo o mantenemos consistencia.
-                task = await Task.findByIdAndUpdate(_id, updateData, { new: true, upsert: true });
+                task = await Task.findByIdAndUpdate(_id, updateData, { new: true, upsert: false });
+                if (!task) continue; // Si no existe (fue borrada), no la recreamos
             } else {
                 updateData.createdBy = req.user.username;
                 task = new Task(updateData);

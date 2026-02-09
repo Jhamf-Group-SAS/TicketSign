@@ -21,7 +21,10 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
         try {
             const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/sync/maintenance`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
+                },
                 body: JSON.stringify(act)
             });
 
@@ -45,7 +48,10 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
         try {
             const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/reports/individual`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
+                },
                 body: JSON.stringify(act)
             });
 
