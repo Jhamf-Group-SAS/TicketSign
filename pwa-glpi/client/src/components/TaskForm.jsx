@@ -17,12 +17,16 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
     const isAdmin = (user.profile || '').includes('Super-Admin') || (user.profile || '').includes('Admin-Mesa');
     const isSpecialist = ['Especialistas', 'Administrativo', 'Admin'].some(p => (user.profile || '').includes(p));
 
-    // ¿Puede editar campos que no sea el estado?
-    const canEditFull = isAdmin || (!isEditing && isSpecialist);
-    // ¿Puede editar el estado?
-    const canEditStatus = isAdmin || isSpecialist;
-    // ¿Puede eliminar?
-    const canDelete = isAdmin;
+    // ¿Puede editar campos? (Admin, o es el Creador)
+    const isCreator = initialData?.createdBy === user.username;
+    // canEditFull: Admin, o (Especialista creando nueva), o Creador
+    const canEditFull = isAdmin || (!isEditing && isSpecialist) || isCreator;
+
+    // ¿Puede editar el estado? (Admin, Creador, o Asignado)
+    const canEditStatus = isAdmin || isSpecialist || isCreator;
+
+    // ¿Puede eliminar? (Admin o Creador)
+    const canDelete = isAdmin || isCreator;
 
     const [formData, setFormData] = useState({
         title: '',
@@ -33,6 +37,7 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
         scheduled_at: '',
         reminder_at: '',
         reminder_sent: false,
+        recurrence: 'NINGUNA',
         assigned_technicians: [],
         glpi_ticket_id: '',
         equipment_service: '',
@@ -49,7 +54,7 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
     const [toast, setToast] = useState(null);
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [isReminderPickerOpen, setIsReminderPickerOpen] = useState(false);
-    const [openDropdown, setOpenDropdown] = useState(null); // 'type' | 'priority' | 'status' | null
+    const [openDropdown, setOpenDropdown] = useState(null); // 'type' | 'priority' | 'status' | 'recurrence' | null
     const [isDeleting, setIsDeleting] = useState(false);
 
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -356,6 +361,18 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                                 name="priority"
                                 value={formData.priority}
                                 options={['BAJA', 'MEDIA', 'ALTA']}
+                                onChange={handleInputChange}
+                                disabled={!canEditFull}
+                            />
+                        </div>
+
+                        {/* Recurrencia */}
+                        <div>
+                            <CustomSelect
+                                label="Periodicidad"
+                                name="recurrence"
+                                value={formData.recurrence || 'NINGUNA'}
+                                options={['NINGUNA', 'DIARIA', 'SEMANAL', 'MENSUAL']}
                                 onChange={handleInputChange}
                                 disabled={!canEditFull}
                             />

@@ -27,6 +27,11 @@ const taskSchema = new mongoose.Schema({
     isPrivate: { type: Boolean, default: false },
     reminder_at: { type: Date },
     reminder_sent: { type: Boolean, default: false },
+    recurrence: {
+        type: String,
+        enum: ['NINGUNA', 'DIARIA', 'SEMANAL', 'MENSUAL'],
+        default: 'NINGUNA'
+    },
 
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }

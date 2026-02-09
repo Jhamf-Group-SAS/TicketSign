@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../store/db';
-import TaskForm from './TaskForm';
+import { isHoliday } from '../utils/holidays';
 import {
     Clock,
     CheckCircle2,
@@ -19,6 +18,8 @@ import {
     ChevronDown,
     Bell
 } from 'lucide-react';
+import { db } from '../store/db';
+import TaskForm from './TaskForm';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -310,6 +311,8 @@ const TaskBoard = ({ onBack }) => {
                             });
                             const isToday = new Date().toDateString() === date.toDateString();
                             const isHighlighted = highlightedDay === date.toDateString();
+                            const isFestivo = isHoliday(date);
+
                             return (
                                 <div
                                     key={i}
@@ -317,9 +320,18 @@ const TaskBoard = ({ onBack }) => {
                                     onDragOver={(e) => e.preventDefault()}
                                     onDrop={(e) => { e.preventDefault(); if (!canMove) return; const taskId = e.dataTransfer.getData("taskId"); if (taskId) { db.tasks.get(Number(taskId)).then(task => { if (task) { const originalDate = new Date(task.scheduled_at); const nDate = new Date(date); nDate.setHours(originalDate.getHours(), originalDate.getMinutes()); db.tasks.update(Number(taskId), { scheduled_at: nDate.toISOString(), updatedAt: new Date().toISOString() }); } }); } }}
                                     onClick={() => handleCreateOnDay(date)}
-                                    className={cn("bg-white dark:bg-slate-900/80 h-[100px] sm:h-[120px] p-1.5 transition-all hover:bg-slate-50 dark:hover:bg-white/5 border-[0.5px] border-slate-100 dark:border-white/5 cursor-cell group flex flex-col", isToday && "ring-1 ring-inset ring-blue-500/30 bg-blue-500/5", isHighlighted && "ring-2 ring-inset ring-blue-500 ring-offset-2 dark:ring-offset-slate-900")}
+                                    className={cn(
+                                        "relative bg-white dark:bg-slate-900/80 h-[100px] sm:h-[120px] p-1.5 transition-all hover:bg-slate-50 dark:hover:bg-white/5 border-[0.5px] border-slate-100 dark:border-white/5 cursor-cell group flex flex-col",
+                                        isToday && "ring-1 ring-inset ring-blue-500/30 bg-blue-500/5",
+                                        isHighlighted && "ring-2 ring-inset ring-blue-500 ring-offset-2 dark:ring-offset-slate-900",
+                                        isFestivo && "bg-red-50/30 dark:bg-red-900/10"
+                                    )}
                                 >
-                                    <div className="flex justify-between items-center mb-1 px-1 shrink-0"><span className={cn("text-[11px] font-black", isToday ? "text-blue-500" : "text-slate-400")}>{date.getDate()}</span><Plus size={10} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" /></div>
+                                    {isFestivo && <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-400" title="Festivo"></div>}
+                                    <div className="flex justify-between items-center mb-1 px-1 shrink-0">
+                                        <span className={cn("text-[11px] font-black", isToday ? "text-blue-500" : isFestivo ? "text-red-400" : "text-slate-400")}>{date.getDate()}</span>
+                                        <Plus size={10} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
                                     <div className="space-y-1 flex-1 overflow-y-auto no-scrollbar">
                                         {dayTasks.map(task => {
                                             const statusInfo = KANBAN_STATUS.find(s => s.id === task.status);

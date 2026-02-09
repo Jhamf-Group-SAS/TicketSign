@@ -187,19 +187,25 @@ router.patch('/:id', async (req, res) => {
 
         // Reglas de permisos:
         // Admin-Mesa y Super-Admin: Todo.
-        // Especialistas: Solo status.
+        // Creador: Todo.
+        // Asignado: Solo status y updatedAt.
         const isAdmin = ['Super-Admin', 'Admin-Mesa'].some(p => userProfile.includes(p));
-        const isSpec = ['Especialistas', 'Administrativo', 'Admin'].some(p => userProfile.includes(p));
+        const isCreator = existingTask.createdBy === req.user.username;
 
-        if (!isAdmin) {
-            if (isSpec) {
-                // Si es especialista, solo puede cambiar el estado
+        // Verificar si el usuario está asignado (buscando por username o nombre completo)
+        const isAssigned = (existingTask.assigned_technicians || []).some(tech =>
+            tech === req.user.username || tech === req.user.fullName
+        );
+
+        if (!isAdmin && !isCreator) {
+            if (isAssigned) {
+                // Si es asignado pero no creador, solo puede cambiar el estado
                 const allowedUpdates = ['status', 'updatedAt'];
                 const keys = Object.keys(updates);
                 const isOnlyStatus = keys.every(k => allowedUpdates.includes(k));
 
                 if (!isOnlyStatus) {
-                    return res.status(403).json({ message: 'Como Especialista, solo puedes cambiar el estado de la tarea' });
+                    return res.status(403).json({ message: 'Como usuario asignado, solo puedes cambiar el estado de la tarea' });
                 }
             } else {
                 return res.status(403).json({ message: 'No tienes permisos para editar esta tarea' });
@@ -257,9 +263,15 @@ router.delete('/:id', async (req, res) => {
         const { id } = req.params;
         const userProfile = req.user.profile || '';
 
-        // Solo Admin-Mesa y Super-Admin pueden eliminar
+        // Buscar tarea para verificar dueño
+        const existingTask = (id.length === 24) ? await Task.findById(id) : null;
+        if (!existingTask && id.length === 24) return res.status(404).json({ message: 'Tarea no encontrada' });
+
+        // Solo Admin-Mesa, Super-Admin y Creador pueden eliminar
         const isAdmin = ['Super-Admin', 'Admin-Mesa'].some(p => userProfile.includes(p));
-        if (!isAdmin) {
+        const isCreator = existingTask && existingTask.createdBy === req.user.username;
+
+        if (!isAdmin && !isCreator) {
             return res.status(403).json({ message: 'No tienes permisos para eliminar tareas' });
         }
 
