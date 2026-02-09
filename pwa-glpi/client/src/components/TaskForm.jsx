@@ -50,6 +50,9 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [isReminderPickerOpen, setIsReminderPickerOpen] = useState(false);
     const [openDropdown, setOpenDropdown] = useState(null); // 'type' | 'priority' | 'status' | null
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const datePickerRef = useRef(null);
     const reminderPickerRef = useRef(null);
@@ -524,21 +527,7 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                         {isEditing && canDelete && (
                             <button
                                 type="button"
-                                onClick={async () => {
-                                    if (window.confirm('¿Estás seguro de eliminar esta tarea?')) {
-                                        await db.tasks.delete(formData.id);
-                                        // Intentar eliminar del servidor
-                                        if (navigator.onLine && (formData._id || formData.id)) {
-                                            await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks/${formData._id || formData.id}`, {
-                                                method: 'DELETE',
-                                                headers: {
-                                                    'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
-                                                }
-                                            });
-                                        }
-                                        onSave();
-                                    }
-                                }}
+                                onClick={() => setShowDeleteConfirm(true)}
                                 className="p-4 rounded-2xl border-2 border-red-500/20 text-red-500 hover:bg-red-500/10 transition-all active:scale-95"
                             >
                                 <Trash2 size={20} />
@@ -564,6 +553,58 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                     )}
                 </footer>
             </div>
+
+            {/* Modal de confirmación de eliminación con estilo Premium */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2rem] border border-slate-200 dark:border-white/10 shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+                        <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 mb-4 mx-auto">
+                            <Trash2 size={24} />
+                        </div>
+                        <h3 className="text-lg font-black text-center text-slate-900 dark:text-white mb-2">¿Eliminar Tarea?</h3>
+                        <p className="text-center text-slate-500 text-sm mb-6 font-medium">
+                            Esta acción no se puede deshacer. La tarea será eliminada permanentemente.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                disabled={isDeleting}
+                                className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-white/10 font-bold uppercase text-[10px] tracking-widest text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    setIsDeleting(true);
+                                    try {
+                                        await db.tasks.delete(formData.id);
+                                        // Si estamos online, borrar del servidor
+                                        if (navigator.onLine) {
+                                            await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks/${formData._id || formData.id}`, {
+                                                method: 'DELETE',
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                    'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
+                                                }
+                                            });
+                                        }
+                                        setToast({ message: 'Tarea eliminada', type: 'success' });
+                                        setTimeout(onSave, 500); // Dar tiempo al toast
+                                    } catch (error) {
+                                        console.error(error);
+                                        setIsDeleting(false);
+                                        setToast({ message: 'Error eliminando', type: 'error' });
+                                    }
+                                }}
+                                disabled={isDeleting}
+                                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold uppercase text-[10px] tracking-widest hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all active:scale-95 flex justify-center items-center"
+                            >
+                                {isDeleting ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Eliminar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
