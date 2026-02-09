@@ -99,6 +99,20 @@ export const SyncService = {
                     });
 
                     await db.tasks.bulkPut(tasksToSave);
+
+                    // Eliminar localmente las tareas que ya no existen en el servidor
+                    // Solo consideramos tareas que ya tenían ID de servidor (_id)
+                    const remoteIds = new Set(remoteTasks.map(t => t._id));
+                    const localTasks = await db.tasks.toArray();
+                    const tasksToDelete = localTasks
+                        .filter(t => t._id && !remoteIds.has(t._id)) // Tiene ID server pero no vino en la respuesta
+                        .map(t => t.id); // Usamos ID local para borrar
+
+                    if (tasksToDelete.length > 0) {
+                        await db.tasks.bulkDelete(tasksToDelete);
+                        console.log(`Eliminadas ${tasksToDelete.length} tareas locales que ya no existen en el servidor.`);
+                    }
+
                     console.log(`Sincronizadas ${remoteTasks.length} tareas del servidor.`);
                 }
             }

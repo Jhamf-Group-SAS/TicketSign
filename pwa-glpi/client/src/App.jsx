@@ -481,7 +481,7 @@ function App() {
                 <div className="flex items-center gap-2 sm:gap-3">
                     <div className="relative" ref={notificationsRef}>
                         <button
-                            onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                            onClick={() => { setIsNotificationsOpen(!isNotificationsOpen); if (!isNotificationsOpen) setNotifications([]); }}
                             className="relative p-2 text-slate-500 hover:text-blue-500 hover:bg-blue-500/5 rounded-xl transition-all active:scale-90 group"
                         >
                             <Bell size={20} />
