@@ -10,6 +10,7 @@ import Login from './components/Login'
 import HistoryList from './components/HistoryList'
 import TaskBoard from './components/TaskBoard'
 import DashboardSummary from './components/DashboardSummary'
+import Toast from './components/Toast'
 import { Plus, History, Wifi, WifiOff, Settings, Calendar, User, ClipboardList, LogOut, Users, FileText, Kanban, LayoutDashboard, Bell, Menu, X } from 'lucide-react'
 
 const cn = (...inputs) => twMerge(clsx(inputs));
@@ -25,8 +26,159 @@ function App() {
     const [theme, setTheme] = useState(localStorage.getItem('glpi_pro_theme') || 'dark')
     const [notifications, setNotifications] = useState([])
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+    const [notificationToast, setNotificationToast] = useState(null)
 
-    // Refs para cerrar menús al hacer clic fuera
+    // Referencias para manejo de estado sin re-render
+    const processingRef = useRef(new Set());
+    const audioContextRef = useRef(null);
+
+    const playNotificationSound = async () => {
+        try {
+            if (!audioContextRef.current) {
+                audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            const ctx = audioContextRef.current;
+            if (ctx.state === 'suspended') await ctx.resume();
+
+            // Oscilador para el primer beep
+            const oscillator1 = ctx.createOscillator();
+            const gainNode1 = ctx.createGain();
+            oscillator1.connect(gainNode1);
+            gainNode1.connect(ctx.destination);
+
+            oscillator1.type = 'sawtooth';
+            oscillator1.frequency.setValueAtTime(900, ctx.currentTime);
+            gainNode1.gain.setValueAtTime(0.6, ctx.currentTime);
+            gainNode1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+
+            oscillator1.start(ctx.currentTime);
+            oscillator1.stop(ctx.currentTime + 0.15);
+
+            // Oscilador para el segundo beep
+            const oscillator2 = ctx.createOscillator();
+            const gainNode2 = ctx.createGain();
+            oscillator2.connect(gainNode2);
+            gainNode2.connect(ctx.destination);
+
+            oscillator2.type = 'sawtooth';
+            oscillator2.frequency.setValueAtTime(1200, ctx.currentTime + 0.2);
+            gainNode2.gain.setValueAtTime(0.6, ctx.currentTime + 0.2);
+            gainNode2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+
+            oscillator2.start(ctx.currentTime + 0.2);
+            oscillator2.stop(ctx.currentTime + 0.4);
+        } catch (e) {
+            console.error("Error reproduciendo sonido:", e);
+        }
+    };
+
+    // Global Reminder Watcher Mejorado y Anti-Duplicados
+    useEffect(() => {
+        const checkReminders = async () => {
+            if (!user) return;
+            const now = new Date().getTime();
+
+            // Buscar tareas con recordatorio configurado que no estén completadas
+            const tasksWithReminders = await db.tasks
+                .where('reminder_at')
+                .notEqual('')
+                .and(t => {
+                    // Verificación de fecha válida
+                    if (!t.reminder_at || t.status === 'COMPLETADA' || t.status === 'CANCELADA') return false;
+
+                    // Verificación de asignación
+                    const isCreator = t.createdBy === user.username;
+                    const isAssigned = (t.assigned_technicians || []).some(tech =>
+                        tech === user.name || tech === user.username || tech === user.displayName
+                    );
+
+                    return isCreator || isAssigned;
+                })
+                .toArray();
+
+            for (const task of tasksWithReminders) {
+                // Verificar si ya se mostró notificación LOCALMENTE para esta tarea
+                try {
+                    // Usamos la clave primaria directamente (task.id)
+                    const alreadyNotified = await db.notification_log.get(task.id);
+                    if (alreadyNotified) continue;
+                } catch (e) {
+                    console.warn('Error checking notification log', e);
+                }
+
+                if (processingRef.current.has(task.id)) continue;
+
+                const reminderTime = new Date(task.reminder_at).getTime();
+
+                // Si ya pasó la hora del recordatorio (y no lo hemos mostrado)
+                if (reminderTime <= now) {
+                    processingRef.current.add(task.id);
+
+                    try {
+                        playNotificationSound();
+
+                        // 1. Mostrar Popup Visual en la App (Toast)
+                        setNotificationToast({
+                            message: `🔔 RECORDATORIO: ${task.title}`,
+                            type: 'warning',
+                            duration: 10000
+                        });
+
+                        const newNotification = {
+                            id: Date.now() + Math.random(),
+                            title: 'Recordatorio',
+                            message: `Es hora de: ${task.title}`,
+                            time: 'Ahora',
+                            type: 'warning',
+                            task_id: task.id
+                        };
+
+                        setNotifications(prev => {
+                            const exists = prev.some(n => n.task_id === task.id && n.time === 'Ahora');
+                            if (exists) return prev;
+                            return [newNotification, ...prev];
+                        });
+
+                        // 2. Notificación del Sistema (OS)
+                        if ('Notification' in window && Notification.permission === 'granted') {
+                            try {
+                                const notification = new Notification('⏰ Recordatorio de Tarea', {
+                                    body: `Es hora de: ${task.title}`,
+                                    icon: '/logo.png',
+                                    vibrate: [200, 100, 200],
+                                    tag: `task-${task.id}`,
+                                    requireInteraction: true
+                                });
+
+                                notification.onclick = (e) => {
+                                    e.preventDefault();
+                                    window.focus();
+                                    notification.close();
+                                    setTimeout(() => setView('kanban'), 100);
+                                };
+                            } catch (e) {
+                                console.error("Error lanzando notificación nativa:", e);
+                            }
+                        }
+
+                        // Marcar como notificado LOCALMENTE
+                        await db.notification_log.add({ task_id: task.id, sent_at: now });
+                    } catch (err) {
+                        console.error("Error procesando recordatorio:", err);
+                    }
+
+                    setTimeout(() => {
+                        if (processingRef.current) processingRef.current.delete(task.id);
+                    }, 5000);
+                }
+            }
+        };
+
+        const interval = setInterval(checkReminders, 5000);
+        checkReminders(); // Check immediately on mount
+
+        return () => clearInterval(interval);
+    }, [user]);
     const notificationsRef = useRef(null);
     const userMenuRef = useRef(null);
 
@@ -43,9 +195,7 @@ function App() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Referencias para manejo de estado sin re-render
-    const processingRef = useRef(new Set());
-    const audioContextRef = useRef(null);
+
 
     // Reactive query for recent acts
     const pendingActs = useLiveQuery(() => db.acts.orderBy('createdAt').reverse().limit(10).toArray()) || []
@@ -113,152 +263,7 @@ function App() {
         };
     }, []);
 
-    // Sonido de notificación robusto (Doble Beep Alerta)
-    const playNotificationSound = () => {
-        try {
-            if (!audioContextRef.current) {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                if (AudioContext) audioContextRef.current = new AudioContext();
-            }
 
-            const ctx = audioContextRef.current;
-            if (!ctx) return;
-
-            if (ctx.state === 'suspended') ctx.resume();
-
-            // Oscilador para el primer beep
-            const oscillator1 = ctx.createOscillator();
-            const gainNode1 = ctx.createGain();
-            oscillator1.connect(gainNode1);
-            gainNode1.connect(ctx.destination);
-
-            oscillator1.type = 'sawtooth'; // Onda más notoria que sine
-            oscillator1.frequency.setValueAtTime(900, ctx.currentTime);
-            gainNode1.gain.setValueAtTime(0.6, ctx.currentTime);
-            gainNode1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
-
-            oscillator1.start(ctx.currentTime);
-            oscillator1.stop(ctx.currentTime + 0.15);
-
-            // Oscilador para el segundo beep (más agudo, breve pausa)
-            const oscillator2 = ctx.createOscillator();
-            const gainNode2 = ctx.createGain();
-            oscillator2.connect(gainNode2);
-            gainNode2.connect(ctx.destination);
-
-            oscillator2.type = 'sawtooth';
-            oscillator2.frequency.setValueAtTime(1200, ctx.currentTime + 0.2);
-            gainNode2.gain.setValueAtTime(0.6, ctx.currentTime + 0.2);
-            gainNode2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
-
-            oscillator2.start(ctx.currentTime + 0.2);
-            oscillator2.stop(ctx.currentTime + 0.4);
-
-        } catch (e) {
-            console.error("Error reproduciendo sonido:", e);
-        }
-    };
-
-
-
-    // Global Reminder Watcher Mejorado y Anti-Duplicados
-    useEffect(() => {
-        const checkReminders = async () => {
-            if (!user) return;
-            const now = new Date().getTime();
-
-            const tasksWithReminders = await db.tasks
-                .where('reminder_at')
-                .notEqual('')
-                .and(t => {
-                    // Verificación de fecha válida
-                    if (!t.reminder_at || t.status === 'COMPLETADA' || t.status === 'CANCELADA') return false;
-
-                    // Verificación de asignación
-                    const isCreator = t.createdBy === user.username;
-                    const isAssigned = (t.assigned_technicians || []).some(tech =>
-                        tech === user.name || tech === user.username || tech === user.displayName
-                    );
-
-                    return isCreator || isAssigned;
-                })
-                .toArray();
-
-            for (const task of tasksWithReminders) {
-                // Verificar si ya se mostró notificación LOCALMENTE para esta tarea
-                try {
-                    const alreadyNotified = await db.notification_log.get({ task_id: task.id });
-                    if (alreadyNotified) continue;
-                } catch (e) {
-                    console.warn('Error checking notification log', e);
-                }
-
-                if (processingRef.current.has(task.id)) continue;
-
-                const reminderTime = new Date(task.reminder_at).getTime();
-
-                // Si ya pasó la hora del recordatorio (y no lo hemos mostrado)
-                if (reminderTime <= now) {
-                    processingRef.current.add(task.id);
-
-                    try {
-                        playNotificationSound();
-
-                        const newNotification = {
-                            id: Date.now() + Math.random(),
-                            title: 'Recordatorio de Tarea',
-                            message: `Es hora de: ${task.title}`,
-                            time: 'Ahora',
-                            type: 'warning',
-                            task_id: task.id
-                        };
-
-                        setNotifications(prev => {
-                            const exists = prev.some(n => n.task_id === task.id && n.time === 'Ahora');
-                            if (exists) return prev;
-                            return [newNotification, ...prev];
-                        });
-
-                        if ('Notification' in window && Notification.permission === 'granted') {
-                            try {
-                                const notification = new Notification('⏰ Recordatorio de Tarea', {
-                                    body: `Es hora de: ${task.title}`,
-                                    icon: '/logo.png',
-                                    vibrate: [200, 100, 200],
-                                    tag: `task-${task.id}`,
-                                    requireInteraction: true
-                                });
-
-                                notification.onclick = (e) => {
-                                    e.preventDefault();
-                                    window.focus();
-                                    notification.close();
-                                    setTimeout(() => setView('kanban'), 100);
-                                };
-                            } catch (e) {
-                                console.error("Error lanzando notificación nativa:", e);
-                            }
-                        }
-
-                        // Marcar como notificado LOCALMENTE
-                        await db.notification_log.add({ task_id: task.id, sent_at: now });
-                        // No actualizamos db.tasks.update(..reminder_sent) aquí para no chocar con el server
-                    } catch (err) {
-                        console.error("Error procesando recordatorio:", err);
-                    }
-
-                    setTimeout(() => {
-                        if (processingRef.current) processingRef.current.delete(task.id);
-                    }, 5000);
-                }
-            }
-        };
-
-        const interval = setInterval(checkReminders, 10000);
-        checkReminders();
-
-        return () => clearInterval(interval);
-    }, []);
 
     const renderHome = () => (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">

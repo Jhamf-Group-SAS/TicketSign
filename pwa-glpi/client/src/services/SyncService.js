@@ -74,7 +74,31 @@ export const SyncService = {
                 const remoteTasks = await responseTasks.json();
                 if (remoteTasks && remoteTasks.length > 0) {
                     const { db } = await import('../store/db');
-                    await db.tasks.bulkPut(remoteTasks.map(t => ({ ...t, id: t.id || t._id })));
+
+                    // Estrategia Anti-Duplicados:
+                    // 1. Obtener todas las tareas locales que tengan _id (para mapear)
+                    const localTasksWithServerId = await db.tasks.where('_id').notEqual('').toArray();
+                    const serverIdToLocalIdMap = new Map();
+                    localTasksWithServerId.forEach(t => {
+                        if (t._id) serverIdToLocalIdMap.set(t._id, t.id);
+                    });
+
+                    // 2. Preparar tareas remotas preservando el ID local si existe
+                    const tasksToSave = remoteTasks.map(remote => {
+                        const localId = serverIdToLocalIdMap.get(remote._id);
+                        if (localId) {
+                            // Si ya existe localmente, usamos su ID local (PK) para actualizar
+                            return { ...remote, id: localId };
+                        } else {
+                            // Si es nueva, dejamos que Dexie asigne ID (o usamos remote.id si existiera y fuera integer, pero mejor dejar undefined)
+                            // Nota: remote.id suele ser string (Mongo ID) o undefined. Si es string, Dexie ++id lo ignorará o fallará.
+                            // Mejor asegurarnos que NO tenga 'id' si es string
+                            const { id, _id, ...rest } = remote;
+                            return { ...remote, id: undefined }; // Forzamos undefined para auto-increment
+                        }
+                    });
+
+                    await db.tasks.bulkPut(tasksToSave);
                     console.log(`Sincronizadas ${remoteTasks.length} tareas del servidor.`);
                 }
             }

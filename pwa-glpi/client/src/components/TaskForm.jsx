@@ -216,17 +216,31 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                 }
                 setToast({ message: 'Tarea actualizada correctamente', type: 'success' });
             } else {
-                const newId = await db.tasks.add(finalData);
-                // Si estamos online, intentar crear en el servidor
+                // 1. Crear localmente primero para tener respuesta inmediata
+                const newLocalId = await db.tasks.add(finalData);
+
+                // 2. Si estamos online, intentar crear en el servidor de inmediato
                 if (navigator.onLine) {
-                    await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
-                        },
-                        body: JSON.stringify(finalData)
-                    });
+                    try {
+                        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
+                            },
+                            body: JSON.stringify(finalData)
+                        });
+
+                        if (response.ok) {
+                            const newTask = await response.json();
+                            // CRÍTICO: Actualizar la tarea local con el _id del servidor para evitar duplicados
+                            if (newTask._id) {
+                                await db.tasks.update(newLocalId, { _id: newTask._id });
+                            }
+                        }
+                    } catch (serverErr) {
+                        console.warn('Creada localmente, pendiente de sync con servidor:', serverErr);
+                    }
                 }
                 setToast({ message: 'Tarea creada correctamente', type: 'success' });
             }
