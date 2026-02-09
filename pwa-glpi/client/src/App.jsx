@@ -143,23 +143,32 @@ function App() {
                             return [newNotification, ...prev];
                         });
 
-                        // 2. Notificación del Sistema (OS)
+                        // 2. Notificación del Sistema (OS / Mobile Lock Screen)
                         if ('Notification' in window && Notification.permission === 'granted') {
                             try {
-                                const notification = new Notification('⏰ Recordatorio de Tarea', {
-                                    body: `Es hora de: ${task.title}`,
-                                    icon: '/logo.png',
-                                    vibrate: [200, 100, 200],
-                                    tag: `task-${task.id}`,
-                                    requireInteraction: true
-                                });
-
-                                notification.onclick = (e) => {
-                                    e.preventDefault();
-                                    window.focus();
-                                    notification.close();
-                                    setTimeout(() => setView('kanban'), 100);
-                                };
+                                if ('serviceWorker' in navigator) {
+                                    navigator.serviceWorker.ready.then(registration => {
+                                        registration.showNotification('⏰ Recordatorio de Tarea', {
+                                            body: `Es hora de: ${task.title}`,
+                                            icon: '/logo.png',
+                                            badge: '/logo.png',
+                                            vibrate: [200, 100, 200],
+                                            tag: `task-${task.id}`,
+                                            requireInteraction: true,
+                                            data: { taskId: task.id }
+                                        });
+                                    });
+                                } else {
+                                    const notification = new Notification('⏰ Recordatorio de Tarea', {
+                                        body: `Es hora de: ${task.title}`,
+                                        icon: '/logo.png',
+                                        tag: `task-${task.id}`
+                                    });
+                                    notification.onclick = () => {
+                                        window.focus();
+                                        setView('kanban');
+                                    };
+                                }
                             } catch (e) {
                                 console.error("Error lanzando notificación nativa:", e);
                             }
