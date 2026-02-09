@@ -50,6 +50,8 @@ const TaskBoard = ({ onBack }) => {
     const [statusFilters, setStatusFilters] = useState([]);
     const scrollContainerRef = useRef(null);
     const todayRef = useRef(null);
+    const highlightedRef = useRef(null);
+    const [highlightedDay, setHighlightedDay] = useState(null);
 
     const scrollToToday = () => {
         setTimeout(() => {
@@ -122,9 +124,25 @@ const TaskBoard = ({ onBack }) => {
                         setViewDate(new Date(resultDate.getFullYear(), resultDate.getMonth(), 1));
                     }
                 }
+                setHighlightedDay(resultDate.toDateString());
             }
+        } else {
+            setHighlightedDay(null);
         }
     }, [searchTerm, statusFilters]);
+
+    // Centrar el día filtrado cuando cambia el mes o el highlight
+    useEffect(() => {
+        if (highlightedDay && highlightedRef.current && scrollContainerRef.current) {
+            setTimeout(() => {
+                highlightedRef.current.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                    inline: 'center'
+                });
+            }, 100);
+        }
+    }, [highlightedDay, viewDate]);
 
     const handleEditTask = (task) => {
         setEditingTask(task);
@@ -291,14 +309,15 @@ const TaskBoard = ({ onBack }) => {
                                 return d.getDate() === date.getDate() && d.getMonth() === date.getMonth() && d.getFullYear() === date.getFullYear();
                             });
                             const isToday = new Date().toDateString() === date.toDateString();
+                            const isHighlighted = highlightedDay === date.toDateString();
                             return (
                                 <div
                                     key={i}
-                                    ref={isToday ? todayRef : null}
+                                    ref={isHighlighted ? highlightedRef : isToday ? todayRef : null}
                                     onDragOver={(e) => e.preventDefault()}
                                     onDrop={(e) => { e.preventDefault(); if (!canMove) return; const taskId = e.dataTransfer.getData("taskId"); if (taskId) { db.tasks.get(Number(taskId)).then(task => { if (task) { const originalDate = new Date(task.scheduled_at); const nDate = new Date(date); nDate.setHours(originalDate.getHours(), originalDate.getMinutes()); db.tasks.update(Number(taskId), { scheduled_at: nDate.toISOString(), updatedAt: new Date().toISOString() }); } }); } }}
                                     onClick={() => handleCreateOnDay(date)}
-                                    className={cn("bg-white dark:bg-slate-900/80 h-[100px] sm:h-[120px] p-1.5 transition-all hover:bg-slate-50 dark:hover:bg-white/5 border-[0.5px] border-slate-100 dark:border-white/5 cursor-cell group flex flex-col", isToday && "ring-1 ring-inset ring-blue-500/30 bg-blue-500/5")}
+                                    className={cn("bg-white dark:bg-slate-900/80 h-[100px] sm:h-[120px] p-1.5 transition-all hover:bg-slate-50 dark:hover:bg-white/5 border-[0.5px] border-slate-100 dark:border-white/5 cursor-cell group flex flex-col", isToday && "ring-1 ring-inset ring-blue-500/30 bg-blue-500/5", isHighlighted && "ring-2 ring-inset ring-blue-500 ring-offset-2 dark:ring-offset-slate-900")}
                                 >
                                     <div className="flex justify-between items-center mb-1 px-1 shrink-0"><span className={cn("text-[11px] font-black", isToday ? "text-blue-500" : "text-slate-400")}>{date.getDate()}</span><Plus size={10} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" /></div>
                                     <div className="space-y-1 flex-1 overflow-y-auto no-scrollbar">

@@ -25,6 +25,7 @@ function App() {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
     const [theme, setTheme] = useState(localStorage.getItem('glpi_pro_theme') || 'dark')
     const [notifications, setNotifications] = useState([])
+    const [unreadCount, setUnreadCount] = useState(0)
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
     const [notificationToast, setNotificationToast] = useState(null)
 
@@ -109,9 +110,10 @@ function App() {
                 if (processingRef.current.has(task.id)) continue;
 
                 const reminderTime = new Date(task.reminder_at).getTime();
+                const windowStart = now - (30 * 60 * 1000); // 30 minutos de ventana hacia atrás
 
-                // Si ya pasó la hora del recordatorio (y no lo hemos mostrado)
-                if (reminderTime <= now) {
+                // Si ya pasó la hora del recordatorio pero no hace más de 30 min (para evitar flood de tareas viejas)
+                if (reminderTime <= now && reminderTime > windowStart) {
                     processingRef.current.add(task.id);
 
                     try {
@@ -133,6 +135,8 @@ function App() {
                             task_id: task.id
                         };
 
+                        setIsNotificationsOpen(false); // No abrir automáticamente, solo sumar al counter
+                        setUnreadCount(prev => prev + 1);
                         setNotifications(prev => {
                             const exists = prev.some(n => n.task_id === task.id && n.time === 'Ahora');
                             if (exists) return prev;
@@ -485,13 +489,16 @@ function App() {
                 <div className="flex items-center gap-2 sm:gap-3">
                     <div className="relative" ref={notificationsRef}>
                         <button
-                            onClick={() => { setIsNotificationsOpen(!isNotificationsOpen); if (!isNotificationsOpen) setNotifications([]); }}
+                            onClick={() => {
+                                setIsNotificationsOpen(!isNotificationsOpen);
+                                if (!isNotificationsOpen) setUnreadCount(0);
+                            }}
                             className="relative p-2 text-slate-500 hover:text-blue-500 hover:bg-blue-500/5 rounded-xl transition-all active:scale-90 group"
                         >
                             <Bell size={20} />
-                            {notifications.length > 0 && (
+                            {unreadCount > 0 && (
                                 <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-950 shadow-sm animate-in zoom-in px-1">
-                                    {notifications.length}
+                                    {unreadCount}
                                 </span>
                             )}
                         </button>
