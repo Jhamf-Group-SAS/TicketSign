@@ -38,6 +38,7 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
         reminder_at: '',
         reminder_sent: false,
         recurrence: 'NINGUNA',
+        start_date: '',
         assigned_technicians: [],
         glpi_ticket_id: '',
         equipment_service: '',
@@ -195,59 +196,140 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
 
         try {
             const timestamp = new Date().toISOString();
-            // Guardar con información de creador si es nueva
-            const finalData = {
-                ...formData,
-                updatedAt: timestamp
-            };
 
-            if (!isEditing) {
-                finalData.createdAt = timestamp;
-                finalData.createdBy = user.username;
-            }
-
-            if (isEditing) {
-                await db.tasks.update(formData.id, finalData);
-                // Si estamos online, intentar sincronizar inmediatamente
-                if (navigator.onLine) {
-                    await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks/${formData._id || formData.id}`, {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
-                        },
-                        body: JSON.stringify(finalData)
-                    });
+            // Lógica de Recurrencia (Creación Múltiple)
+            if (!isEditing && formData.recurrence && formData.recurrence !== 'NINGUNA') {
+                if (!formData.start_date || !formData.scheduled_at) {
+                    setToast({ message: 'Debe indicar fecha inicio y fecha límite para la recurrencia', type: 'error' });
+                    return;
                 }
-                setToast({ message: 'Tarea actualizada correctamente', type: 'success' });
-            } else {
-                // 1. Crear localmente primero para tener respuesta inmediata
-                const newLocalId = await db.tasks.add(finalData);
 
-                // 2. Si estamos online, intentar crear en el servidor de inmediato
-                if (navigator.onLine) {
-                    try {
-                        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks`, {
-                            method: 'POST',
+                const startDate = new Date(formData.start_date);
+                const endDate = new Date(formData.scheduled_at);
+
+                if (startDate > endDate) {
+                    setToast({ message: 'La fecha de inicio no puede ser posterior a la fecha límite', type: 'error' });
+                    return;
+                }
+
+                const taskDates = [];
+                let currentDate = new Date(startDate);
+
+                // Evitar bucles infinitos o demasiadas tareas (límite seguridad 365)
+                let safetyCounter = 0;
+                while (currentDate <= endDate && safetyCounter < 366) {
+                    taskDates.push(new Date(currentDate));
+
+                    if (formData.recurrence === 'DIARIA') {
+                        currentDate.setDate(currentDate.getDate() + 1);
+                    } else if (formData.recurrence === 'SEMANAL') {
+                        currentDate.setDate(currentDate.getDate() + 7);
+                    } else if (formData.recurrence === 'MENSUAL') {
+                        currentDate.setMonth(currentDate.getMonth() + 1);
+                    }
+                    safetyCounter++;
+                }
+
+                if (taskDates.length === 0) {
+                    setToast({ message: 'El rango de fechas no generó ninguna tarea', type: 'error' });
+                    return;
+                }
+
+                let createdCount = 0;
+                const creationPromises = taskDates.map(async (date) => {
+                    const taskData = {
+                        ...formData,
+                        scheduled_at: date.toISOString(),
+                        createdAt: timestamp,
+                        createdBy: user.username,
+                        updatedAt: timestamp,
+                        recurrence: formData.recurrence, // Marca como recurrente
+                        // Opcional: podrías agregar un groupId para relacionarlas futuro
+                    };
+                    delete taskData.start_date; // No se guarda en DB como campo
+
+                    // 1. Crear localmente
+                    const newLocalId = await db.tasks.add(taskData);
+                    createdCount++;
+
+                    // 2. Sync server si online
+                    if (navigator.onLine) {
+                        try {
+                            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
+                                },
+                                body: JSON.stringify(taskData)
+                            });
+                            if (response.ok) {
+                                const newTask = await response.json();
+                                if (newTask._id) {
+                                    await db.tasks.update(newLocalId, { _id: newTask._id });
+                                }
+                            }
+                        } catch (err) { console.warn('Sync error for task instance', err); }
+                    }
+                });
+
+                await Promise.all(creationPromises);
+                setToast({ message: `${createdCount} tareas periódicas creadas correctamente`, type: 'success' });
+
+            } else {
+                // Lógica Original (Tarea Única o Edición)
+                const finalData = {
+                    ...formData,
+                    updatedAt: timestamp
+                };
+                delete finalData.start_date; // Limpieza
+
+                if (!isEditing) {
+                    finalData.createdAt = timestamp;
+                    finalData.createdBy = user.username;
+                    // Si es creación simple sin recurrencia, scheduled_at es la fecha única
+                }
+
+                if (isEditing) {
+                    await db.tasks.update(formData.id, finalData);
+                    if (navigator.onLine) {
+                        await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks/${formData._id || formData.id}`, {
+                            method: 'PATCH',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
                             },
                             body: JSON.stringify(finalData)
                         });
-
-                        if (response.ok) {
-                            const newTask = await response.json();
-                            // CRÍTICO: Actualizar la tarea local con el _id del servidor para evitar duplicados
-                            if (newTask._id) {
-                                await db.tasks.update(newLocalId, { _id: newTask._id });
-                            }
-                        }
-                    } catch (serverErr) {
-                        console.warn('Creada localmente, pendiente de sync con servidor:', serverErr);
                     }
+                    setToast({ message: 'Tarea actualizada correctamente', type: 'success' });
+                } else {
+                    // Creación Simple (Sin Recurrencia)
+                    const newLocalId = await db.tasks.add(finalData);
+
+                    if (navigator.onLine) {
+                        try {
+                            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
+                                },
+                                body: JSON.stringify(finalData)
+                            });
+
+                            if (response.ok) {
+                                const newTask = await response.json();
+                                if (newTask._id) {
+                                    await db.tasks.update(newLocalId, { _id: newTask._id });
+                                }
+                            }
+                        } catch (serverErr) {
+                            console.warn('Creada localmente, pendiente de sync con servidor:', serverErr);
+                        }
+                    }
+                    setToast({ message: 'Tarea creada correctamente', type: 'success' });
                 }
-                setToast({ message: 'Tarea creada correctamente', type: 'success' });
             }
 
             setTimeout(onSave, 1500);
@@ -396,27 +478,76 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                                     />
                                 </div>
                             </div>
-                            <div className="relative" ref={datePickerRef}>
-                                <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">Fecha Programada</label>
-                                <div
-                                    onClick={() => canEditFull && setIsDatePickerOpen(!isDatePickerOpen)}
-                                    className={cn(
-                                        "w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 pl-10 text-xs outline-none transition-all font-bold relative",
-                                        canEditFull ? "cursor-pointer focus:ring-2 focus:ring-blue-500/20" : "opacity-60 cursor-not-allowed"
-                                    )}
-                                >
-                                    <CalendarIcon size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                    {formData.scheduled_at ? new Date(formData.scheduled_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : 'Seleccionar...'}
-                                </div>
 
-                                {isDatePickerOpen && (
-                                    <CustomDatePicker
-                                        value={formData.scheduled_at}
-                                        onChange={(date) => setFormData(prev => ({ ...prev, scheduled_at: date }))}
-                                        onClose={() => setIsDatePickerOpen(false)}
-                                    />
-                                )}
-                            </div>
+                            {/* Lógica de Fechas según Recurrencia */}
+                            {formData.recurrence !== 'NINGUNA' ? (
+                                <>
+                                    <div className="relative">
+                                        <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">Desde (Inicio)</label>
+                                        <div
+                                            onClick={() => canEditFull && setOpenDropdown('start_date_picker')}
+                                            className={cn(
+                                                "w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 pl-10 text-xs outline-none transition-all font-bold relative",
+                                                canEditFull ? "cursor-pointer focus:ring-2 focus:ring-blue-500/20" : "opacity-60 cursor-not-allowed"
+                                            )}
+                                        >
+                                            <CalendarIcon size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            {formData.start_date ? new Date(formData.start_date).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : 'Seleccionar...'}
+                                        </div>
+                                        {openDropdown === 'start_date_picker' && (
+                                            <div className="absolute top-full left-0 z-50 mt-2 w-full">
+                                                <CustomDatePicker
+                                                    value={formData.start_date}
+                                                    onChange={(date) => { setFormData(prev => ({ ...prev, start_date: date })); setOpenDropdown(null); }}
+                                                    onClose={() => setOpenDropdown(null)}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="relative" ref={datePickerRef}>
+                                        <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">Hasta (Límite)</label>
+                                        <div
+                                            onClick={() => canEditFull && setIsDatePickerOpen(!isDatePickerOpen)}
+                                            className={cn(
+                                                "w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 pl-10 text-xs outline-none transition-all font-bold relative",
+                                                canEditFull ? "cursor-pointer focus:ring-2 focus:ring-blue-500/20" : "opacity-60 cursor-not-allowed"
+                                            )}
+                                        >
+                                            <CalendarIcon size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            {formData.scheduled_at ? new Date(formData.scheduled_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : 'Seleccionar...'}
+                                        </div>
+                                        {isDatePickerOpen && (
+                                            <CustomDatePicker
+                                                value={formData.scheduled_at}
+                                                onChange={(date) => setFormData(prev => ({ ...prev, scheduled_at: date }))}
+                                                onClose={() => setIsDatePickerOpen(false)}
+                                            />
+                                        )}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="relative" ref={datePickerRef}>
+                                    <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">Fecha Programada</label>
+                                    <div
+                                        onClick={() => canEditFull && setIsDatePickerOpen(!isDatePickerOpen)}
+                                        className={cn(
+                                            "w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 pl-10 text-xs outline-none transition-all font-bold relative",
+                                            canEditFull ? "cursor-pointer focus:ring-2 focus:ring-blue-500/20" : "opacity-60 cursor-not-allowed"
+                                        )}
+                                    >
+                                        <CalendarIcon size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        {formData.scheduled_at ? new Date(formData.scheduled_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : 'Seleccionar...'}
+                                    </div>
+
+                                    {isDatePickerOpen && (
+                                        <CustomDatePicker
+                                            value={formData.scheduled_at}
+                                            onChange={(date) => setFormData(prev => ({ ...prev, scheduled_at: date }))}
+                                            onClose={() => setIsDatePickerOpen(false)}
+                                        />
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         <div className="p-4 bg-blue-500/5 dark:bg-blue-500/10 rounded-2xl border border-blue-500/20">
