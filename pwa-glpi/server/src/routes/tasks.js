@@ -111,7 +111,8 @@ router.post('/', async (req, res) => {
 
                         if (techData && techData.mobile) {
                             const dateObj = new Date(newTask.scheduled_at);
-                            const formattedDate = isNaN(dateObj.getTime()) ? 'Pendiente' : dateObj.toLocaleString('es-ES', {
+                            const formattedDate = isNaN(dateObj.getTime()) ? 'Pendiente' : dateObj.toLocaleString('es-CO', {
+                                timeZone: 'America/Bogota',
                                 day: '2-digit', month: '2-digit', year: 'numeric',
                                 hour: '2-digit', minute: '2-digit', hour12: true
                             });
@@ -225,7 +226,8 @@ router.patch('/:id', async (req, res) => {
                         const techData = technicians.find(t => t.fullName === techName || t.name === techName);
                         if (techData && techData.mobile) {
                             const dateObj = new Date(task.scheduled_at);
-                            const formattedDate = isNaN(dateObj.getTime()) ? 'Pendiente' : dateObj.toLocaleString('es-ES', {
+                            const formattedDate = isNaN(dateObj.getTime()) ? 'Pendiente' : dateObj.toLocaleString('es-CO', {
+                                timeZone: 'America/Bogota',
                                 day: '2-digit', month: '2-digit', year: 'numeric',
                                 hour: '2-digit', minute: '2-digit', hour12: true
                             });

@@ -68,6 +68,7 @@ class ReminderService {
                 if (techData && techData.mobile) {
                     const dateObj = new Date(task.scheduled_at);
                     const formattedDate = isNaN(dateObj.getTime()) ? 'Pendiente' : dateObj.toLocaleString('es-CO', {
+                        timeZone: 'America/Bogota',
                         day: '2-digit', month: '2-digit', year: 'numeric',
                         hour: '2-digit', minute: '2-digit', hour12: true
                     });

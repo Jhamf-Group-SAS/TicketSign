@@ -171,8 +171,8 @@ function App() {
                 .where('reminder_at')
                 .notEqual('')
                 .and(t => {
-                    // Verificación de fecha válida y no enviada
-                    if (!t.reminder_at || t.reminder_sent || t.status === 'COMPLETADA' || t.status === 'CANCELADA') return false;
+                    // Verificación de fecha válida
+                    if (!t.reminder_at || t.status === 'COMPLETADA' || t.status === 'CANCELADA') return false;
 
                     // Verificación de asignación
                     const isCreator = t.createdBy === user.username;
@@ -185,10 +185,19 @@ function App() {
                 .toArray();
 
             for (const task of tasksWithReminders) {
+                // Verificar si ya se mostró notificación LOCALMENTE para esta tarea
+                try {
+                    const alreadyNotified = await db.notification_log.get({ task_id: task.id });
+                    if (alreadyNotified) continue;
+                } catch (e) {
+                    console.warn('Error checking notification log', e);
+                }
+
                 if (processingRef.current.has(task.id)) continue;
 
                 const reminderTime = new Date(task.reminder_at).getTime();
 
+                // Si ya pasó la hora del recordatorio (y no lo hemos mostrado)
                 if (reminderTime <= now) {
                     processingRef.current.add(task.id);
 
@@ -231,7 +240,9 @@ function App() {
                             }
                         }
 
-                        await db.tasks.update(task.id, { reminder_sent: true });
+                        // Marcar como notificado LOCALMENTE
+                        await db.notification_log.add({ task_id: task.id, sent_at: now });
+                        // No actualizamos db.tasks.update(..reminder_sent) aquí para no chocar con el server
                     } catch (err) {
                         console.error("Error procesando recordatorio:", err);
                     }
