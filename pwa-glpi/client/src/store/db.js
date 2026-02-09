@@ -3,11 +3,11 @@ import Dexie from 'dexie';
 export const db = new Dexie('MaintenanceDB');
 
 // Esquema de la base de datos local
-db.version(5).stores({
+db.version(6).stores({
     acts: '++id, glpi_ticket_id, status, type, client_name, technical_name, createdAt, updatedAt',
     assets_cache: '++id, serial, hostname, ticket_id',
     sync_logs: '++id, act_id, task_id, timestamp, status, error',
-    tasks: '++id, status, priority, type, scheduled_at, reminder_at, reminder_sent, glpi_ticket_id, createdAt, updatedAt'
+    tasks: '++id, status, priority, type, scheduled_at, reminder_at, reminder_sent, isPrivate, glpi_ticket_id, createdAt, updatedAt'
 });
 
 /**

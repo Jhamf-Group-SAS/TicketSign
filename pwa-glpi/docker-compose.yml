@@ -2,7 +2,7 @@ version: "3.7"
 
 services:
   ticketsign-client:
-    image: ghcr.io/JhamfGit/ticketsign-client:latest
+    image: ghcr.io/jhamfgit/ticketsign-client:latest
     networks:
       - jhamfstack
     deploy:
@@ -19,15 +19,21 @@ services:
         - traefik.http.routers.ticketsign.tls.certresolver=letsencryptresolver
 
   ticketsign-server:
-    image: ghcr.io/JhamfGit/ticketsign-server:latest
+    image: ghcr.io/jhamfgit/ticketsign-server:latest
     networks:
       - jhamfstack
     environment:
       - PORT=5000
       - MONGO_URI=mongodb://mongo:27017/ticketsign
-      - GLPI_API_URL=${GLPI_API_URL}
-      - GLPI_APP_TOKEN=${GLPI_APP_TOKEN}
-      - GLPI_USER_TOKEN=${GLPI_USER_TOKEN}
+      - GLPI_API_URL=https://service.jhamf.com/apirest.php
+      - GLPI_APP_TOKEN=RVzlOUp4BmZIzHDQ4IQ6pz8ajxg85lXYbqhM9Ntj
+      - GLPI_USER_TOKEN=vy58wK7lqPjKPh01CtBrjE4xZfeNvXhYV4fKKEUz
+      - WHATSAPP_PHONE_ID=849555261580952
+      - WHATSAPP_WABA_ID=848382954344504
+      - WHATSAPP_TOKEN=EAAVX5xu2Jq4BQnDHUyZAYdJRFlsli5thLu6TxGIYyF2zvNklOLPJSszXlh0rgV8rgCtfMVCNj5fOJ9ZBvMfEba6k6jqfDKnErSMFccJrbfxy1G79wnMOjk3VC7TTgwG8O2dkVFimIvZAfv8ZCc9ErZAeycpeAjXW12KzHGnZB8urmm5SJoXwNm9MQUCq4SQgZDZD
+      - WHATSAPP_TEMPLATE_NAME=notificacion_tarea
+      - WHATSAPP_LANG=es_CO
+      - JWT_SECRET=677993ce631061a6ce22201bc7137bf4
     deploy:
       mode: replicated
       replicas: 1

@@ -24,6 +24,9 @@ const taskSchema = new mongoose.Schema({
     equipment_service: String,
     acta_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Act' },
     createdBy: { type: String, required: true }, // Username del creador
+    isPrivate: { type: Boolean, default: false },
+    reminder_at: { type: Date },
+    reminder_sent: { type: Boolean, default: false },
 
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }

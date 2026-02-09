@@ -10,6 +10,7 @@ import syncRoutes from './routes/sync.js';
 import authRoutes from './routes/auth.js';
 import reportsRoutes from './routes/reports.js';
 import tasksRoutes from './routes/tasks.js';
+import reminderService from './services/reminder.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -56,4 +57,5 @@ app.use('/api/tasks', tasksRoutes);
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    reminderService.start();
 });

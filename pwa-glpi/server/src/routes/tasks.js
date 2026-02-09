@@ -20,15 +20,41 @@ router.get('/technicians', async (req, res) => {
     }
 });
 
-// Obtener todas las tareas (con filtros)
+// Obtener todas las tareas (con filtros y privacidad)
 router.get('/', async (req, res) => {
     try {
         const { technician, status, priority } = req.query;
-        const query = {};
+        const userProfile = req.user.profile || '';
+        const username = req.user.username;
+        const isAdmin = ['Super-Admin', 'Admin-Mesa'].some(p => userProfile.includes(p));
 
-        if (technician) query.assigned_technicians = technician;
-        if (status) query.status = status;
-        if (priority) query.priority = priority;
+        // Filtros base de la visibilidad
+        const visibilityQuery = {
+            $or: [
+                // 1. Siempre veo mis propias tareas (públicas o privadas)
+                { createdBy: username },
+                // 2. Si es pública: la veo si soy Admin o si estoy asignado
+                {
+                    isPrivate: false,
+                    $or: [
+                        { createdBy: username }, // redundante pero seguro
+                        { assigned_technicians: { $in: [username, req.user.fullName] } }
+                    ]
+                }
+            ]
+        };
+
+        // Si es Admin, el punto 2 se simplifica: veo TODAS las públicas
+        if (isAdmin) {
+            visibilityQuery.$or[1] = { isPrivate: false };
+        }
+
+        const query = { $and: [visibilityQuery] };
+
+        // Aplicar filtros adicionales de la URL
+        if (technician) query.$and.push({ assigned_technicians: technician });
+        if (status) query.$and.push({ status: status });
+        if (priority) query.$and.push({ priority: priority });
 
         const tasks = await Task.find(query).sort({ scheduled_at: 1 });
         res.json(tasks);

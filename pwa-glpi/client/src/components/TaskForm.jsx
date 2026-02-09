@@ -3,7 +3,7 @@ import { db } from '../store/db';
 import { SyncService } from '../services/SyncService';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { X, Save, User, ClipboardList, ChevronDown, Calendar as CalendarIcon, Hash, MapPin, Bell, Trash2, Search, Check } from 'lucide-react';
+import { X, Save, User, ClipboardList, ChevronDown, Calendar as CalendarIcon, Hash, MapPin, Bell, Trash2, Search, Check, Lock, Globe } from 'lucide-react';
 import Toast from './Toast';
 import CustomDatePicker from './CustomDatePicker';
 
@@ -36,6 +36,7 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
         assigned_technicians: [],
         glpi_ticket_id: '',
         equipment_service: '',
+        isPrivate: false,
         ...initialData
     });
 
@@ -264,6 +265,36 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                                 />
                             </div>
                         )}
+                        {/* Visibilidad (Pública / Privada) */}
+                        <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950/50 rounded-2xl border border-slate-200 dark:border-white/10">
+                            <div>
+                                <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-1">Visibilidad</label>
+                                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                    {formData.isPrivate ? 'Privada (Solo yo)' : 'Pública (Administradores y Asignados)'}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setFormData(prev => ({ ...prev, isPrivate: !prev.isPrivate }))}
+                                disabled={!canEditFull}
+                                className={cn(
+                                    "relative w-32 h-10 rounded-xl p-1 transition-all flex items-center",
+                                    formData.isPrivate ? "bg-amber-500/10 border-amber-500/30" : "bg-blue-500/10 border-blue-500/30",
+                                    "border"
+                                )}
+                            >
+                                <div className={cn(
+                                    "absolute inset-y-1 w-1/2 rounded-lg transition-all flex items-center justify-center shadow-lg",
+                                    formData.isPrivate ? "right-1 bg-amber-500 text-white" : "left-1 bg-blue-500 text-white"
+                                )}>
+                                    {formData.isPrivate ? <Lock size={14} className="mr-1" /> : <Globe size={14} className="mr-1" />}
+                                    <span className="text-[10px] font-black uppercase">{formData.isPrivate ? 'Privada' : 'Pública'}</span>
+                                </div>
+                                <div className={cn("w-1/2 text-center text-[10px] font-black uppercase", !formData.isPrivate ? "opacity-40" : "hidden")}>Pública</div>
+                                <div className={cn("w-1/2 text-center text-[10px] font-black uppercase ml-auto", formData.isPrivate ? "opacity-40" : "hidden")}>Privada</div>
+                            </button>
+                        </div>
+
                         <div>
                             <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">Título de la Tarea</label>
                             <input
