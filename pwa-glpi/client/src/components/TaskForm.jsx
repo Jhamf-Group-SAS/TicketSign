@@ -594,33 +594,7 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                             </div>
                         )}
 
-                        {/* Control de Notificaciones WhatsApp para Recurrencia */}
-                        {formData.recurrence !== 'NINGUNA' && (
-                            <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/10 rounded-2xl border border-green-200 dark:border-green-900/20">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center text-green-600 dark:text-green-400">
-                                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase tracking-widest text-green-700 dark:text-green-400">Notificar por WhatsApp</label>
-                                        <p className="text-[10px] text-slate-500 font-medium">Enviar mensaje a técnicos por cada tarea generada</p>
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setFormData(prev => ({ ...prev, sendWhatsApp: !prev.sendWhatsApp }))}
-                                    className={cn(
-                                        "w-10 h-6 rounded-full p-1 transition-all duration-300",
-                                        formData.sendWhatsApp ? "bg-green-500" : "bg-slate-200 dark:bg-slate-700"
-                                    )}
-                                >
-                                    <div className={cn(
-                                        "w-4 h-4 bg-white rounded-full transition-transform duration-300 shadow-sm",
-                                        formData.sendWhatsApp ? "translate-x-4" : "translate-x-0"
-                                    )} />
-                                </button>
-                            </div>
-                        )}
+
 
                         <div className="p-4 bg-blue-500/5 dark:bg-blue-500/10 rounded-2xl border border-blue-500/20">
                             <div className="flex items-center justify-between mb-3">
