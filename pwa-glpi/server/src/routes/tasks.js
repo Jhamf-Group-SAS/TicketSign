@@ -94,8 +94,8 @@ router.post('/', async (req, res) => {
             newTask = { ...taskData, _id: 'temp_' + Date.now() };
         }
 
-        // Enviar notificaciones de WhatsApp si hay técnicos asignados
-        if (newTask.assigned_technicians && newTask.assigned_technicians.length > 0) {
+        // Enviar notificaciones de WhatsApp si hay técnicos asignados y el usuario lo desea
+        if (req.body.sendWhatsApp !== false && newTask.assigned_technicians && newTask.assigned_technicians.length > 0) {
             // Ejecutar en segundo plano para no bloquear la respuesta
             setImmediate(async () => {
                 try {
