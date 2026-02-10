@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { isHoliday } from '../utils/holidays';
 import {
@@ -299,7 +300,7 @@ const TaskBoard = ({ onBack }) => {
         return (
             <div className="flex-1 flex flex-col min-h-0 bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl rounded-[2rem] border border-slate-200 dark:border-white/5 overflow-hidden shadow-2xl relative">
                 {/* Tooltip Portal */}
-                {hoveredTask && (
+                {hoveredTask && createPortal(
                     <div
                         className="fixed z-[9999] pointer-events-none transition-opacity duration-200"
                         style={{
@@ -322,7 +323,8 @@ const TaskBoard = ({ onBack }) => {
                             )}
                             <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 dark:bg-white rotate-45"></div>
                         </div>
-                    </div>
+                    </div>,
+                    document.body
                 )}
 
                 <div className="px-4 sm:px-6 py-4 border-b border-slate-100 dark:border-white/5 flex flex-col sm:flex-row items-center justify-between bg-white/50 dark:bg-slate-900/50 gap-4">
