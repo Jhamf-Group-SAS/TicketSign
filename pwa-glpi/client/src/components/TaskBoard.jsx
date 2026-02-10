@@ -257,9 +257,22 @@ const TaskBoard = ({ onBack }) => {
         const startDay = firstDay === 0 ? 6 : firstDay - 1;
         const daysInMonth = new Date(year, month + 1, 0).getDate();
 
+        // Estado para el tooltip
+        const [hoveredTask, setHoveredTask] = useState(null);
+        const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+
         const calendarDays = [];
         for (let i = 0; i < startDay; i++) calendarDays.push(null);
         for (let i = 1; i <= daysInMonth; i++) calendarDays.push(new Date(year, month, i));
+
+        const handleTaskHover = (e, task) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setTooltipPosition({
+                x: rect.left + rect.width / 2,
+                y: rect.top - 10
+            });
+            setHoveredTask(task);
+        };
 
         const CalendarDropdown = ({ value, options, onChange, type }) => {
             const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -284,7 +297,34 @@ const TaskBoard = ({ onBack }) => {
         };
 
         return (
-            <div className="flex-1 flex flex-col min-h-0 bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl rounded-[2rem] border border-slate-200 dark:border-white/5 overflow-hidden shadow-2xl">
+            <div className="flex-1 flex flex-col min-h-0 bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl rounded-[2rem] border border-slate-200 dark:border-white/5 overflow-hidden shadow-2xl relative">
+                {/* Tooltip Portal */}
+                {hoveredTask && (
+                    <div
+                        className="fixed z-[9999] pointer-events-none transition-opacity duration-200"
+                        style={{
+                            left: `${tooltipPosition.x}px`,
+                            top: `${tooltipPosition.y}px`,
+                            transform: 'translate(-50%, -100%)'
+                        }}
+                    >
+                        <div className="mb-2 bg-slate-900 text-white dark:bg-white dark:text-slate-900 p-3 rounded-xl shadow-xl text-xs max-w-[200px] animate-in zoom-in-95 duration-200">
+                            <div className="font-bold mb-1 line-clamp-2">{hoveredTask.title}</div>
+                            {hoveredTask.description && <div className="text-slate-400 dark:text-slate-500 mb-2 line-clamp-2 text-[10px]">{hoveredTask.description}</div>}
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className={cn("w-1.5 h-1.5 rounded-full", KANBAN_STATUS.find(s => s.id === hoveredTask.status)?.bg.replace('bg-', 'bg-').replace('dark:bg-', '').split(' ')[0] || 'bg-slate-400')}></span>
+                                <span className="text-[9px] uppercase font-black opacity-70">{KANBAN_STATUS.find(s => s.id === hoveredTask.status)?.label}</span>
+                            </div>
+                            {hoveredTask.assigned_technicians && hoveredTask.assigned_technicians.length > 0 && (
+                                <div className="text-[9px] text-slate-400 dark:text-slate-500 border-t border-white/10 dark:border-black/5 pt-1 mt-1">
+                                    {hoveredTask.assigned_technicians.join(', ')}
+                                </div>
+                            )}
+                            <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 dark:bg-white rotate-45"></div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="px-4 sm:px-6 py-4 border-b border-slate-100 dark:border-white/5 flex flex-col sm:flex-row items-center justify-between bg-white/50 dark:bg-slate-900/50 gap-4">
                     <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-center sm:justify-start">
                         <CalendarDropdown type="month" value={month} options={months} onChange={(newMonth) => setViewDate(new Date(year, newMonth, 1))} />
@@ -336,7 +376,15 @@ const TaskBoard = ({ onBack }) => {
                                         {dayTasks.map(task => {
                                             const statusInfo = KANBAN_STATUS.find(s => s.id === task.status);
                                             return (
-                                                <div key={task.id} draggable={canMove} onDragStart={(e) => e.dataTransfer.setData("taskId", task.id)} onClick={(e) => { e.stopPropagation(); handleEditTask(task); }} className={cn("relative h-[24px] flex items-center px-2 rounded-md border text-[10px] font-bold cursor-pointer transition-all active:scale-[0.97] hover:shadow-sm overflow-hidden", statusInfo?.bg || 'bg-slate-50 dark:bg-white/5', statusInfo?.border || 'border-slate-200 dark:border-white/10')}>
+                                                <div
+                                                    key={task.id}
+                                                    draggable={canMove}
+                                                    onDragStart={(e) => e.dataTransfer.setData("taskId", task.id)}
+                                                    onClick={(e) => { e.stopPropagation(); handleEditTask(task); }}
+                                                    onMouseEnter={(e) => handleTaskHover(e, task)}
+                                                    onMouseLeave={() => setHoveredTask(null)}
+                                                    className={cn("relative h-[24px] flex items-center px-2 rounded-md border text-[10px] font-bold cursor-pointer transition-all active:scale-[0.97] hover:shadow-sm overflow-hidden", statusInfo?.bg || 'bg-slate-50 dark:bg-white/5', statusInfo?.border || 'border-slate-200 dark:border-white/10')}
+                                                >
                                                     <span className="truncate text-slate-900 dark:text-white flex-1">{task.title}</span>
                                                     {task.reminder_at && <Bell size={10} className={cn("shrink-0 ml-1", task.reminder_sent ? "text-slate-400" : "text-blue-500")} />}
                                                 </div>

@@ -6,15 +6,15 @@ const CustomDatePicker = ({ value, onChange, onClose }) => {
     const [selectedDate, setSelectedDate] = useState(value ? new Date(value) : new Date());
     const [hours, setHours] = useState(selectedDate.getHours());
     const [minutes, setMinutes] = useState(selectedDate.getMinutes());
+    const [viewMode, setViewMode] = useState('calendar'); // 'calendar', 'month', 'year'
 
     const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const daysHeader = ['Wk', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
     const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
-    // Monday as first day adjustment
     const getFirstDayOfMonth = (year, month) => {
         let day = new Date(year, month, 1).getDay();
-        return day === 0 ? 6 : day - 1; // 0=Lun, 6=Dom
+        return day === 0 ? 6 : day - 1;
     };
 
     const prevMonth = () => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
@@ -25,11 +25,23 @@ const CustomDatePicker = ({ value, onChange, onClose }) => {
         setSelectedDate(newDate);
     };
 
+    const handleMonthSelect = (monthIndex) => {
+        setViewDate(new Date(viewDate.getFullYear(), monthIndex, 1));
+        setViewMode('calendar');
+    };
+
+    const handleYearSelect = (year) => {
+        setViewDate(new Date(year, viewDate.getMonth(), 1));
+        setViewMode('month');
+    };
+
     const handleNow = () => {
         const now = new Date();
         setSelectedDate(now);
         setHours(now.getHours());
         setMinutes(now.getMinutes());
+        setViewDate(now);
+        setViewMode('calendar');
         onChange(now.toISOString());
         onClose();
     };
@@ -46,7 +58,6 @@ const CustomDatePicker = ({ value, onChange, onClose }) => {
         const rows = [];
         let cells = [];
 
-        // Padding for first week
         for (let i = 0; i < firstDay; i++) {
             cells.push(<div key={`empty-${i}`} className="w-10 h-10"></div>);
         }
@@ -85,48 +96,111 @@ const CustomDatePicker = ({ value, onChange, onClose }) => {
         return rows;
     };
 
+    const renderMonths = () => {
+        return (
+            <div className="grid grid-cols-3 gap-3">
+                {months.map((m, i) => (
+                    <button
+                        key={m}
+                        onClick={() => handleMonthSelect(i)}
+                        className={`p-3 rounded-xl text-xs font-bold transition-all
+                            ${viewDate.getMonth() === i ? 'bg-blue-500 text-white' : 'hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400'}`}
+                    >
+                        {m}
+                    </button>
+                ))}
+            </div>
+        );
+    };
+
+    const renderYears = () => {
+        const currentYear = new Date().getFullYear();
+        const startYear = currentYear - 10;
+        const endYear = currentYear + 10;
+        const years = [];
+        for (let y = startYear; y <= endYear; y++) {
+            years.push(y);
+        }
+        return (
+            <div className="grid grid-cols-4 gap-3 max-h-[220px] overflow-y-auto no-scrollbar">
+                {years.map(y => (
+                    <button
+                        key={y}
+                        onClick={() => handleYearSelect(y)}
+                        className={`p-3 rounded-xl text-xs font-bold transition-all
+                            ${viewDate.getFullYear() === y ? 'bg-blue-500 text-white' : 'hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400'}`}
+                    >
+                        {y}
+                    </button>
+                ))}
+            </div>
+        );
+    };
+
     return (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] p-6 w-full max-w-[340px] animate-in zoom-in-95 duration-300">
                 {/* Header */}
                 <div className="flex justify-between items-center mb-6">
-                    <button type="button" onClick={prevMonth} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl text-slate-400 transition-all active:scale-90">
-                        <ChevronLeft size={20} />
-                    </button>
-                    <div className="flex items-center gap-2">
-                        <span className="text-lg font-black text-blue-500 tracking-tight">{months[viewDate.getMonth()]}</span>
-                        <ChevronRight size={14} className="text-slate-400 rotate-90 opacity-50" />
-                        <span className="text-lg font-black text-slate-400 tracking-tight">{viewDate.getFullYear()}</span>
-                    </div>
-                    <button type="button" onClick={nextMonth} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl text-slate-400 transition-all active:scale-90">
-                        <ChevronRight size={20} />
-                    </button>
-                </div>
+                    {viewMode === 'calendar' && (
+                        <button type="button" onClick={prevMonth} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl text-slate-400 transition-all active:scale-90">
+                            <ChevronLeft size={20} />
+                        </button>
+                    )}
 
-                {/* Days Header */}
-                <div className="flex justify-between mb-4 px-1">
-                    {daysHeader.map(d => (
-                        <span key={d} className={`w-9 text-center text-[10px] font-black uppercase tracking-tighter ${d === 'Wk' || d === 'Dom' ? 'text-blue-500' : 'text-slate-700 dark:text-slate-300'}`}>
-                            {d}
+                    <div className="flex items-center gap-2 mx-auto cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 px-3 py-1 rounded-xl transition-colors" onClick={() => setViewMode(viewMode === 'calendar' ? 'month' : 'year')}>
+                        <span className="text-lg font-black text-blue-500 tracking-tight">
+                            {viewMode === 'year' ? 'Seleccionar Año' :
+                                viewMode === 'month' ? viewDate.getFullYear() :
+                                    months[viewDate.getMonth()]}
                         </span>
-                    ))}
+                        {viewMode === 'calendar' && (
+                            <>
+                                <ChevronRight size={14} className="text-slate-400 rotate-90 opacity-50" />
+                                <span className="text-lg font-black text-slate-400 tracking-tight">{viewDate.getFullYear()}</span>
+                            </>
+                        )}
+                    </div>
+
+                    {viewMode === 'calendar' && (
+                        <button type="button" onClick={nextMonth} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl text-slate-400 transition-all active:scale-90">
+                            <ChevronRight size={20} />
+                        </button>
+                    )}
                 </div>
 
-                {/* Grid */}
-                <div className="mb-6 px-1">
-                    {renderDays().map((row, i) => (
-                        <div key={i} className="flex justify-between mb-2">
-                            <div className="w-9 h-9 flex items-center justify-center text-[9px] font-black text-blue-500/30">
-                                {5 + i}
-                            </div>
-                            {row.props.children.map((child, j) => (
-                                <div key={j} className="w-9 h-9 flex items-center justify-center">
-                                    {React.cloneElement(child, { className: child.props.className.replace('w-10 h-10', 'w-8 h-8') })}
+                {viewMode === 'calendar' ? (
+                    <>
+                        {/* Days Header */}
+                        <div className="flex justify-between mb-4 px-1">
+                            {daysHeader.map(d => (
+                                <span key={d} className={`w-9 text-center text-[10px] font-black uppercase tracking-tighter ${d === 'Wk' || d === 'Dom' ? 'text-blue-500' : 'text-slate-700 dark:text-slate-300'}`}>
+                                    {d}
+                                </span>
+                            ))}
+                        </div>
+
+                        {/* Grid */}
+                        <div className="mb-6 px-1">
+                            {renderDays().map((row, i) => (
+                                <div key={i} className="flex justify-between mb-2">
+                                    <div className="w-9 h-9 flex items-center justify-center text-[9px] font-black text-blue-500/30">
+                                        {5 + i}
+                                    </div>
+                                    {row.props.children.map((child, j) => (
+                                        <div key={j} className="w-9 h-9 flex items-center justify-center">
+                                            {React.cloneElement(child, { className: child.props.className.replace('w-10 h-10', 'w-8 h-8') })}
+                                        </div>
+                                    ))}
                                 </div>
                             ))}
                         </div>
-                    ))}
-                </div>
+                    </>
+                ) : (
+                    <div className="mb-6">
+                        {viewMode === 'month' ? renderMonths() : renderYears()}
+                    </div>
+                )}
 
                 {/* Time Picker */}
                 <div className="border-t border-slate-100 dark:border-white/5 pt-6 mb-6">
