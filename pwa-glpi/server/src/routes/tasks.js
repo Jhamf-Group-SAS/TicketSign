@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import Task from '../models/Task.js';
 import glpi from '../services/glpi.js';
 import whatsapp from '../services/whatsapp.js';
@@ -23,43 +24,81 @@ router.get('/technicians', async (req, res) => {
 // Obtener todas las tareas (con filtros y privacidad)
 router.get('/', async (req, res) => {
     try {
+        console.log('[Tasks] GET / request received');
         const { technician, status, priority } = req.query;
-        const userProfile = req.user.profile || '';
-        const username = req.user.username;
-        const isAdmin = ['Super-Admin', 'Admin-Mesa'].some(p => userProfile.includes(p));
 
-        // Filtros base de la visibilidad
-        const visibilityQuery = {
-            $or: [
-                // 1. Siempre veo mis propias tareas (públicas o privadas)
-                { createdBy: username },
-                // 2. Si es pública: la veo si soy Admin o si estoy asignado
-                {
-                    isPrivate: false,
-                    $or: [
-                        { createdBy: username }, // redundante pero seguro
-                        { assigned_technicians: { $in: [username, req.user.fullName] } }
-                    ]
-                }
+        if (!req.user) {
+            console.warn('[Tasks] No user in request');
+            return res.status(401).json({ message: 'Usuario no autenticado' });
+        }
+
+        console.log('[Tasks] User Authenticated:', JSON.stringify(req.user));
+
+        const username = req.user.username || '';
+        const userProfile = req.user.profile || '';
+        // Normalizamos roles para comparación case-insensitive
+        const isAdmin = ['super-admin', 'admin-mesa', 'admin'].some(role =>
+            userProfile.toLowerCase().includes(role)
+        );
+
+        if (!username) {
+            console.warn('[Tasks] Username is missing in token payload');
+            // If username defines identity, we can't proceed safely for filters
+            return res.status(400).json({ message: 'Token de usuario incompleto (falta username)' });
+        }
+
+        // Construir condiciones de visibilidad:
+        // 1. Cualquier usuario autenticado ve las tareas PÚBLICAS (isPrivate: false).
+        // 2. Un usuario ve sus propias tareas (createdBy).
+        // 3. Un usuario ve las tareas donde está ASIGNADO (por username o nombre completo).
+
+        const myIdentifiers = [username, req.user.displayName].filter(Boolean);
+
+        const visibilityConditions = [
+            { isPrivate: { $ne: true } }, // Tareas públicas
+            { createdBy: username },      // Creadas por mí
+            { assigned_technicians: { $in: myIdentifiers } } // Asignadas a mí (username o nombre completo)
+        ];
+
+        // Especial: Los Admins pueden ver todo lo no privado (ya está en la condición 1)
+        // Si quisiéramos que los admins vean TODO incluso lo privado de otros, lo añadiríamos aquí.
+        // Pero seguimos la regla del usuario: Privado es SOLO para creador y asignados.
+
+        const query = {
+            $and: [
+                { $or: visibilityConditions }
             ]
         };
 
-        // Si es Admin, el punto 2 se simplifica: veo TODAS las públicas
-        if (isAdmin) {
-            visibilityQuery.$or[1] = { isPrivate: false };
+        // Aplicar filtros opcionales
+        if (technician) {
+            query.$and.push({ assigned_technicians: technician });
+        }
+        if (status) {
+            query.$and.push({ status: status });
+        }
+        if (priority) {
+            query.$and.push({ priority: priority });
         }
 
-        const query = { $and: [visibilityQuery] };
+        console.log(`[Tasks] Querying DB. Username: ${username}, Admin: ${isAdmin}`);
 
-        // Aplicar filtros adicionales de la URL
-        if (technician) query.$and.push({ assigned_technicians: technician });
-        if (status) query.$and.push({ status: status });
-        if (priority) query.$and.push({ priority: priority });
+        // CHECK DB CONNECTION STATUS
+        // Avoid hanging on buffer if DB is down
+        if (mongoose.connection.readyState !== 1) {
+            console.warn('[Tasks] MongoDB is not connected (readyState !== 1). Returning empty task list.');
+            return res.json([]);
+        }
 
         const tasks = await Task.find(query).sort({ scheduled_at: 1 });
+        console.log(`[Tasks] Found ${tasks.length} tasks`);
         res.json(tasks);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('[Tasks] Error in GET handler:', error);
+        res.status(500).json({
+            message: 'Error interno del servidor al obtener tareas',
+            details: error.message
+        });
     }
 });
 
@@ -192,9 +231,9 @@ router.patch('/:id', async (req, res) => {
         const isAdmin = ['Super-Admin', 'Admin-Mesa'].some(p => userProfile.includes(p));
         const isCreator = existingTask.createdBy === req.user.username;
 
-        // Verificar si el usuario está asignado (buscando por username o nombre completo)
+        // Verificar si el usuario está asignado (buscando por username o nombre completo/displayName)
         const isAssigned = (existingTask.assigned_technicians || []).some(tech =>
-            tech === req.user.username || tech === req.user.fullName
+            tech === req.user.username || tech === req.user.displayName
         );
 
         if (!isAdmin && !isCreator) {

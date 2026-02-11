@@ -74,22 +74,24 @@ const TaskBoard = ({ onBack }) => {
     };
 
     const filteredTasks = tasks.filter(task => {
-        // Filtrar por pertenencia si no es admin
-        if (!isAdmin) {
-            const myNames = [
-                (user.name || '').toLowerCase(),
-                (user.displayName || '').toLowerCase(),
-                (user.username || '').toLowerCase()
-            ].filter(Boolean);
+        // Reglas de Visibilidad (Sincronizado con Lógica del Servidor)
+        const myNames = [
+            (user.username || '').toLowerCase(),
+            (user.name || '').toLowerCase(),
+            (user.displayName || '').toLowerCase()
+        ].filter(Boolean);
 
-            const isCreator = myNames.includes((task.createdBy || '').toLowerCase());
+        const isCreator = myNames.includes((task.createdBy || '').toLowerCase());
+        const isAssigned = (task.assigned_technicians || []).some(tech =>
+            myNames.some(name => (tech || '').toLowerCase().includes(name) || name.includes((tech || '').toLowerCase()))
+        );
+        const isPublic = !task.isPrivate;
 
-            const isAssigned = (task.assigned_technicians || []).some(tech =>
-                myNames.some(name => (tech || '').toLowerCase().includes(name) || name.includes((tech || '').toLowerCase()))
-            );
-
-            if (!isCreator && !isAssigned) return false;
-        }
+        // Un usuario (sea admin o no) ve una tarea si:
+        // 1. Es Pública
+        // 2. Es el Creador
+        // 3. Está Asignado
+        if (!isPublic && !isCreator && !isAssigned) return false;
 
         const matchesSearch = !searchTerm ||
             task.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
