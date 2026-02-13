@@ -6,6 +6,7 @@ import { twMerge } from 'tailwind-merge';
 import { X, Save, User, ClipboardList, ChevronDown, Calendar as CalendarIcon, Hash, MapPin, Bell, Trash2, Search, Check, Lock, Globe } from 'lucide-react';
 import Toast from './Toast';
 import CustomDatePicker from './CustomDatePicker';
+import CustomSelect from './CustomSelect';
 
 const cn = (...inputs) => twMerge(clsx(inputs));
 
@@ -108,47 +109,6 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
         };
     }, []);
 
-    const CustomSelect = ({ label, name, value, options, onChange, disabled }) => {
-        const isOpen = openDropdown === name && !disabled;
-        return (
-            <div className="relative flex-1" ref={name === openDropdown ? dropdownRef : null}>
-                <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">{label}</label>
-                <div
-                    onClick={() => !disabled && setOpenDropdown(isOpen ? null : name)}
-                    className={cn(
-                        "w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 text-sm outline-none transition-all font-bold flex justify-between items-center group",
-                        disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:border-slate-300 dark:hover:border-white/20",
-                        isOpen && "ring-2 ring-blue-500/20 border-blue-500/50"
-                    )}
-                >
-                    <span className="text-slate-900 dark:text-white truncate pr-2">{value}</span>
-                    <ChevronDown size={16} className={cn("text-slate-400 shrink-0 transition-transform duration-300", isOpen && "rotate-180")} />
-                </div>
-
-                {isOpen && (
-                    <div className="absolute top-[calc(100%+8px)] left-0 w-full z-[70] bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl p-2 animate-in zoom-in-95 duration-200 overflow-hidden">
-                        {options.map(opt => (
-                            <div
-                                key={opt}
-                                onClick={() => {
-                                    onChange({ target: { name, value: opt } });
-                                    setOpenDropdown(null);
-                                }}
-                                className={cn(
-                                    "px-4 py-3 rounded-xl text-sm font-bold cursor-pointer transition-all mb-1 last:mb-0",
-                                    value === opt
-                                        ? "bg-blue-500 text-white shadow-lg shadow-blue-500/30"
-                                        : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5"
-                                )}
-                            >
-                                {opt}
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
-    };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -377,10 +337,9 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                             <div className="pb-4 border-b border-slate-100 dark:border-white/5">
                                 <CustomSelect
                                     label="Estado del Flujo"
-                                    name="status"
                                     value={formData.status}
-                                    options={['PROGRAMADA', 'ASIGNADA', 'EN_EJECUCION', 'CANCELADA', 'COMPLETADA']}
-                                    onChange={handleInputChange}
+                                    options={['PROGRAMADA', 'ASIGNADA', 'EN_EJECUCION', 'CANCELADA', 'COMPLETADA'].map(opt => ({ id: opt, label: opt }))}
+                                    onChange={(val) => setFormData(p => ({ ...p, status: val }))}
                                     disabled={!canEditStatus}
                                 />
                             </div>
@@ -448,18 +407,16 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                             <CustomSelect
                                 label="Tipo"
-                                name="type"
                                 value={formData.type}
-                                options={['PREVENTIVO', 'CORRECTIVO']}
-                                onChange={handleInputChange}
+                                options={['PREVENTIVO', 'CORRECTIVO'].map(opt => ({ id: opt, label: opt }))}
+                                onChange={(val) => setFormData(p => ({ ...p, type: val }))}
                                 disabled={!canEditFull}
                             />
                             <CustomSelect
                                 label="Prioridad"
-                                name="priority"
                                 value={formData.priority}
-                                options={['BAJA', 'MEDIA', 'ALTA']}
-                                onChange={handleInputChange}
+                                options={['BAJA', 'MEDIA', 'ALTA'].map(opt => ({ id: opt, label: opt }))}
+                                onChange={(val) => setFormData(p => ({ ...p, priority: val }))}
                                 disabled={!canEditFull}
                             />
                         </div>
@@ -468,10 +425,9 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                         <div>
                             <CustomSelect
                                 label="Periodicidad"
-                                name="recurrence"
                                 value={formData.recurrence || 'NINGUNA'}
-                                options={['NINGUNA', 'DIARIA', 'SEMANAL', 'MENSUAL']}
-                                onChange={handleInputChange}
+                                options={['NINGUNA', 'DIARIA', 'SEMANAL', 'MENSUAL'].map(opt => ({ id: opt, label: opt }))}
+                                onChange={(val) => setFormData(p => ({ ...p, recurrence: val }))}
                                 disabled={!canEditFull}
                             />
                         </div>
@@ -670,7 +626,7 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                                 </div>
 
                                 {isTechListOpen && canEditFull && (
-                                    <div className="absolute top-full left-0 w-full z-[70] bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl p-2 max-h-60 overflow-y-auto mt-1 animate-in slide-in-from-top-2 no-scrollbar">
+                                    <div className="absolute top-full left-0 w-full z-[70] bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl p-2 max-h-60 overflow-y-auto mt-2 animate-in slide-in-from-top-2 no-scrollbar custom-scrollbar shadow-blue-500/5">
                                         {filteredTechs.length === 0 ? (
                                             <div className="p-4 text-center text-slate-500 text-xs font-bold">No se encontraron técnicos</div>
                                         ) : (
@@ -681,7 +637,7 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                                                     className={cn(
                                                         "px-4 py-3 rounded-xl text-sm font-bold cursor-pointer transition-all mb-1 last:mb-0 flex justify-between items-center group",
                                                         formData.assigned_technicians.includes(t.fullName)
-                                                            ? "bg-blue-500/10 text-blue-600"
+                                                            ? "bg-blue-600 text-white shadow-lg shadow-blue-500/40"
                                                             : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5"
                                                     )}
                                                 >
