@@ -1,5 +1,5 @@
 import { db } from '../store/db';
-import { Package, ClipboardList, User, Building2, Monitor, Calendar, Clock, Tag, CheckCircle, Save, X, ChevronLeft, Building, Trash2, ShieldCheck, Settings2, Globe, FileCheck, Keyboard, Mouse, Laptop, HardDrive, Image as ImageIcon, UploadCloud, FileText, MessageSquare, Printer, Wifi, Zap, Layers, Power } from 'lucide-react';
+import { Package, ClipboardList, User, Building2, Monitor, Calendar, Clock, Tag, CheckCircle, Save, X, ChevronLeft, Building, Trash2, ShieldCheck, Settings2, Globe, FileCheck, Keyboard, Mouse, Laptop, HardDrive, Image as ImageIcon, UploadCloud, FileText, MessageSquare, Printer, Wifi, Zap, Layers, Power, ClipboardCheck } from 'lucide-react';
 import { useState } from 'react';
 import Toast from './Toast';
 
