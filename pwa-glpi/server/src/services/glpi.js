@@ -365,7 +365,7 @@ class GLPIConnector {
                 'sort': 'id',
                 'order': 'DESC',
                 'is_deleted': 0,
-                'status': criteria.status || undefined,
+                'status': (criteria.status === 'pending' || !criteria.status) ? undefined : criteria.status,
                 'expand_dropdowns': true
             };
 
@@ -509,8 +509,14 @@ class GLPIConnector {
             if (criteria.status && criteria.status !== 'all' && criteria.status !== 'undefined' && criteria.status !== 'null') {
                 const beforeStatus = tickets.length;
                 if (criteria.status === 'pending') {
-                    // Pendientes = No cerrados ni resueltos
-                    tickets = tickets.filter(t => t.status != 5 && t.status != 6);
+                    // Debug: Ver estados detectados con nombres
+                    const statusInfo = tickets.slice(0, 10).map(t => ({ id: t.id, status: t.status, status_desc: t.status_desc }));
+                    console.log(`[DEBUG-SRV] Ejemplo de tickets antes del filtro:`, statusInfo);
+
+                    // Estados permitidos: 1 (Nuevo), 2 (En curso - asignada), 3 (En curso - planificada), 4 (En espera)
+                    const beforeFilter = tickets.length;
+                    tickets = tickets.filter(t => [1, 2, 3, 4].includes(Number(t.status)));
+                    console.log(`[DEBUG-SRV] Filtro finalizado: ${beforeFilter} -> ${tickets.length} tickets`);
                 } else if (!isNaN(criteria.status)) {
                     tickets = tickets.filter(t => t.status == criteria.status);
                 }

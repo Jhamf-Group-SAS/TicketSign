@@ -144,7 +144,7 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
                 const [entRes, techRes, tickRes] = await Promise.all([
                     fetch(`${baseUrl}/glpi/entities`, { headers }),
                     fetch(`${baseUrl}/glpi/technicians`, { headers }),
-                    fetch(`${baseUrl}/glpi/tickets?range=0-50&status=pending`, { headers })
+                    fetch(`${baseUrl}/glpi/tickets?range=0-300&status=pending`, { headers })
                 ]);
 
                 if (entRes.ok) {
