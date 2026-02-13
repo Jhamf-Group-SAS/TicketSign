@@ -13,6 +13,7 @@ import DashboardSummary from './components/DashboardSummary'
 import Toast from './components/Toast'
 import TicketList from './components/TicketList'
 import TicketDetail from './components/TicketDetail'
+import AutomaticUpdateHandler from './components/AutomaticUpdateHandler'
 import { Plus, History, Wifi, WifiOff, Settings, Calendar, User, ClipboardList, LogOut, Users, FileText, Kanban, LayoutDashboard, Bell, Menu, X, MessageSquare, Package } from 'lucide-react'
 
 const cn = (...inputs) => twMerge(clsx(inputs));
@@ -395,6 +396,7 @@ function App() {
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-300">
+            <AutomaticUpdateHandler />
             {/* Dynamic Background elements */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full"></div>

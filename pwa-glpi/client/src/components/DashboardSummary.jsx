@@ -147,6 +147,12 @@ const DashboardSummary = ({ onNavigate }) => {
                     <ArrowUpRight size={24} />
                 </button>
             </div>
+
+            <div className="flex justify-center pb-4">
+                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600">
+                    TicketSign v{import.meta.env.VITE_APP_VERSION || '1.0.1'} • Actualización Automática Activa
+                </p>
+            </div>
         </div>
     );
 };
