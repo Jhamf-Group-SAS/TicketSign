@@ -11,7 +11,9 @@ import HistoryList from './components/HistoryList'
 import TaskBoard from './components/TaskBoard'
 import DashboardSummary from './components/DashboardSummary'
 import Toast from './components/Toast'
-import { Plus, History, Wifi, WifiOff, Settings, Calendar, User, ClipboardList, LogOut, Users, FileText, Kanban, LayoutDashboard, Bell, Menu, X } from 'lucide-react'
+import TicketList from './components/TicketList'
+import TicketDetail from './components/TicketDetail'
+import { Plus, History, Wifi, WifiOff, Settings, Calendar, User, ClipboardList, LogOut, Users, FileText, Kanban, LayoutDashboard, Bell, Menu, X, MessageSquare, Package } from 'lucide-react'
 
 const cn = (...inputs) => twMerge(clsx(inputs));
 
@@ -19,8 +21,9 @@ function App() {
     const [isOnline, setIsOnline] = useState(navigator.onLine)
     const [isAuthenticated, setIsAuthenticated] = useState(false)
     const [user, setUser] = useState(null)
-    const [view, setView] = useState('home') // home, form-preventive, form-corrective, preview, consolidated
+    const [view, setView] = useState('home') // home, form-preventive, form-corrective, form-delivery, preview, consolidated, tickets, ticket-detail
     const [selectedAct, setSelectedAct] = useState(null)
+    const [selectedTicketId, setSelectedTicketId] = useState(null)
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
     const [theme, setTheme] = useState(localStorage.getItem('glpi_pro_theme') || 'dark')
@@ -325,8 +328,8 @@ function App() {
                         >
                             <div className="flex justify-between items-start mb-3">
                                 <div className="flex items-center gap-3">
-                                    <div className={`p-2.5 rounded-xl ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-500' : 'bg-orange-500/10 text-orange-500'}`}>
-                                        <ClipboardList size={20} />
+                                    <div className={`p-2.5 rounded-xl ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-500' : act.type === 'ENTREGA' ? 'bg-purple-500/10 text-purple-500' : 'bg-orange-500/10 text-orange-500'}`}>
+                                        {act.type === 'ENTREGA' ? <Package size={20} /> : <ClipboardList size={20} />}
                                     </div>
                                     <div>
                                         <h4 className="font-black text-sm text-slate-900 dark:text-white">Ticket #{act.glpi_ticket_id || '---'}</h4>
@@ -384,7 +387,9 @@ function App() {
         { id: 'home', label: 'Inicio', icon: LayoutDashboard },
         { id: 'form-preventive', label: 'Preventivo', icon: ClipboardList, color: 'text-blue-500', bg: 'hover:bg-blue-500/10' },
         { id: 'form-corrective', label: 'Correctivo', icon: Plus, color: 'text-orange-500', bg: 'hover:bg-orange-500/10' },
+        { id: 'form-delivery', label: 'Entrega', icon: Package, color: 'text-purple-500', bg: 'hover:bg-purple-500/10' },
         { id: 'kanban', label: 'Tareas', icon: Kanban, color: 'text-indigo-500', bg: 'hover:bg-indigo-500/10' },
+        { id: 'tickets', label: 'Soporte GLPI', icon: MessageSquare, color: 'text-cyan-500', bg: 'hover:bg-cyan-500/10' },
         { id: 'history', label: 'Historial', icon: History, color: 'text-purple-500', bg: 'hover:bg-purple-500/10' },
     ];
 
@@ -396,70 +401,80 @@ function App() {
                 <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full"></div>
             </div>
 
-            {/* Mobile Sidebar Overlay */}
+            {/* Sidebar / Drawer for Mobile Navigation */}
             {isSidebarOpen && (
-                <div className="fixed inset-0 z-[100] sm:hidden">
+                <div className="fixed inset-0 z-[60] sm:hidden">
+                    {/* Backdrop */}
                     <div
-                        className="absolute inset-0 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-300"
+                        className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm animate-in fade-in transition-all"
                         onClick={() => setIsSidebarOpen(false)}
                     />
-                    <div className="absolute top-0 left-0 w-[280px] h-full bg-white dark:bg-[#020617] border-r border-slate-200 dark:border-white/5 shadow-2xl animate-in slide-in-from-left duration-300 flex flex-col overflow-hidden">
-                        <div className="p-6 border-b border-slate-100 dark:border-white/5 flex justify-between items-center bg-slate-50 dark:bg-white/5">
-                            <div className="bg-[#0f172a] p-1.5 rounded-xl border border-white/10">
-                                <img src="/logo-white.png" className="h-6 w-auto" alt="logo" />
+
+                    {/* Sidebar Content */}
+                    <div className="absolute top-0 left-0 bottom-0 w-[280px] bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-white/10 shadow-2xl animate-in slide-in-from-left duration-300">
+                        <div className="p-6 flex flex-col h-full uppercase tracking-tighter">
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="bg-[#0f172a] p-2 rounded-xl border border-white/10">
+                                    <img src="/logo-white.png" className="h-8 w-auto" alt="jhamf" />
+                                </div>
+                                <button
+                                    onClick={() => setIsSidebarOpen(false)}
+                                    className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all"
+                                >
+                                    <X size={24} />
+                                </button>
                             </div>
-                            <button onClick={() => setIsSidebarOpen(false)} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
-                                <X size={24} />
-                            </button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
-                            <p className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4">Navegación</p>
-                            {navItems.map(item => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => { setView(item.id); setIsSidebarOpen(false); }}
-                                    className={cn(
-                                        "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all active:scale-[0.98] font-black text-xs uppercase tracking-widest",
-                                        view === item.id
-                                            ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
-                                            : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5"
-                                    )}
-                                >
-                                    <item.icon size={20} className={view === item.id ? "text-white" : item.color} />
-                                    <span>{item.label}</span>
-                                </button>
-                            ))}
-                        </div>
-                        <div className="p-6 border-t border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Modo Oscuro</span>
-                                <button
-                                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                                    className={cn(
-                                        "w-12 h-6 rounded-full transition-all relative",
-                                        theme === 'dark' ? "bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.4)]" : "bg-slate-300"
-                                    )}
-                                >
-                                    <div className={cn(
-                                        "absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-md",
-                                        theme === 'dark' ? "left-7" : "left-1"
-                                    )} />
-                                </button>
+
+                            <div className="flex-1 space-y-2">
+                                <p className="text-[10px] font-black text-slate-400 mb-4 px-2 tracking-[0.2em]">Navegación</p>
+                                {navItems.map(item => (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => {
+                                            setView(item.id);
+                                            setIsSidebarOpen(false);
+                                        }}
+                                        className={cn(
+                                            "w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all group active:scale-[0.98]",
+                                            view === item.id
+                                                ? "bg-blue-500/10 text-blue-500 border border-blue-500/20"
+                                                : "text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5"
+                                        )}
+                                    >
+                                        <item.icon size={20} className={cn(
+                                            view === item.id ? "text-blue-500" : item.color
+                                        )} />
+                                        <span className="text-xs font-black uppercase tracking-widest">{item.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="mt-auto pt-6 border-t border-slate-100 dark:border-white/5">
+                                <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-white/5 rounded-2xl">
+                                    <div className="bg-blue-500/20 p-2 rounded-lg text-blue-500">
+                                        <User size={18} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] font-black text-slate-400 leading-none mb-1">Técnico</p>
+                                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{user?.name || user?.username}</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            )}
+            )
+            }
 
-            {/* Navbar Premium con Quick Actions incorporados */}
+
             <nav className="p-3 sm:p-4 bg-white/40 dark:bg-slate-950/40 backdrop-blur-xl sticky top-0 z-50 border-b border-slate-200 dark:border-white/5 flex justify-between items-center shadow-sm dark:shadow-2xl">
                 <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-                    {/* Botón Hamburguesa - Solo visible en móvil */}
+                    {/* Hamburger Button for Mobile */}
                     <button
                         onClick={() => setIsSidebarOpen(true)}
-                        className="flex sm:hidden p-2.5 bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-blue-500 rounded-[1.2rem] transition-all active:scale-90 border border-slate-200/50 dark:border-white/5"
+                        className="p-2 sm:hidden text-slate-500 hover:text-blue-500 hover:bg-blue-500/5 rounded-xl transition-all active:scale-90"
                     >
-                        <Menu size={22} />
+                        <Menu size={24} />
                     </button>
 
                     <div
@@ -472,27 +487,27 @@ function App() {
                     </div>
                 </div>
 
-                {/* Quick Actions Menu - Oculto en móvil muy pequeño o adaptado */}
-                <div className="hidden sm:flex items-center gap-1 bg-slate-100/50 dark:bg-white/5 p-1 rounded-[1.2rem] border border-slate-200/50 dark:border-white/5 max-w-[50%] xs:max-w-[60%] sm:max-w-none overflow-x-auto no-scrollbar">
-                    {navItems.map(item => (
-                        <button
-                            key={item.id}
-                            onClick={() => setView(item.id)}
-                            className={cn(
-                                "flex items-center gap-2 px-3 sm:px-4 py-2 rounded-2xl transition-all active:scale-95 group/nav shrink-0",
-                                view === item.id
-                                    ? "bg-white dark:bg-white/10 shadow-sm text-blue-500"
-                                    : `text-slate-500 hover:text-slate-900 dark:hover:text-white ${item.bg}`
-                            )}
-                        >
-                            <item.icon size={16} className={cn(
-                                "transition-transform group-hover/nav:scale-110",
-                                "transition-transform group-hover/nav:scale-110",
-                                view === item.id ? "text-blue-500" : item.color
-                            )} />
-                            <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">{item.label}</span>
-                        </button>
-                    ))}
+                <div className="hidden sm:flex flex-1 justify-center px-4">
+                    <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-white/5 p-1 rounded-[1.2rem] border border-slate-200/50 dark:border-white/5 overflow-x-auto no-scrollbar max-w-full">
+                        {navItems.map(item => (
+                            <button
+                                key={item.id}
+                                onClick={() => setView(item.id)}
+                                className={cn(
+                                    "flex items-center gap-2 px-3 sm:px-4 py-2 rounded-2xl transition-all active:scale-95 group/nav shrink-0",
+                                    view === item.id
+                                        ? "bg-white dark:bg-white/10 shadow-sm text-blue-500"
+                                        : `text-slate-500 hover:text-slate-900 dark:hover:text-white ${item.bg}`
+                                )}
+                            >
+                                <item.icon size={16} className={cn(
+                                    "transition-transform group-hover/nav:scale-110",
+                                    view === item.id ? "text-blue-500" : item.color
+                                )} />
+                                <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">{item.label}</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-2 sm:gap-3">
@@ -625,10 +640,10 @@ function App() {
             <main className="flex-1 relative z-10 p-4 pt-6 max-w-4xl mx-auto w-full">
                 {view === 'home' && renderHome()}
 
-                {(view === 'form-preventive' || view === 'form-corrective') && (
+                {(view === 'form-preventive' || view === 'form-corrective' || view === 'form-delivery') && (
                     <div className="animate-in fade-in zoom-in-95 duration-300">
                         <MaintenanceForm
-                            type={view === 'form-preventive' ? 'PREVENTIVO' : 'CORRECTIVO'}
+                            type={view === 'form-preventive' ? 'PREVENTIVO' : view === 'form-delivery' ? 'ENTREGA' : 'CORRECTIVO'}
                             onCancel={() => setView('home')}
                             onSave={() => setView('home')}
                             theme={theme}
@@ -665,11 +680,29 @@ function App() {
                         onBack={() => setView('home')}
                     />
                 )}
+
+                {view === 'tickets' && (
+                    <TicketList
+                        user={user}
+                        onSelectTicket={(id) => {
+                            setSelectedTicketId(id);
+                            setView('ticket-detail');
+                        }}
+                        onBack={() => setView('home')}
+                    />
+                )}
+
+                {view === 'ticket-detail' && selectedTicketId && (
+                    <TicketDetail
+                        ticketId={selectedTicketId}
+                        onBack={() => setView('tickets')}
+                    />
+                )}
             </main>
 
             {/* Status Bar / Mobile Indicator */}
             <div className="md:hidden h-20"></div> {/* Spacer for fixed footer if needed */}
-        </div>
+        </div >
     )
 }
 

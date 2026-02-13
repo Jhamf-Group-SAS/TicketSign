@@ -50,74 +50,78 @@ export const SyncService = {
         if (!navigator.onLine) return;
 
         const token = localStorage.getItem('glpi_pro_token');
-        if (!token || token.split('.').length !== 3) return;
+        if (!token) return;
 
         try {
-            // Sincronizar Actas
-            const responseActs = await fetch(`${API_BASE_URL}/sync/maintenance?limit=50`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (responseActs.ok) {
-                const remoteActs = await responseActs.json();
-                if (remoteActs) {
-                    const { saveRemoteActs } = await import('../store/db');
-                    await saveRemoteActs(remoteActs);
-                    console.log(`Sincronizados ${remoteActs.length} registros de actas del servidor.`);
-                }
-            }
-
-            // Sincronizar Tareas
-            const responseTasks = await fetch(`${API_BASE_URL}/tasks`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (responseTasks.ok) {
-                const remoteTasks = await responseTasks.json();
-                if (remoteTasks) {
-                    const { db } = await import('../store/db');
-
-                    // Estrategia Anti-Duplicados:
-                    // 1. Obtener todas las tareas locales que tengan _id (para mapear)
-                    const localTasksWithServerId = await db.tasks.where('_id').notEqual('').toArray();
-                    const serverIdToLocalIdMap = new Map();
-                    localTasksWithServerId.forEach(t => {
-                        if (t._id) serverIdToLocalIdMap.set(t._id, t.id);
-                    });
-
-                    // 2. Preparar tareas remotas preservando el ID local si existe
-                    const tasksToSave = remoteTasks.map(remote => {
-                        const localId = serverIdToLocalIdMap.get(remote._id);
-                        if (localId) {
-                            // Si ya existe localmente, usamos su ID local (PK) para actualizar
-                            return { ...remote, id: localId };
-                        } else {
-                            // Si es nueva, dejamos que Dexie asigne ID (o usamos remote.id si existiera y fuera integer, pero mejor dejar undefined)
-                            // Nota: remote.id suele ser string (Mongo ID) o undefined. Si es string, Dexie ++id lo ignorará o fallará.
-                            // Mejor asegurarnos que NO tenga 'id' si es string
-                            const { id, _id, ...rest } = remote;
-                            return { ...remote, id: undefined }; // Forzamos undefined para auto-increment
-                        }
-                    });
-
-                    await db.tasks.bulkPut(tasksToSave);
-
-                    // Eliminar localmente las tareas que ya no existen en el servidor
-                    // Solo consideramos tareas que ya tenían ID de servidor (_id)
-                    const remoteIds = new Set(remoteTasks.map(t => t._id));
-                    const localTasks = await db.tasks.toArray();
-                    const tasksToDelete = localTasks
-                        .filter(t => t._id && !remoteIds.has(t._id)) // Tiene ID server pero no vino en la respuesta
-                        .map(t => t.id); // Usamos ID local para borrar
-
-                    if (tasksToDelete.length > 0) {
-                        await db.tasks.bulkDelete(tasksToDelete);
-                        console.log(`Eliminadas ${tasksToDelete.length} tareas locales que ya no existen en el servidor.`);
+            // --- Sincronizar Actas ---
+            try {
+                const responseActs = await fetch(`${API_BASE_URL}/sync/maintenance?limit=50`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (responseActs.ok) {
+                    const remoteActs = await responseActs.json();
+                    if (Array.isArray(remoteActs)) {
+                        const { saveRemoteActs } = await import('../store/db');
+                        await saveRemoteActs(remoteActs);
+                        console.log(`[Sync] Sincronizados ${remoteActs.length} registros de actas.`);
                     }
-
-                    console.log(`Sincronizadas ${remoteTasks.length} tareas del servidor.`);
                 }
+            } catch (e) {
+                console.error('[Sync] Error pulling acts:', e);
             }
+
+            // --- Sincronizar Tareas ---
+            try {
+                const responseTasks = await fetch(`${API_BASE_URL}/tasks`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (responseTasks.ok) {
+                    const remoteTasks = await responseTasks.json();
+
+                    if (Array.isArray(remoteTasks)) {
+                        const { db } = await import('../store/db');
+
+                        // 1. Mapear tareas locales existentes por _id (Server ID)
+                        const localTasks = await db.tasks.toArray();
+                        const localMap = new Map();
+                        localTasks.forEach(t => {
+                            if (t._id) localMap.set(t._id, t);
+                        });
+
+                        // 2. Preparar lista para guardar (Upsert)
+                        const tasksToSave = remoteTasks.map(remoteTask => {
+                            const localMatch = localMap.get(remoteTask._id);
+                            if (localMatch) {
+                                // ACTUALIZAR: Mantener el ID local (Dexie PK)
+                                return { ...remoteTask, id: localMatch.id };
+                            } else {
+                                // INSERTAR: Asegurar que id sea undefined para autoincrement
+                                const { id, ...rest } = remoteTask;
+                                return { ...rest, id: undefined };
+                            }
+                        });
+
+                        if (tasksToSave.length > 0) {
+                            await db.tasks.bulkPut(tasksToSave);
+                        }
+
+                        // 3. (Opcional) Limpieza de tareas que ya no existen en el servidor
+                        // IMPORTANTE: Solo borrar si estamos seguros que el endpoint devuelve TODO lo visible.
+                        // Por ahora, para evitar borrar tareas privadas locales o drafts, NO borramos masivamente.
+                        // Solo actualizamos/insertamos las que vienen del servidor.
+
+                        console.log(`[Sync] Sincronizadas ${tasksToSave.length} tareas del servidor.`);
+                    }
+                } else {
+                    console.warn(`[Sync] Error fetching tasks: ${responseTasks.status} ${responseTasks.statusText}`);
+                }
+            } catch (e) {
+                console.error('[Sync] Error pulling tasks:', e);
+            }
+
         } catch (error) {
-            console.error('Error obteniendo datos remotos:', error);
+            console.error('[Sync] General error:', error);
         }
     },
 

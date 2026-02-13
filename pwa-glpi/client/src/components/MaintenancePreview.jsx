@@ -1,6 +1,68 @@
-import { ChevronLeft, Calendar, User, Tag, HardDrive, ClipboardCheck, Image as ImageIcon, PenTool, CheckCircle, X, FileText, UploadCloud, RefreshCcw } from 'lucide-react';
+import { db } from '../store/db';
+import { Package, ClipboardList, User, Building2, Monitor, Calendar, Clock, Tag, CheckCircle, Save, X, ChevronLeft, Building, Trash2, ShieldCheck, Settings2, Globe, FileCheck, Keyboard, Mouse, Laptop, HardDrive, Image as ImageIcon, UploadCloud, FileText, MessageSquare, Printer, Wifi, Zap, Layers, Power } from 'lucide-react';
 import { useState } from 'react';
 import Toast from './Toast';
+
+const PREVENTIVE_CHECKLIST = [
+    { id: 'limpieza_interna', label: 'Limpieza Interna', icon: Monitor },
+    { id: 'soplado', label: 'Soplado de Polvo', icon: FileCheck },
+    { id: 'cambio_pasta', label: 'Cambio de Pasta Térmica', icon: Settings2 },
+    { id: 'limpieza_externa', label: 'Limpieza Externa (Gabinete/Pantalla)', icon: Monitor },
+    { id: 'ajuste_tornilleria', label: 'Ajuste de Tornillería', icon: Settings2 },
+    { id: 'verificacion_ventiladores', label: 'Verificación de Ventiladores', icon: Settings2 },
+    { id: 'organizacion_cables', label: 'Organización de Cables', icon: Globe },
+    { id: 'revision_voltajes', label: 'Revisión de Voltajes Fuente', icon: ShieldCheck }
+];
+
+const DELIVERY_CHECKLIST = [
+    { id: 'monitor', label: 'Monitor / Pantalla', icon: Monitor },
+    { id: 'teclado', label: 'Teclado', icon: Keyboard },
+    { id: 'mouse', label: 'Mouse', icon: Mouse },
+    { id: 'cargador', label: 'Cargador / Cable Poder', icon: Laptop },
+    { id: 'maletin', label: 'Maletín / Funda', icon: Package },
+    { id: 'cable_video', label: 'Cable Video (HDMI/VGA)', icon: Globe },
+    { id: 'so_configurado', label: 'OS Configurado', icon: ShieldCheck },
+    { id: 'perfil_usuario', label: 'Perfil de Usuario', icon: User },
+    { id: 'unido_dominio', label: 'Unido al Dominio', icon: Globe },
+    { id: 'antivirus_instalado', label: 'Antivirus Instalado', icon: ShieldCheck },
+    { id: 'aplicaciones_base', label: 'Aplicaciones Base', icon: Settings2 }
+];
+
+const PRINTER_CHECKLIST = [
+    { id: 'encendido_funcional', label: 'Encendido y Funcional', icon: Power },
+    { id: 'conectividad_red', label: 'Conectividad de Red', icon: Globe },
+    { id: 'nivel_tinta', label: 'Nivel Inicial de Tóner/Tinta', icon: Zap },
+    { id: 'accesorios_impresora', label: 'Accesorios Incluidos', icon: Package }
+];
+
+const NETWORK_CHECKLIST = [
+    { id: 'luces_ok', label: 'Encendido y Luces Indicadoras OK', icon: Zap },
+    { id: 'puertos_funcionales', label: 'Puertos Funcionales', icon: Layers },
+    { id: 'configuracion_inicial', label: 'Configuración Inicial Completada', icon: Settings2 },
+    { id: 'documentacion_red', label: 'Documentación Entregada', icon: FileCheck }
+];
+
+const PERIPHERAL_CHECKLIST = [
+    { id: 'funcionamiento_verificado', label: 'Encendido/Funcionamiento Verificado', icon: Power },
+    { id: 'cables_completos', label: 'Cables Completos', icon: Layers },
+    { id: 'sin_defectos_fabrica', label: 'Sin Defectos de Fabrica', icon: ShieldCheck },
+    { id: 'accesorios_periferico', label: 'Accesorios Incluidos', icon: Package }
+];
+
+const GENERIC_CHECKLIST = [
+    { id: 'encendido_funcional_gen', label: 'Encendido y Funcional', icon: Power },
+    { id: 'accesorios_completos_gen', label: 'Cables/Accesorios Completos', icon: Package },
+    { id: 'sin_defectos_visibles_gen', label: 'Sin Defectos Visibles', icon: ShieldCheck },
+    { id: 'documentacion_gen', label: 'Documentación Entregada', icon: FileCheck }
+];
+
+const DELIVERY_CHECKLISTS = {
+    'COMPUTADOR': DELIVERY_CHECKLIST,
+    'IMPRESORA': PRINTER_CHECKLIST,
+    'REDES': NETWORK_CHECKLIST,
+    'PERIFERICO': PERIPHERAL_CHECKLIST,
+    'OTRO': GENERIC_CHECKLIST
+};
 
 const MaintenancePreview = ({ act, onBack, theme }) => {
     const [isExporting, setIsExporting] = useState(false);
@@ -76,15 +138,15 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
         <div className="space-y-8 pb-32 max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 transition-colors">
             {/* Header Preview */}
             <div className="flex items-center justify-between sticky top-[73px] z-40 bg-white/80 dark:bg-[#020617]/80 backdrop-blur-md py-4 border-b border-slate-200 dark:border-white/5 mx-[-1rem] px-4 transition-colors">
-                <div className="flex items-center gap-3">
-                    <button onClick={onBack} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full text-slate-500 dark:text-slate-400">
-                        <ChevronLeft size={24} />
-                    </button>
+                <div className="flex items-center gap-4">
+                    <div className={`p-4 rounded-2xl ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-500' : act.type === 'ENTREGA' ? 'bg-purple-500/10 text-purple-500' : 'bg-orange-500/10 text-orange-500'}`}>
+                        {act.type === 'ENTREGA' ? <Package size={28} /> : <ClipboardList size={28} />}
+                    </div>
                     <div>
-                        <h2 className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-white transition-colors">
-                            Vista Previa: Ticket #{act.glpi_ticket_id || '---'}
+                        <h2 className="text-xl font-black text-slate-900 dark:text-white leading-tight">
+                            {act.type === 'PREVENTIVO' ? 'Acta Preventiva' : act.type === 'ENTREGA' ? 'Acta de Entrega' : 'Acta Correctiva'}
                         </h2>
-                        <p className="text-[10px] uppercase font-black text-blue-500 tracking-widest">{act.type} - {act.status}</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Resumen del Servicio</p>
                     </div>
                 </div>
             </div>
@@ -134,9 +196,15 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
                         <HardDrive size={14} /> Datos del Equipo
                     </h3>
                     <div className="grid grid-cols-2 gap-y-4 text-sm">
-                        <div className="col-span-2">
-                            <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Inventario / Activo</p>
-                            <p className="text-purple-600 dark:text-blue-400 font-black transition-colors">{act.inventory_number || 'N/A'}</p>
+                        <div className="col-span-2 flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Inventario / Activo</p>
+                                <p className="text-purple-600 dark:text-blue-400 font-black transition-colors">{act.inventory_number || 'N/A'}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Tipo de Activo</p>
+                                <span className="px-3 py-1 bg-purple-500/10 text-purple-500 rounded-full text-[10px] font-black uppercase tracking-tight border border-purple-500/20">{act.equipment_type || 'COMPUTADOR'}</span>
+                            </div>
                         </div>
                         <div>
                             <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Serial</p>
@@ -150,30 +218,68 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
                             <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1 block">Modelo</label>
                             <p className="text-slate-900 dark:text-white font-medium transition-colors">{act.equipment_model || 'N/A'}</p>
                         </div>
+                        {(!act.equipment_type || act.equipment_type === 'COMPUTADOR') && (
+                            <>
+                                <div>
+                                    <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Procesador</p>
+                                    <p className="text-slate-900 dark:text-white font-medium transition-colors">{act.equipment_processor || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">RAM</p>
+                                    <p className="text-slate-900 dark:text-white font-medium transition-colors">
+                                        {act.equipment_ram === 'OTRO' ? `${act.equipment_ram_other} GB` : (act.equipment_ram || 'N/A')}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Disco</p>
+                                    <p className="text-slate-900 dark:text-white font-medium transition-colors">
+                                        {act.equipment_disk === 'OTRO' ? `${act.equipment_disk_other} GB` : (act.equipment_disk || 'N/A')}
+                                        <span className="ml-1.5 px-1.5 py-0.5 bg-slate-100 dark:bg-white/5 rounded text-[10px] font-black text-slate-500">{act.equipment_disk_type || 'SSD'}</span>
+                                    </p>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </section>
 
                 {/* Checklist */}
                 <section className="bg-white dark:bg-slate-900/40 p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-sm space-y-4 shadow-sm dark:shadow-none transition-colors">
-                    <h3 className="text-xs font-black uppercase text-green-500 tracking-[0.2em] flex items-center gap-2">
-                        <Tag size={14} /> Resultados del Checklist
-                    </h3>
-                    {act.type === 'PREVENTIVO' ? (
-                        <div className="space-y-2">
-                            {Object.entries(act.checklist)
-                                .filter(([_, val]) => val === true)
-                                .map(([key]) => (
-                                    <div key={key} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/30 rounded-2xl border border-slate-200 dark:border-white/5 transition-colors">
-                                        <span className="text-sm text-slate-600 dark:text-slate-300 capitalize transition-colors">{key.replace(/_/g, ' ')}</span>
-                                        <CheckCircle size={18} className="text-green-500" />
-                                    </div>
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-black uppercase text-green-500 tracking-[0.2em] flex items-center gap-2">
+                            <Tag size={14} /> Checklist de {act.type === 'ENTREGA' ? 'Entrega' : 'Mantenimiento'}
+                        </h3>
+                        {(act.type === 'PREVENTIVO' || act.type === 'ENTREGA') && (
+                            <span className="text-[10px] font-bold bg-green-500/10 text-green-600 dark:text-green-400 px-3 py-1 rounded-full">
+                                {Object.values(act.checklist).filter(v => v === true).length} Completados
+                            </span>
+                        )}
+                    </div>
+
+                    {(act.type === 'PREVENTIVO' || act.type === 'ENTREGA') ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {(act.type === 'PREVENTIVO' ? PREVENTIVE_CHECKLIST :
+                                DELIVERY_CHECKLISTS[act.equipment_type] || GENERIC_CHECKLIST)
+                                .map((item) => (
+                                    act.checklist[item.id] && (
+                                        <div key={item.id} className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-950/30 rounded-2xl border border-slate-200 dark:border-white/5 transition-colors">
+                                            <div className="bg-green-500/10 p-2 rounded-xl text-green-500">
+                                                <item.icon size={18} />
+                                            </div>
+                                            <span className="flex-1 text-xs font-bold text-slate-600 dark:text-slate-300 transition-colors uppercase tracking-tight">{item.label}</span>
+                                            <CheckCircle size={18} className="text-green-500" />
+                                        </div>
+                                    )
                                 ))}
                             {Object.values(act.checklist).every(v => v === false) && (
-                                <p className="text-center text-slate-400 dark:text-slate-500 text-xs italic py-4 transition-colors">No se marcaron actividades.</p>
+                                <p className="col-span-2 text-center text-slate-400 dark:text-slate-500 text-xs italic py-4 transition-colors">No se marcaron actividades.</p>
                             )}
                         </div>
                     ) : (
                         <div className="space-y-4 text-sm">
+                            <div>
+                                <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Diagnóstico</p>
+                                <p className="text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-200 dark:border-white/5 leading-relaxed transition-colors">{act.checklist.diagnostico || 'N/A'}</p>
+                            </div>
                             <div>
                                 <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Falla Reportada</p>
                                 <p className="text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-200 dark:border-white/5 leading-relaxed transition-colors">{act.checklist.falla_reportada || 'N/A'}</p>
@@ -182,8 +288,35 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
                                 <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Acción Realizada</p>
                                 <p className="text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-200 dark:border-white/5 leading-relaxed transition-colors">{act.checklist.accion_realizada || 'N/A'}</p>
                             </div>
+                            <div>
+                                <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Repuestos Usados</p>
+                                <p className="text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-200 dark:border-white/5 leading-relaxed transition-colors">{act.checklist.repuestos_usados || 'N/A'}</p>
+                            </div>
                         </div>
                     )}
+                </section>
+
+                {/* Observaciones y Recomendaciones */}
+                <section className="bg-white dark:bg-slate-900/40 p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-sm space-y-4 shadow-sm dark:shadow-none transition-colors">
+                    <h3 className="text-xs font-black uppercase text-blue-500 tracking-[0.2em] flex items-center gap-2">
+                        <MessageSquare size={14} /> Observaciones Finales
+                    </h3>
+                    <div className="space-y-4">
+                        <div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Observaciones Generales</p>
+                            <div className="text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-950/30 p-4 rounded-2xl border border-slate-200 dark:border-white/5 text-sm leading-relaxed transition-colors whitespace-pre-wrap">
+                                {act.observations || 'Sin observaciones.'}
+                            </div>
+                        </div>
+                        {act.type !== 'ENTREGA' && act.recommendations && (
+                            <div>
+                                <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">Recomendaciones</p>
+                                <div className="text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-950/30 p-4 rounded-2xl border border-slate-200 dark:border-white/5 text-sm leading-relaxed transition-colors whitespace-pre-wrap">
+                                    {act.recommendations}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </section>
 
                 {/* Evidencias */}

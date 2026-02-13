@@ -9,7 +9,14 @@ const actSchema = new mongoose.Schema({
     equipment_model: String,
     assigned_user: String,
     inventory_number: String,
-    type: { type: String, enum: ['PREVENTIVO', 'CORRECTIVO'] },
+    equipment_ram: String,
+    equipment_ram_other: String,
+    equipment_disk: String,
+    equipment_disk_other: String,
+    equipment_disk_type: String,
+    equipment_processor: String,
+    equipment_type: { type: String, default: 'COMPUTADOR' },
+    type: { type: String, enum: ['PREVENTIVO', 'CORRECTIVO', 'ENTREGA'] },
     status: { type: String, default: 'BORRADOR' },
 
     // Checklist dinámico

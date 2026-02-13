@@ -43,12 +43,16 @@ router.post('/login', async (req, res) => {
                     fullName = `${glpiSession.glpifirstname || ''} ${glpiSession.glpirealname || ''}`.trim();
                 }
 
-                // Extraer perfil activo
+                // Extraer perfil activo e ID de usuario de forma robusta
                 const activeProfile = glpiSession.glpiactiveprofile?.name || '';
+                const userId = glpiSession.glpiID || glpiSession.glpiid || null;
+
+                console.log(`[AUTH] Usuario autenticado: ${fullName} (ID GLPI: ${userId})`);
 
                 const token = jwt.sign(
                     {
                         username,
+                        id: userId,
                         displayName: fullName,
                         profile: activeProfile,
                         glpi_session: sessionToken
@@ -60,7 +64,7 @@ router.post('/login', async (req, res) => {
                 return res.status(200).json({
                     status: 'success',
                     token,
-                    user: { username, name: fullName, profile: activeProfile }
+                    user: { id: userId, username, name: fullName, profile: activeProfile }
                 });
             } catch (pErr) {
                 console.warn('No se pudo obtener el nombre completo o perfil, usando username:', pErr.message);

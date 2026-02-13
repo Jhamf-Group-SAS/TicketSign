@@ -11,11 +11,63 @@ export const generateMaintenancePDF = async (actData) => {
       '--disable-dev-shm-usage',
       '--disable-gpu'
     ],
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser'
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
   });
   const page = await browser.newPage();
 
   const isPreventive = actData.type === 'PREVENTIVO';
+  const isDelivery = actData.type === 'ENTREGA';
+
+  // Mapeo de labels profesionales para el checklist
+  const CHECKLIST_LABELS = {
+    // Preventivo
+    'limpieza_interna': 'Limpieza Interna de Componentes',
+    'soplado': 'Soplado y Limpieza de Polvo',
+    'cambio_pasta': 'Cambio de Pasta Térmica (CPU/GPU)',
+    'limpieza_externa': 'Limpieza Externa de Chasis/Monitor',
+    'ajuste_tornilleria': 'Ajuste General de Tornillería',
+    'verificacion_ventiladores': 'Verificación de Estado de Ventiladores',
+    'organizacion_cables': 'Organización y Peinado de Cables',
+    'revision_voltajes': 'Prueba de Voltajes de la Fuente',
+    // Entrega
+    'monitor': 'Monitor / Pantalla Verificada',
+    'teclado': 'Teclado en Buen Estado',
+    'mouse': 'Mouse / Ratón Verificado',
+    'cargador': 'Cargador Original / Cable Poder',
+    'maletin': 'Maletín o Funda Protectora',
+    'cable_video': 'Cable de Video (HDMI/VGA/DP)',
+    'so_configurado': 'Sistema Operativo Configurado',
+    'perfil_usuario': 'Perfil de Usuario Creado',
+    'unido_dominio': 'Equipo Unido al Dominio',
+    'antivirus_instalado': 'Sistema de Antivirus Activo',
+    'aplicaciones_base': 'Software y Herramientas Base',
+    // Impresora
+    'encendido_funcional': 'Encendido y Funcional',
+    'conectividad_red': 'Conectividad de Red Verificada',
+    'nivel_tinta': 'Nivel Inicial de Tóner/Tinta',
+    'accesorios_impresora': 'Accesorios Incluidos (Cables/Bandejas)',
+    // Redes
+    'luces_ok': 'Encendido y Luces Indicadoras OK',
+    'puertos_funcionales': 'Puertos Físicos Funcionales',
+    'configuracion_inicial': 'Configuración Inicial Completada',
+    'documentacion_red': 'Documentación Técnica Entregada',
+    // Periférico
+    'funcionamiento_verificado': 'Encendido y Funcionamiento Verificado',
+    'cables_completos': 'Cables de Conexión Completos',
+    'sin_defectos_fabrica': 'Sin Defectos de Fábrica Visibles',
+    'accesorios_periferico': 'Accesorios Originales Incluidos',
+    // Otros (Genérico)
+    'encendido_funcional_gen': 'Encendido y Funcional',
+    'accesorios_completos_gen': 'Cables y Accesorios Completos',
+    'sin_defectos_visibles_gen': 'Sin Defectos Visibles',
+    'documentacion_gen': 'Manuales / Documentación Entregada',
+    // Tipos de dispositivos
+    'COMPUTADOR': 'Computador / Laptop',
+    'IMPRESORA': 'Impresora / Multifuncional',
+    'REDES': 'Equipo de Networking',
+    'PERIFERICO': 'Periférico / Accesorio',
+    'OTRO': 'Otro Dispositivo Tecnológico'
+  };
 
   // Obtener la ruta del logo
   const logoPath = path.join(process.cwd(), 'src', 'assets', 'logo-jhamf.png');
@@ -131,22 +183,30 @@ export const generateMaintenancePDF = async (actData) => {
             <div class="grid-row" style="border:none;">
               <div class="field"><span class="label">TÉCNICO:</span><span class="val">${actData.technical_name}</span></div>
               <div class="field"><span class="label">FECHA:</span><span class="val">${new Date(actData.createdAt).toLocaleDateString()}</span></div>
-              <div class="field"><span class="label">SERVICIO:</span><span class="val">${actData.type}</span></div>
+              <div class="field"><span class="label">TIPO ACTIVO:</span><span class="val" style="color:#7c3aed; font-weight:900;">${CHECKLIST_LABELS[actData.equipment_type] || actData.equipment_type || 'COMPUTADOR'}</span></div>
               <div class="field"><span class="label">MODELO:</span><span class="val">${actData.equipment_model}</span></div>
             </div>
+            ${(!actData.equipment_type || actData.equipment_type === 'COMPUTADOR') ? `
+            <div class="grid-row" style="border:none;">
+              <div class="field"><span class="label">PROCESADOR:</span><span class="val">${actData.equipment_processor || 'N/A'}</span></div>
+              <div class="field"><span class="label">RAM:</span><span class="val">${actData.equipment_ram === 'OTRO' ? (actData.equipment_ram_other ? `${actData.equipment_ram_other} GB` : 'OTRO') : (actData.equipment_ram || 'N/A')}</span></div>
+              <div class="field"><span class="label">DISCO:</span><span class="val">${actData.equipment_disk === 'OTRO' ? (actData.equipment_disk_other ? `${actData.equipment_disk_other} GB` : 'OTRO') : (actData.equipment_disk || 'N/A')} ${actData.equipment_disk_type || 'SSD'}</span></div>
+              <div class="field"></div>
+            </div>
+            ` : ''}
           </div>
         </div>
 
         <div class="section">
-          <div class="section-title">${isPreventive ? 'Actividades Ejecutadas' : 'Descripción del Servicio'}</div>
-          ${isPreventive ? `
+          <div class="section-title">${isPreventive ? 'Actividades Ejecutadas' : isDelivery ? 'Checklist de Entrega' : 'Descripción del Servicio'}</div>
+          ${(isPreventive || isDelivery) ? `
             <div class="checklist-container" style="display: block;">
               ${Object.entries(actData.checklist)
         .filter(([_, val]) => val === true)
         .map(([key]) => `
                 <div class="checklist-item" style="margin-bottom: 4px; font-size: 10px;">
                   <span class="check-mark">✔</span>
-                  <span>${key.replace(/_/g, ' ')}</span>
+                  <span>${CHECKLIST_LABELS[key] || key.replace(/_/g, ' ')}</span>
                 </div>
               `).join('') || '<div style="font-size:9px; color:#94a3b8;">No se marcaron tareas.</div>'}
             </div>
@@ -169,10 +229,12 @@ export const generateMaintenancePDF = async (actData) => {
           <div class="work-box" style="min-height: 40px; margin-top: 4px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">${actData.observations || 'Sin observaciones.'}</div>
         </div>
 
+        ${!isDelivery ? `
         <div class="section">
           <span class="label">Recomendaciones</span>
           <div class="work-box" style="min-height: 40px; margin-top: 4px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">${actData.recommendations || 'Sin recomendaciones.'}</div>
         </div>
+        ` : ''}
 
         ${actData.photos && actData.photos.length > 0 ? `
           <div class="section">
@@ -237,7 +299,7 @@ export const generateConsolidatedPDF = async (clientName, acts) => {
       '--disable-dev-shm-usage',
       '--disable-gpu'
     ],
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser'
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
   });
   const page = await browser.newPage();
 
