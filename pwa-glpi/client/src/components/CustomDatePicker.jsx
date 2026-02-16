@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Clock, Calendar as CalendarIcon } from 'lucide-react';
 
-const CustomDatePicker = ({ value, onChange, onClose }) => {
+const CustomDatePicker = ({ value, onChange, onClose, hideTime = false }) => {
     const [viewDate, setViewDate] = useState(value ? new Date(value) : new Date());
     const [selectedDate, setSelectedDate] = useState(value ? new Date(value) : new Date());
     const [hours, setHours] = useState(selectedDate.getHours());
@@ -137,8 +138,8 @@ const CustomDatePicker = ({ value, onChange, onClose }) => {
         );
     };
 
-    return (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300">
+    return createPortal(
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] p-6 w-full max-w-[340px] animate-in zoom-in-95 duration-300">
                 {/* Header */}
                 <div className="flex justify-between items-center mb-6">
@@ -203,29 +204,31 @@ const CustomDatePicker = ({ value, onChange, onClose }) => {
                 )}
 
                 {/* Time Picker */}
-                <div className="border-t border-slate-100 dark:border-white/5 pt-6 mb-6">
-                    <div className="flex items-center justify-center gap-4">
-                        <div className="flex flex-col items-center">
-                            <input
-                                type="number"
-                                value={hours.toString().padStart(2, '0')}
-                                onChange={(e) => setHours(Math.max(0, Math.min(23, parseInt(e.target.value) || 0)))}
-                                className="w-14 text-2xl font-black text-slate-900 dark:text-white bg-transparent text-center outline-none focus:text-blue-500 transition-colors"
-                            />
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Horas</span>
-                        </div>
-                        <span className="font-black text-slate-300 text-xl mb-4">:</span>
-                        <div className="flex flex-col items-center">
-                            <input
-                                type="number"
-                                value={minutes.toString().padStart(2, '0')}
-                                onChange={(e) => setMinutes(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
-                                className="w-14 text-2xl font-black text-slate-400 bg-transparent text-center outline-none focus:text-blue-500 transition-colors"
-                            />
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Minutos</span>
+                {!hideTime && (
+                    <div className="border-t border-slate-100 dark:border-white/5 pt-6 mb-6">
+                        <div className="flex items-center justify-center gap-4">
+                            <div className="flex flex-col items-center">
+                                <input
+                                    type="number"
+                                    value={hours.toString().padStart(2, '0')}
+                                    onChange={(e) => setHours(Math.max(0, Math.min(23, parseInt(e.target.value) || 0)))}
+                                    className="w-14 text-2xl font-black text-slate-900 dark:text-white bg-transparent text-center outline-none focus:text-blue-500 transition-colors"
+                                />
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Horas</span>
+                            </div>
+                            <span className="font-black text-slate-300 text-xl mb-4">:</span>
+                            <div className="flex flex-col items-center">
+                                <input
+                                    type="number"
+                                    value={minutes.toString().padStart(2, '0')}
+                                    onChange={(e) => setMinutes(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+                                    className="w-14 text-2xl font-black text-slate-400 bg-transparent text-center outline-none focus:text-blue-500 transition-colors"
+                                />
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Minutos</span>
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex gap-3">
@@ -234,7 +237,7 @@ const CustomDatePicker = ({ value, onChange, onClose }) => {
                         onClick={handleNow}
                         className="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-95"
                     >
-                        Ahora
+                        {hideTime ? 'Hoy' : 'Ahora'}
                     </button>
                     <button
                         type="button"
@@ -245,7 +248,8 @@ const CustomDatePicker = ({ value, onChange, onClose }) => {
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

@@ -289,10 +289,10 @@ function App() {
     const renderHome = () => (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* New Dashboard Summary Section */}
-            <DashboardSummary onNavigate={setView} />
+            <DashboardSummary onNavigate={handleNavClick} />
 
             {/* Consolidated Reports Quick Link */}
-            <div className="bg-white dark:bg-slate-900/40 p-6 rounded-[2.5rem] border border-slate-200 dark:border-white/5 backdrop-blur-md flex items-center justify-between group cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all active:scale-95 shadow-sm dark:shadow-xl" onClick={() => setView('consolidated')}>
+            <div className="bg-white dark:bg-slate-900/40 p-6 rounded-[2.5rem] border border-slate-200 dark:border-white/5 backdrop-blur-md flex items-center justify-between group cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all active:scale-95 shadow-sm dark:shadow-xl" onClick={() => handleNavClick('consolidated')}>
                 <div className="flex items-center gap-4">
                     <div className="bg-purple-500/10 p-4 rounded-3xl text-purple-500 group-hover:scale-110 transition-transform">
                         <Users size={28} />
@@ -314,7 +314,7 @@ function App() {
                         <History size={14} />
                         Actividad Reciente
                     </h3>
-                    <button onClick={() => setView('history')} className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-blue-500 transition-all">Ver todo</button>
+                    <button onClick={() => handleNavClick('history')} className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-blue-500 transition-all">Ver todo</button>
                 </div>
 
                 <div className="space-y-3">
@@ -323,7 +323,7 @@ function App() {
                             key={act.id}
                             onClick={() => {
                                 setSelectedAct(act)
-                                setView('preview')
+                                handleNavClick('preview')
                             }}
                             className="bg-white/40 dark:bg-slate-900/10 backdrop-blur-sm p-5 rounded-[2rem] border border-slate-200 dark:border-white/5 hover:bg-white dark:hover:bg-slate-900/40 transition-all group cursor-pointer active:scale-[0.99] shadow-sm"
                         >
@@ -390,9 +390,25 @@ function App() {
         { id: 'form-corrective', label: 'Correctivo', icon: Plus, color: 'text-orange-500', bg: 'hover:bg-orange-500/10' },
         { id: 'form-delivery', label: 'Entrega', icon: Package, color: 'text-purple-500', bg: 'hover:bg-purple-500/10' },
         { id: 'kanban', label: 'Tareas', icon: Kanban, color: 'text-indigo-500', bg: 'hover:bg-indigo-500/10' },
-        { id: 'tickets', label: 'Soporte GLPI', icon: MessageSquare, color: 'text-cyan-500', bg: 'hover:bg-cyan-500/10' },
+        { id: 'tickets', label: 'Soporte GLPI', icon: MessageSquare, color: 'text-cyan-500', bg: 'hover:bg-cyan-500/10', comingSoon: true },
         { id: 'history', label: 'Historial', icon: History, color: 'text-purple-500', bg: 'hover:bg-purple-500/10' },
     ];
+
+    const handleNavClick = (itemOrId) => {
+        const item = typeof itemOrId === 'string'
+            ? navItems.find(i => i.id === itemOrId)
+            : itemOrId;
+
+        if (item?.comingSoon) {
+            setNotificationToast({
+                message: "Módulo en desarrollo: Próximamente",
+                type: "warning"
+            });
+            return;
+        }
+        setView(item?.id || itemOrId);
+        setIsSidebarOpen(false);
+    };
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-300">
@@ -432,21 +448,24 @@ function App() {
                                 {navItems.map(item => (
                                     <button
                                         key={item.id}
-                                        onClick={() => {
-                                            setView(item.id);
-                                            setIsSidebarOpen(false);
-                                        }}
+                                        onClick={() => handleNavClick(item)}
                                         className={cn(
-                                            "w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all group active:scale-[0.98]",
+                                            "w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all group active:scale-[0.98] relative overflow-hidden",
                                             view === item.id
                                                 ? "bg-blue-500/10 text-blue-500 border border-blue-500/20"
-                                                : "text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5"
+                                                : "text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5",
+                                            item.comingSoon && "opacity-80"
                                         )}
                                     >
                                         <item.icon size={20} className={cn(
                                             view === item.id ? "text-blue-500" : item.color
                                         )} />
                                         <span className="text-xs font-black uppercase tracking-widest">{item.label}</span>
+                                        {item.comingSoon && (
+                                            <span className="ml-auto text-[8px] font-black bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-md border border-blue-500/20 uppercase tracking-widest">
+                                                Próximamente
+                                            </span>
+                                        )}
                                     </button>
                                 ))}
                             </div>
@@ -494,12 +513,13 @@ function App() {
                         {navItems.map(item => (
                             <button
                                 key={item.id}
-                                onClick={() => setView(item.id)}
+                                onClick={() => handleNavClick(item)}
                                 className={cn(
-                                    "flex items-center gap-2 px-3 sm:px-4 py-2 rounded-2xl transition-all active:scale-95 group/nav shrink-0",
+                                    "flex items-center gap-2 px-3 sm:px-4 py-2 rounded-2xl transition-all active:scale-95 group/nav shrink-0 relative",
                                     view === item.id
                                         ? "bg-white dark:bg-white/10 shadow-sm text-blue-500"
-                                        : `text-slate-500 hover:text-slate-900 dark:hover:text-white ${item.bg}`
+                                        : `text-slate-500 hover:text-slate-900 dark:hover:text-white ${item.bg}`,
+                                    item.comingSoon && "opacity-70"
                                 )}
                             >
                                 <item.icon size={16} className={cn(
@@ -507,6 +527,9 @@ function App() {
                                     view === item.id ? "text-blue-500" : item.color
                                 )} />
                                 <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">{item.label}</span>
+                                {item.comingSoon && (
+                                    <div className="absolute -top-1 -right-1 bg-blue-500 w-2 h-2 rounded-full border border-white dark:border-slate-950 animate-pulse"></div>
+                                )}
                             </button>
                         ))}
                     </div>
@@ -703,7 +726,15 @@ function App() {
             </main>
 
             {/* Status Bar / Mobile Indicator */}
-            <div className="md:hidden h-20"></div> {/* Spacer for fixed footer if needed */}
+            <div className="md:hidden h-20"></div>
+
+            {notificationToast && (
+                <Toast
+                    message={notificationToast.message}
+                    type={notificationToast.type}
+                    onClose={() => setNotificationToast(null)}
+                />
+            )}
         </div >
     )
 }

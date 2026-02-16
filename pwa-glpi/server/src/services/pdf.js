@@ -2,6 +2,57 @@ import puppeteer from 'puppeteer';
 import path from 'path';
 import fs from 'fs';
 
+// Mapeo de labels profesionales para el checklist
+export const CHECKLIST_LABELS = {
+  // Preventivo
+  'limpieza_interna': 'Limpieza Interna de Componentes',
+  'soplado': 'Soplado y Limpieza de Polvo',
+  'cambio_pasta': 'Cambio de Pasta Térmica (CPU/GPU)',
+  'limpieza_externa': 'Limpieza Externa de Chasis/Monitor',
+  'ajuste_tornilleria': 'Ajuste General de Tornillería',
+  'verificacion_ventiladores': 'Verificación de Estado de Ventiladores',
+  'organizacion_cables': 'Organización y Peinado de Cables',
+  'revision_voltajes': 'Prueba de Voltajes de la Fuente',
+  // Entrega
+  'monitor': 'Monitor / Pantalla Verificada',
+  'teclado': 'Teclado en Buen Estado',
+  'mouse': 'Mouse / Ratón Verificado',
+  'cargador': 'Cargador Original / Cable Poder',
+  'maletin': 'Maletín o Funda Protectora',
+  'cable_video': 'Cable de Video (HDMI/VGA/DP)',
+  'so_configurado': 'Sistema Operativo Configurado',
+  'perfil_usuario': 'Perfil de Usuario Creado',
+  'unido_dominio': 'Equipo Unido al Dominio',
+  'antivirus_instalado': 'Sistema de Antivirus Activo',
+  'aplicaciones_base': 'Software y Herramientas Base',
+  // Impresora
+  'encendido_funcional': 'Encendido y Funcional',
+  'conectividad_red': 'Conectividad de Red Verificada',
+  'nivel_tinta': 'Nivel Inicial de Tóner/Tinta',
+  'accesorios_impresora': 'Accesorios Incluidos (Cables/Bandejas)',
+  // Redes
+  'luces_ok': 'Encendido y Luces Indicadoras OK',
+  'puertos_funcionales': 'Puertos Físicos Funcionales',
+  'configuracion_inicial': 'Configuración Inicial Completada',
+  'documentacion_red': 'Documentación Técnica Entregada',
+  // Periférico
+  'funcionamiento_verificado': 'Encendido y Funcionamiento Verificado',
+  'cables_completos': 'Cables de Conexión Completos',
+  'sin_defectos_fabrica': 'Sin Defectos de Fábrica Visibles',
+  'accesorios_periferico': 'Accesorios Originales Incluidos',
+  // Otros (Genérico)
+  'encendido_funcional_gen': 'Encendido y Funcional',
+  'accesorios_completos_gen': 'Cables y Accesorios Completos',
+  'sin_defectos_visibles_gen': 'Sin Defectos Visibles',
+  'documentacion_gen': 'Manuales / Documentación Entregada',
+  // Tipos de dispositivos
+  'COMPUTADOR': 'Computador / Laptop',
+  'IMPRESORA': 'Impresora / Multifuncional',
+  'REDES': 'Equipo de Networking',
+  'PERIFERICO': 'Periférico / Accesorio',
+  'OTRO': 'Otro Dispositivo Tecnológico'
+};
+
 export const generateMaintenancePDF = async (actData) => {
   const browser = await puppeteer.launch({
     headless: 'new',
@@ -17,57 +68,6 @@ export const generateMaintenancePDF = async (actData) => {
 
   const isPreventive = actData.type === 'PREVENTIVO';
   const isDelivery = actData.type === 'ENTREGA';
-
-  // Mapeo de labels profesionales para el checklist
-  const CHECKLIST_LABELS = {
-    // Preventivo
-    'limpieza_interna': 'Limpieza Interna de Componentes',
-    'soplado': 'Soplado y Limpieza de Polvo',
-    'cambio_pasta': 'Cambio de Pasta Térmica (CPU/GPU)',
-    'limpieza_externa': 'Limpieza Externa de Chasis/Monitor',
-    'ajuste_tornilleria': 'Ajuste General de Tornillería',
-    'verificacion_ventiladores': 'Verificación de Estado de Ventiladores',
-    'organizacion_cables': 'Organización y Peinado de Cables',
-    'revision_voltajes': 'Prueba de Voltajes de la Fuente',
-    // Entrega
-    'monitor': 'Monitor / Pantalla Verificada',
-    'teclado': 'Teclado en Buen Estado',
-    'mouse': 'Mouse / Ratón Verificado',
-    'cargador': 'Cargador Original / Cable Poder',
-    'maletin': 'Maletín o Funda Protectora',
-    'cable_video': 'Cable de Video (HDMI/VGA/DP)',
-    'so_configurado': 'Sistema Operativo Configurado',
-    'perfil_usuario': 'Perfil de Usuario Creado',
-    'unido_dominio': 'Equipo Unido al Dominio',
-    'antivirus_instalado': 'Sistema de Antivirus Activo',
-    'aplicaciones_base': 'Software y Herramientas Base',
-    // Impresora
-    'encendido_funcional': 'Encendido y Funcional',
-    'conectividad_red': 'Conectividad de Red Verificada',
-    'nivel_tinta': 'Nivel Inicial de Tóner/Tinta',
-    'accesorios_impresora': 'Accesorios Incluidos (Cables/Bandejas)',
-    // Redes
-    'luces_ok': 'Encendido y Luces Indicadoras OK',
-    'puertos_funcionales': 'Puertos Físicos Funcionales',
-    'configuracion_inicial': 'Configuración Inicial Completada',
-    'documentacion_red': 'Documentación Técnica Entregada',
-    // Periférico
-    'funcionamiento_verificado': 'Encendido y Funcionamiento Verificado',
-    'cables_completos': 'Cables de Conexión Completos',
-    'sin_defectos_fabrica': 'Sin Defectos de Fábrica Visibles',
-    'accesorios_periferico': 'Accesorios Originales Incluidos',
-    // Otros (Genérico)
-    'encendido_funcional_gen': 'Encendido y Funcional',
-    'accesorios_completos_gen': 'Cables y Accesorios Completos',
-    'sin_defectos_visibles_gen': 'Sin Defectos Visibles',
-    'documentacion_gen': 'Manuales / Documentación Entregada',
-    // Tipos de dispositivos
-    'COMPUTADOR': 'Computador / Laptop',
-    'IMPRESORA': 'Impresora / Multifuncional',
-    'REDES': 'Equipo de Networking',
-    'PERIFERICO': 'Periférico / Accesorio',
-    'OTRO': 'Otro Dispositivo Tecnológico'
-  };
 
   // Obtener la ruta del logo
   const logoPath = path.join(process.cwd(), 'src', 'assets', 'logo-jhamf.png');
@@ -152,7 +152,7 @@ export const generateMaintenancePDF = async (actData) => {
       <body>
         <div class="header">
           <div class="logo-area">
-            ${logoBase64 ? `<img src="${logoBase64}" class="logo-img" />` : '<span style="font-size:18px; font-weight:900;">GLPI<span style="color:#3b82f6;">PRO</span></span>'}
+            ${logoBase64 ? `<img src="${logoBase64}" class="logo-img" />` : '<span style="font-size:18px; font-weight:900;">Ticket<span style="color:#3b82f6;">sign</span></span>'}
           </div>
           <div class="document-info">
             <span class="ticket-badge">Ticket #${actData.glpi_ticket_id || 'S/N'}</span>
@@ -272,8 +272,7 @@ export const generateMaintenancePDF = async (actData) => {
         </div>
 
         <div style="margin-top:20px; font-size: 7px; color: #94a3b8; text-align: center; border-top: 1px dotted #e2e8f0; padding-top: 8px;">
-          Documento digital verificado generado por el sistema GLPI PRO. 
-          Página 1 de 1.
+          Documento digital verificado generado por el sistema Ticketsign. Página 1 de 1.
         </div>
       </body>
     </html>
@@ -317,90 +316,127 @@ export const generateConsolidatedPDF = async (clientName, acts) => {
     <html>
       <head>
         <style>
-          body { font-family: Arial, sans-serif; color: #333; padding: 40px; }
-          .header { border-bottom: 3px solid #0056b3; padding-bottom: 15px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; }
-          .logo-img { height: 50px; }
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+          body { font-family: 'Inter', sans-serif; color: #1e293b; padding: 15px; }
+          .header { border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+          .logo-img { height: 35px; }
           .header-text { text-align: right; }
-          .title { font-size: 24px; color: #0056b3; font-weight: bold; margin: 0; }
-          .subtitle { font-size: 14px; color: #666; margin-top: 5px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th { background: #0056b3; color: white; padding: 10px; text-align: left; font-size: 12px; }
-          td { border-bottom: 1px solid #ddd; padding: 10px; font-size: 11px; }
-          .footer { margin-top: 50px; font-size: 10px; text-align: center; color: #999; }
-          .summary-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; margin-bottom: 20px; display: flex; justify-content: center; gap: 60px; }
+          .title { font-size: 16px; color: #0056b3; font-weight: 900; margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
+          .subtitle { font-size: 9px; color: #64748b; margin-top: 2px; font-weight: 600; }
+          
+          table { width: 100%; border-collapse: collapse; margin-top: 5px; table-layout: fixed; border: 1px solid #e2e8f0; }
+          th { background: #0056b3; color: white; padding: 8px 4px; text-align: left; font-size: 7px; text-transform: uppercase; font-weight: 900; letter-spacing: 0.2px; border-right: 1px solid #004a99; }
+          td { border: 1px solid #e2e8f0; padding: 6px 4px; font-size: 7px; vertical-align: middle; word-wrap: break-word; color: #334155; }
+          tr:nth-child(even) { background-color: #f8fafc; }
+          
+          .footer { margin-top: 20px; font-size: 7px; text-align: center; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; line-height: 1.4; }
+          .summary-card { background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px; border-radius: 12px; margin-bottom: 12px; display: flex; justify-content: center; gap: 50px; }
           .stat { display: flex; flex-direction: column; text-align: center; }
-          .stat-val { font-size: 24px; font-weight: bold; color: #0056b3; }
-          .stat-label { font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: bold; margin-top: 2px; }
+          .stat-val { font-size: 14px; font-weight: 900; color: #2563eb; }
+          .stat-label { font-size: 7px; color: #64748b; text-transform: uppercase; font-weight: 800; margin-top: 1px; letter-spacing: 0.5px; }
+
+          .type-text { font-weight: 900; font-size: 7px; text-transform: uppercase; }
+          .text-blue { color: #2563eb; }
+          .text-orange { color: #d9480f; }
+          .text-green { color: #10b981; }
         </style>
       </head>
       <body>
         <div class="header">
           <div class="logo-area">
-            ${logoBase64 ? `<img src="${logoBase64}" class="logo-img" />` : '<span style="font-size:24px; font-weight:bold;">GLPI<span style="color:#0056b3;">PRO</span></span>'}
+            ${logoBase64 ? `<img src="${logoBase64}" class="logo-img" />` : '<span style="font-size:20px; font-weight:900;">Ticket<span style="color:#0056b3;">sign</span></span>'}
           </div>
           <div class="header-text">
-            <h1 class="title">REPORTE CONSOLIDADO</h1>
-            <div class="subtitle">EMPRESA: <strong>${clientName}</strong> | ${new Date().toLocaleDateString()}</div>
+            <h1 class="title">Detalles Técnicos y de Empresa (Consolidado)</h1>
+            <div class="subtitle">CLIENTE: <strong>${clientName}</strong> | GENERADO: ${new Date().toLocaleDateString()}</div>
           </div>
         </div>
 
         <div class="summary-card">
           <div class="stat">
             <span class="stat-val">${acts.length}</span>
-            <span class="stat-label">Total Equipos</span>
+            <span class="stat-label">Equipos Total</span>
           </div>
           <div class="stat">
             <span class="stat-val">${acts.filter(a => a.type === 'PREVENTIVO').length}</span>
-            <span class="stat-label">Preventivos</span>
+            <span class="stat-label">Mantenimientos Prev.</span>
           </div>
           <div class="stat">
             <span class="stat-val">${acts.filter(a => a.type === 'CORRECTIVO').length}</span>
-            <span class="stat-label">Correctivos</span>
+            <span class="stat-label">Soportes Correctivos</span>
+          </div>
+          <div class="stat">
+            <span class="stat-val">${acts.filter(a => a.type === 'ENTREGA').length}</span>
+            <span class="stat-label">Entregas Realizadas</span>
           </div>
         </div>
 
         <table>
           <thead>
             <tr>
-              <th>Fecha</th>
-              <th>Hostname / Modelo</th>
-              <th>Serial Number</th>
-              <th>Usuario</th>
-              <th>Tipo</th>
-              <th>Status Final</th>
-              <th>Ticket GLPI</th>
+              <th style="width: 50px">FECHA</th>
+              <th style="width: 35px">TICKET</th>
+              <th style="width: 80px">TÉCNICO</th>
+              <th style="width: 70px">USUARIO</th>
+              <th style="width: 65px">TIPO</th>
+              <th style="width: 60px">HOSTNAME</th>
+              <th style="width: 75px">ACTIVO</th>
+              <th style="width: 60px">MODELO</th>
+              <th style="width: 75px">SERIAL</th>
+              <th style="width: 45px">INVENTARIO</th>
+              <th style="width: 65px">PROCESADOR</th>
+              <th style="width: 30px">RAM</th>
+              <th style="width: 50px">DISCO</th>
+              <th style="width: 60px">ESTADO</th>
             </tr>
           </thead>
           <tbody>
-            ${acts.map(act => `
+            ${acts.map(act => {
+    const ram = act.equipment_ram === 'OTRO' ? (act.equipment_ram_other ? `${act.equipment_ram_other}GB` : 'OTRO') : (act.equipment_ram || '-');
+    const discoSize = act.equipment_disk === 'OTRO' ? (act.equipment_disk_other ? `${act.equipment_disk_other}GB` : 'OTRO') : (act.equipment_disk || '-');
+    const disco = `${discoSize} ${act.equipment_disk_type || ''}`;
+
+    return `
               <tr>
                 <td>${new Date(act.createdAt).toLocaleDateString()}</td>
+                <td>#${act.glpi_ticket_id || '-'}</td>
+                <td>${act.technical_name || '-'}</td>
+                <td>${act.assigned_user || '-'}</td>
                 <td>
-                    <strong>${act.equipment_hostname || 'S/H'}</strong><br/>
-                    <small style="color:#666">${act.equipment_model || '-'}</small>
+                    <span class="type-text ${act.type === 'PREVENTIVO' ? 'text-blue' : act.type === 'ENTREGA' ? 'text-green' : 'text-orange'}">${act.type}</span>
                 </td>
-                <td style="font-family: monospace;">${act.equipment_serial}</td>
-                <td><strong>${act.assigned_user}</strong></td>
-                <td>
-                    <span style="color: ${act.type === 'PREVENTIVO' ? '#0056b3' : '#d9480f'}">${act.type}</span>
+                <td><strong>${act.equipment_hostname || '-'}</strong></td>
+                <td>${CHECKLIST_LABELS[act.equipment_type] || act.equipment_type || '-'}</td>
+                <td>${act.equipment_model || '-'}</td>
+                <td style="font-family: monospace;">${act.equipment_serial || '-'}</td>
+                <td>${act.inventory_number || '-'}</td>
+                <td>${act.equipment_processor || '-'}</td>
+                <td>${ram}</td>
+                <td>${disco}</td>
+                 <td style="font-weight: 900;" class="${act.type === 'PREVENTIVO' || act.type === 'ENTREGA' ? 'text-green' : 'text-blue'}">
+                  ${act.type === 'PREVENTIVO' ? 'COMPLETADO' : act.type === 'ENTREGA' ? 'ENTREGADO' : (act.checklist.estado_final || 'FINALIZADO')}
                 </td>
-                <td>${act.type === 'PREVENTIVO' ? 'COMPLETADO' : (act.checklist.estado_final || 'REPARADO')}</td>
-                <td>#${act.glpi_ticket_id}</td>
               </tr>
-            `).join('')}
+            `;
+  }).join('')}
           </tbody>
         </table>
 
         <div class="footer">
-          Este es un reporte automático generado por GLPI PRO v1.0. 
-          Certificamos que todos los mantenimientos listados cuentan con firmas de conformidad digitales.
+          Repetir información en Excel: Seleccione la tabla, copie (Ctrl+C) y pegue (Ctrl+V) en su hoja de cálculo.<br/>
+          Generado automáticamente por Ticketsign v1.1 - Sistema de Gestión de Actas Digitales.
         </div>
       </body>
     </html>
   `;
 
   await page.setContent(htmlContent);
-  const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+  const pdfBuffer = await page.pdf({
+    format: 'A4',
+    landscape: true,
+    printBackground: true,
+    margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' }
+  });
 
   await browser.close();
   return pdfBuffer;

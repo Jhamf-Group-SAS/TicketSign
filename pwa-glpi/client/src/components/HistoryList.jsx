@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getHistory } from '../store/db';
-import { Search, Calendar, User, ChevronRight, FileCheck, Filter, Download, History, ChevronLeft } from 'lucide-react';
+import { Search, Calendar, User, ChevronRight, FileCheck, Filter, Download, History, ChevronLeft, X } from 'lucide-react';
+import { clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+import CustomDatePicker from './CustomDatePicker';
+
+const cn = (...inputs) => twMerge(clsx(inputs));
 
 const HistoryList = ({ onSelectAct, onBack }) => {
     // Usamos useLiveQuery para que la lista se actualice automáticamente
@@ -11,6 +16,8 @@ const HistoryList = ({ onSelectAct, onBack }) => {
 
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('ALL');
+    const [selectedDate, setSelectedDate] = useState('');
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     // Eliminamos useEffect y loadHistory ya que useLiveQuery maneja la suscripción
 
@@ -22,7 +29,9 @@ const HistoryList = ({ onSelectAct, onBack }) => {
 
         const matchesType = filterType === 'ALL' || act.type === filterType;
 
-        return matchesSearch && matchesType;
+        const matchesDate = !selectedDate || new Date(act.createdAt).toISOString().split('T')[0] === selectedDate;
+
+        return matchesSearch && matchesType && matchesDate;
     });
 
     return (
@@ -60,18 +69,61 @@ const HistoryList = ({ onSelectAct, onBack }) => {
                     />
                 </div>
                 <div className="flex bg-white dark:bg-slate-900/40 p-1 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
-                    {['ALL', 'PREVENTIVO', 'CORRECTIVO'].map((type) => (
+                    {['ALL', 'PREVENTIVO', 'CORRECTIVO', 'ENTREGA'].map((type) => (
                         <button
                             key={type}
                             onClick={() => setFilterType(type)}
-                            className={`flex-1 py-2 text-[10px] font-black uppercase tracking-tighter rounded-xl transition-all ${filterType === type
+                            className={`flex-1 py-3 text-[10px] font-black uppercase tracking-tighter rounded-xl transition-all ${filterType === type
                                 ? 'bg-blue-600 text-white shadow-lg'
                                 : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5'
                                 }`}
                         >
-                            {type === 'ALL' ? 'Todos' : type.slice(0, 4)}
+                            {type === 'ALL' ? 'Todos' : type === 'ENTREGA' ? 'Entregas' : type.slice(0, 4)}
                         </button>
                     ))}
+                </div>
+
+                {/* Date Filter */}
+                <div className="relative">
+                    <button
+                        onClick={() => setShowDatePicker(true)}
+                        className={cn(
+                            "w-full h-full flex items-center justify-between gap-3 px-4 py-3.5 bg-white dark:bg-slate-900/40 backdrop-blur-xl border rounded-2xl transition-all",
+                            selectedDate
+                                ? "border-blue-500 text-blue-500 shadow-lg"
+                                : "border-slate-200 dark:border-white/5 text-slate-400"
+                        )}
+                    >
+                        <div className="flex items-center gap-3">
+                            <Calendar size={18} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">
+                                {selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString() : 'Filtrar por Fecha'}
+                            </span>
+                        </div>
+                        {selectedDate && (
+                            <div
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedDate('');
+                                }}
+                                className="p-1 hover:bg-blue-500/10 rounded-lg transition-colors"
+                            >
+                                <X size={14} />
+                            </div>
+                        )}
+                    </button>
+
+                    {showDatePicker && (
+                        <CustomDatePicker
+                            value={selectedDate ? new Date(selectedDate + 'T00:00:00') : new Date()}
+                            hideTime={true}
+                            onChange={(val) => {
+                                setSelectedDate(new Date(val).toISOString().split('T')[0]);
+                                setShowDatePicker(false);
+                            }}
+                            onClose={() => setShowDatePicker(false)}
+                        />
+                    )}
                 </div>
             </div>
 
@@ -90,14 +142,16 @@ const HistoryList = ({ onSelectAct, onBack }) => {
                             className="group bg-white dark:bg-slate-900/30 backdrop-blur-sm p-5 rounded-3xl border border-slate-200 dark:border-white/5 hover:border-blue-500/30 transition-all text-left flex items-center justify-between shadow-sm dark:shadow-none hover:shadow-xl dark:hover:shadow-blue-900/10 active:scale-[0.99]"
                         >
                             <div className="flex items-center gap-4">
-                                <div className={`p-3 rounded-2xl ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-500' : 'bg-orange-500/10 text-orange-500'
+                                <div className={`p-3 rounded-2xl ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-500' :
+                                    act.type === 'ENTREGA' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-orange-500/10 text-orange-500'
                                     } group-hover:scale-110 transition-transform`}>
                                     <FileCheck size={24} />
                                 </div>
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2">
                                         <h4 className="font-bold text-slate-900 dark:text-white">{act.client_name}</h4>
-                                        <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-widest ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-500' : 'bg-orange-500/10 text-orange-500'
+                                        <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-widest ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-500' :
+                                            act.type === 'ENTREGA' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-orange-500/10 text-orange-500'
                                             }`}>
                                             {act.type}
                                         </span>
