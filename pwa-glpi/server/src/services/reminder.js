@@ -46,6 +46,18 @@ class ReminderService {
                 for (const task of tasksToRemind) {
                     await this.sendReminder(task, allTechs);
                 }
+            } else {
+                // Logging para debug - mostrar el conteo de tareas que NO cumplen los criterios
+                const totalTasks = await Task.countDocuments();
+                const completedOrCanceled = await Task.countDocuments({ status: { $in: ['COMPLETADA', 'CANCELADA'] } });
+                const reminderSent = await Task.countDocuments({ reminder_sent: true });
+                const noReminder = await Task.countDocuments({ reminder_at: { $exists: false } });
+
+                console.log(`[ReminderService] No hay tareas para recordar.`);
+                console.log(`  - Total tareas: ${totalTasks}`);
+                console.log(`  - Completadas/Canceladas: ${completedOrCanceled}`);
+                console.log(`  - Recordatorio ya enviado: ${reminderSent}`);
+                console.log(`  - Sin recordatorio configurado: ${noReminder}`);
             }
         } catch (error) {
             console.error('[ReminderService] Error chequeando recordatorios:', error);
@@ -59,11 +71,12 @@ class ReminderService {
             let sentCount = 0;
 
             for (const techName of task.assigned_technicians) {
-                const techData = allTechs.find(t =>
-                    (t.fullName || '').toLowerCase() === techName.toLowerCase() ||
-                    (t.name || '').toLowerCase() === techName.toLowerCase() ||
-                    (t.username || '').toLowerCase() === techName.toLowerCase()
-                );
+                const techData = allTechs.find(t => {
+                    const searchName = (techName || '').toLowerCase().trim();
+                    return (t.fullName || '').toLowerCase().trim() === searchName ||
+                        (t.name || '').toLowerCase().trim() === searchName ||
+                        (t.username || '').toLowerCase().trim() === searchName;
+                });
 
                 if (techData && techData.mobile) {
                     const dateObj = new Date(task.scheduled_at);
@@ -73,14 +86,22 @@ class ReminderService {
                         hour: '2-digit', minute: '2-digit', hour12: true
                     });
 
-                    // Modificamos ligeramente el título o descripción para indicar que es un RECORDATORIO
-                    await whatsapp.sendTaskNotification(techData.mobile, {
+                    // Asegurar código de país 57 si no lo tiene (Colombia)
+                    let phone = techData.mobile.replace(/\D/g, '');
+                    if (phone.length === 10) phone = '57' + phone;
+
+                    console.log(`[ReminderService] Enviando recordatorio a ${techName} (${phone})`);
+
+                    const sent = await whatsapp.sendTaskNotification(phone, {
                         techName: techData.fullName || techData.name,
                         title: `🔔 RECORDATORIO: ${task.title}`,
-                        description: `[Alerta Programada] ${task.description || ''}`,
+                        description: `[Alerta Programada] ${(task.description || '').substring(0, 800)}`,
                         date: formattedDate
                     });
-                    sentCount++;
+
+                    if (sent) sentCount++;
+                } else {
+                    console.warn(`[ReminderService] No se pudo recordar a "${techName}". Razón: ${!techData ? 'Técnico no hallado' : 'Sin móvil registrado'}`);
                 }
             }
 

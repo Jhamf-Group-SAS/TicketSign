@@ -142,11 +142,13 @@ router.post('/', async (req, res) => {
                     const allTechs = await glpi.getEligibleTechnicians();
 
                     for (const techName of newTask.assigned_technicians) {
-                        const techData = allTechs.find(t =>
-                            (t.fullName || '').toLowerCase() === techName.toLowerCase() ||
-                            (t.name || '').toLowerCase() === techName.toLowerCase() ||
-                            (t.username || '').toLowerCase() === techName.toLowerCase()
-                        );
+                        // Búsqueda más flexible del técnico
+                        const techData = allTechs.find(t => {
+                            const searchName = techName.toLowerCase().trim();
+                            return (t.fullName || '').toLowerCase().trim() === searchName ||
+                                (t.name || '').toLowerCase().trim() === searchName ||
+                                (t.username || '').toLowerCase().trim() === searchName;
+                        });
 
                         if (techData && techData.mobile) {
                             const dateObj = new Date(newTask.scheduled_at);
@@ -156,15 +158,19 @@ router.post('/', async (req, res) => {
                                 hour: '2-digit', minute: '2-digit', hour12: true
                             });
 
-                            console.log(`[WhatsApp] Intentando enviar a ${techName} (${techData.mobile})`);
-                            await whatsapp.sendTaskNotification(techData.mobile, {
+                            // Asegurar código de país 57 si no lo tiene
+                            let phone = techData.mobile.replace(/\D/g, '');
+                            if (phone.length === 10) phone = '57' + phone;
+
+                            console.log(`[WhatsApp] Intentando enviar a ${techName} (${phone})`);
+                            await whatsapp.sendTaskNotification(phone, {
                                 techName: techData.fullName || techData.name,
                                 title: newTask.title,
-                                description: newTask.description || 'Sin descripción adicional',
+                                description: (newTask.description || 'Sin descripción adicional').substring(0, 1000), // Límite de Meta
                                 date: formattedDate
                             });
                         } else {
-                            console.warn(`[WhatsApp] No se pudo notificar a "${techName}". Razón: ${!techData ? 'Nombre no coincide exactamente con técnicos de GLPI' : 'No tiene teléfono móvil registrado en GLPI'}`);
+                            console.warn(`[WhatsApp] No se pudo notificar a "${techName}". Razón: ${!techData ? 'Técnico no encontrado en la lista maestra' : 'No tiene teléfono móvil registrado'}`);
                         }
                     }
                 } catch (notifyErr) {
@@ -256,6 +262,11 @@ router.patch('/:id', async (req, res) => {
             if (!existingTask.acta_id) {
                 return res.status(400).json({ message: 'No se puede completar una tarea sin un acta firmada vinculada.' });
             }
+        }
+
+        // Cancelar recordatorios si la tarea se marca como completada o cancelada
+        if (updates.status === 'COMPLETADA' || updates.status === 'CANCELADA') {
+            updates.reminder_sent = true; // Marcar como enviado para que no se dispare el recordatorio
         }
 
         const task = await Task.findByIdAndUpdate(id, updates, { new: true });
