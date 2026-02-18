@@ -167,6 +167,7 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
 
                 const startDate = new Date(formData.start_date);
                 const endDate = new Date(formData.scheduled_at);
+                endDate.setHours(23, 59, 59, 999); // Incluir el último día completo
 
                 if (startDate > endDate) {
                     setToast({ message: 'La fecha de inicio no puede ser posterior a la fecha límite', type: 'error' });
