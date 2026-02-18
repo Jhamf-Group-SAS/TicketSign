@@ -1,6 +1,8 @@
+import mongoose from 'mongoose';
 import glpi from './glpi.js';
 import whatsapp from './whatsapp.js';
 import Task from '../models/Task.js';
+import { memoryTasks } from '../routes/tasks.js';
 
 class ReminderService {
     constructor() {
@@ -26,41 +28,50 @@ class ReminderService {
     async checkReminders() {
         try {
             const now = new Date();
-            // Buscar tareas que tengan recordatorio programado
-            // que ya haya pasado (o sea ahora)
-            // y que NO tengan el flag de reminder_sent
-            // y que NO estén completadas o canceladas
-            const tasksToRemind = await Task.find({
-                reminder_at: { $lte: now },
-                reminder_sent: { $ne: true }, // Evita duplicados
-                status: { $nin: ['COMPLETADA', 'CANCELADA'] },
-                assigned_technicians: { $not: { $size: 0 } } // Que tengan técnicos asignados
-            });
+            let allWithReminders = [];
+
+            if (mongoose.connection.readyState === 1) {
+                console.log(`\n--- [ReminderService] Escaneando Base de Datos (${now.toLocaleTimeString()}) ---`);
+                allWithReminders = await Task.find({ reminder_at: { $exists: true } });
+            } else {
+                console.log(`\n--- [ReminderService] Escaneando Memoria Local (Modo sin DB) [${now.toLocaleTimeString()}] ---`);
+                allWithReminders = (memoryTasks || []).filter(t => t.reminder_at);
+            }
+
+            if (allWithReminders.length === 0) {
+                console.log('  - No hay ninguna tarea con recordatorio programado.');
+                return;
+            }
+
+            console.log(`  - Total tareas con recordatorio: ${allWithReminders.length}`);
+
+            const tasksToRemind = [];
+
+            for (const task of allWithReminders) {
+                const isPast = new Date(task.reminder_at) <= now;
+                const notSent = task.reminder_sent !== true;
+                const currentStatus = (task.status || '').toUpperCase();
+                const activeStatus = !['COMPLETADA', 'CANCELADA'].includes(currentStatus);
+                const hasTechs = task.assigned_technicians && task.assigned_technicians.length > 0;
+
+                if (isPast && notSent && activeStatus && hasTechs) {
+                    tasksToRemind.push(task);
+                    console.log(`  - ✅ Tarea "${task.title}" cumple criterios. AGREGADA.`);
+                } else if (isPast) {
+                    console.log(`  - ❌ Saltando "${task.title}": Sent=${task.reminder_sent}, Status=${currentStatus}, Techs=${task.assigned_technicians?.length}`);
+                }
+            }
 
             if (tasksToRemind.length > 0) {
-                console.log(`[ReminderService] Encontradas ${tasksToRemind.length} tareas para recordar.`);
-
-                // Obtener técnicos una sola vez para eficiencia
                 const allTechs = await glpi.getEligibleTechnicians();
-
                 for (const task of tasksToRemind) {
                     await this.sendReminder(task, allTechs);
                 }
-            } else {
-                // Logging para debug - mostrar el conteo de tareas que NO cumplen los criterios
-                const totalTasks = await Task.countDocuments();
-                const completedOrCanceled = await Task.countDocuments({ status: { $in: ['COMPLETADA', 'CANCELADA'] } });
-                const reminderSent = await Task.countDocuments({ reminder_sent: true });
-                const noReminder = await Task.countDocuments({ reminder_at: { $exists: false } });
-
-                console.log(`[ReminderService] No hay tareas para recordar.`);
-                console.log(`  - Total tareas: ${totalTasks}`);
-                console.log(`  - Completadas/Canceladas: ${completedOrCanceled}`);
-                console.log(`  - Recordatorio ya enviado: ${reminderSent}`);
-                console.log(`  - Sin recordatorio configurado: ${noReminder}`);
             }
+            console.log('--- [ReminderService] Finalizado ---\n');
+
         } catch (error) {
-            console.error('[ReminderService] Error chequeando recordatorios:', error);
+            console.error('[ReminderService] Error crítico:', error.message);
         }
     }
 
@@ -112,9 +123,14 @@ class ReminderService {
                 // En este paso asumimos que ya agregamos el campo o que el modelo lo soporta.
                 // Si el modelo es estricto, hay que agregar 'reminder_sent' al Schema de Task.js
 
-                // Actualizamos en BD
-                await Task.findByIdAndUpdate(task._id, { reminder_sent: true });
-                console.log(`[ReminderService] Recordatorio enviado y marcado para tarea ${task._id}`);
+                // Si es una tarea real de BD, actualizar en BD
+                if (typeof task._id === 'string' && !task._id.startsWith('temp_') && mongoose.connection.readyState === 1) {
+                    await Task.findByIdAndUpdate(task._id, { reminder_sent: true });
+                    console.log(`[ReminderService] Recordatorio marcado como enviado en BD para ${task._id}`);
+                } else {
+                    // Si es memoria, ya actualizamos el objeto localmente arriba (task.reminder_sent = true)
+                    console.log(`[ReminderService] Recordatorio marcado como enviado en MEMORIA para ${task._id}`);
+                }
             }
 
         } catch (error) {

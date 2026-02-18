@@ -7,6 +7,9 @@ import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// Almacén temporal para pruebas en local sin DB
+export const memoryTasks = [];
+
 // Middleware de autenticación para todas las rutas de tareas
 router.use(authenticateToken);
 
@@ -129,52 +132,50 @@ router.post('/', async (req, res) => {
             newTask = await task.save();
             console.log('[Tasks] Tarea guardada en base de datos.');
         } catch (dbErr) {
-            console.warn('[Tasks] Modo local (sin DB). Procesando notificación sin guardar en servidor.');
+            console.warn('[Tasks] Modo local (sin DB). Guardando en memoria para pruebas de recordatorios.');
             newTask = { ...taskData, _id: 'temp_' + Date.now() };
+            memoryTasks.push(newTask); // GUARDAR EN MEMORIA LOCAL
         }
 
-        // Enviar notificaciones de WhatsApp si hay técnicos asignados y el usuario lo desea
-        if (req.body.sendWhatsApp !== false && newTask.assigned_technicians && newTask.assigned_technicians.length > 0) {
-            // Ejecutar en segundo plano para no bloquear la respuesta
+        // NOTIFICACIÓN WHATSAPP
+        const shouldSend = req.body.sendWhatsApp !== false && req.body.sendWhatsApp !== 'false';
+        console.log(`[Tasks] Verificando envío de WhatsApp: Technicians: ${newTask.assigned_technicians?.length}, shouldSend: ${shouldSend}`);
+
+        if (shouldSend && newTask.assigned_technicians && newTask.assigned_technicians.length > 0) {
             setImmediate(async () => {
                 try {
-                    console.log(`[WhatsApp] Iniciando notificaciones para: ${newTask.assigned_technicians.join(', ')}`);
+                    console.log(`[WhatsApp] Obteniendo lista de técnicos desde GLPI...`);
                     const allTechs = await glpi.getEligibleTechnicians();
 
                     for (const techName of newTask.assigned_technicians) {
-                        // Búsqueda más flexible del técnico
-                        const techData = allTechs.find(t => {
-                            const searchName = techName.toLowerCase().trim();
-                            return (t.fullName || '').toLowerCase().trim() === searchName ||
-                                (t.name || '').toLowerCase().trim() === searchName ||
-                                (t.username || '').toLowerCase().trim() === searchName;
-                        });
+                        const n = (techName || '').toLowerCase().trim();
+                        const techData = allTechs.find(t =>
+                            (t.fullName || '').toLowerCase().trim() === n ||
+                            (t.name || '').toLowerCase().trim() === n ||
+                            (t.username || '').toLowerCase().trim() === n
+                        );
 
                         if (techData && techData.mobile) {
-                            const dateObj = new Date(newTask.scheduled_at);
-                            const formattedDate = isNaN(dateObj.getTime()) ? 'Pendiente' : dateObj.toLocaleString('es-CO', {
-                                timeZone: 'America/Bogota',
-                                day: '2-digit', month: '2-digit', year: 'numeric',
-                                hour: '2-digit', minute: '2-digit', hour12: true
-                            });
-
-                            // Asegurar código de país 57 si no lo tiene
                             let phone = techData.mobile.replace(/\D/g, '');
                             if (phone.length === 10) phone = '57' + phone;
 
-                            console.log(`[WhatsApp] Intentando enviar a ${techName} (${phone})`);
-                            await whatsapp.sendTaskNotification(phone, {
+                            const dateObj = new Date(newTask.scheduled_at);
+                            const formattedDate = isNaN(dateObj.getTime()) ? 'Pendiente' : dateObj.toLocaleString('es-CO');
+
+                            console.log(`[WhatsApp] Intentando enviar mensaje a ${techName} (${phone})`);
+                            const result = await whatsapp.sendTaskNotification(phone, {
                                 techName: techData.fullName || techData.name,
                                 title: newTask.title,
-                                description: (newTask.description || 'Sin descripción adicional').substring(0, 1000), // Límite de Meta
+                                description: (newTask.description || 'Sin descripción adicional').substring(0, 500),
                                 date: formattedDate
                             });
+                            console.log(`[WhatsApp] Resultado del envío a ${techName}: ${result ? 'EXITOSO' : 'FALLIDO'}`);
                         } else {
-                            console.warn(`[WhatsApp] No se pudo notificar a "${techName}". Razón: ${!techData ? 'Técnico no encontrado en la lista maestra' : 'No tiene teléfono móvil registrado'}`);
+                            console.warn(`[WhatsApp] Saltando a ${techName}: ${!techData ? 'No coincide en GLPI' : 'No tiene celular'}`);
                         }
                     }
-                } catch (notifyErr) {
-                    console.error('[WhatsApp] Fallo en proceso de notificación:', notifyErr.message);
+                } catch (err) {
+                    console.error('[WhatsApp] Error crítico en el flujo de notificación:', err.message);
                 }
             });
         }
@@ -195,16 +196,36 @@ router.post('/sync', async (req, res) => {
         for (const taskData of tasks) {
             const { _id, ...updateData } = taskData;
 
-            let task;
-            if (_id && _id.length === 24) { // MongoDB ID
-                task = await Task.findByIdAndUpdate(_id, updateData, { new: true, upsert: false });
-                if (!task) continue; // Si no existe (fue borrada), no la recreamos
-            } else {
-                updateData.createdBy = req.user.username;
-                task = new Task(updateData);
-                await task.save();
+            let task = null;
+            try {
+                if (_id && _id.length === 24) { // MongoDB ID
+                    task = await Task.findByIdAndUpdate(_id, updateData, { new: true, upsert: false });
+                } else if (_id && _id.startsWith('temp_')) {
+                    // Actualizar en memoria
+                    const index = memoryTasks.findIndex(t => t._id === _id);
+                    if (index !== -1) {
+                        memoryTasks[index] = { ...memoryTasks[index], ...updateData };
+                        task = memoryTasks[index];
+                        console.log(`[Sync] Tarea en MEMORIA actualizada: ${_id}`);
+                    }
+                } else {
+                    // Crear nueva (intento DB)
+                    updateData.createdBy = req.user.username;
+                    task = new Task(updateData);
+                    await task.save();
+                }
+            } catch (err) {
+                console.warn(`[Sync] Error en DB para ${_id || 'nueva'}. Usando memoria: ${err.message}`);
+                if (!task) {
+                    const newId = _id || 'temp_' + Date.now();
+                    task = { ...updateData, _id: newId, createdBy: req.user.username };
+                    // Evitar duplicados en memoria
+                    const existingIdx = memoryTasks.findIndex(t => t._id === newId);
+                    if (existingIdx !== -1) memoryTasks[existingIdx] = task;
+                    else memoryTasks.push(task);
+                }
             }
-            results.push(task);
+            if (task) results.push(task);
         }
 
         res.json(results);
@@ -227,15 +248,23 @@ router.patch('/:id', async (req, res) => {
             return res.status(404).json({ message: 'ID de tarea no válido para el servidor' });
         }
 
-        const existingTask = (id.length === 24) ? await Task.findById(id) : null;
-        if (!existingTask && id.length === 24) return res.status(404).json({ message: 'Tarea no encontrada' });
+        let existingTask = null;
+        if (id.length === 24) {
+            existingTask = await Task.findById(id);
+            if (!existingTask) return res.status(404).json({ message: 'Tarea no encontrada' });
+        } else if (id.startsWith('temp_')) {
+            existingTask = memoryTasks.find(t => t._id === id);
+            if (!existingTask) return res.status(404).json({ message: 'Tarea en memoria no encontrada' });
+        } else {
+            return res.status(404).json({ message: 'ID de tarea no válido' });
+        }
 
         // Reglas de permisos:
         // Admin-Mesa y Super-Admin: Todo.
         // Creador: Todo.
         // Asignado: Solo status y updatedAt.
         const isAdmin = ['Super-Admin', 'Admin-Mesa'].some(p => userProfile.includes(p));
-        const isCreator = existingTask.createdBy === req.user.username;
+        const isCreator = existingTask && existingTask.createdBy === req.user.username;
 
         // Verificar si el usuario está asignado (buscando por username o nombre completo/displayName)
         const isAssigned = (existingTask.assigned_technicians || []).some(tech =>
@@ -259,7 +288,7 @@ router.patch('/:id', async (req, res) => {
 
         // Regla de Negocio: PROGRAMADA -> ASIGNADA se maneja implícitamente por el cliente
         if (updates.status === 'COMPLETADA' && !updates.acta_id) {
-            if (!existingTask.acta_id) {
+            if (!existingTask.acta_id && !id.startsWith('temp_')) {
                 return res.status(400).json({ message: 'No se puede completar una tarea sin un acta firmada vinculada.' });
             }
         }
@@ -269,7 +298,18 @@ router.patch('/:id', async (req, res) => {
             updates.reminder_sent = true; // Marcar como enviado para que no se dispare el recordatorio
         }
 
-        const task = await Task.findByIdAndUpdate(id, updates, { new: true });
+        const task = (id.startsWith('temp_'))
+            ? null
+            : await Task.findByIdAndUpdate(id, updates, { new: true });
+
+        // Si estamos en modo memoria (sin DB)
+        if (id.startsWith('temp_')) {
+            const index = memoryTasks.findIndex(t => t._id === id);
+            if (index !== -1) {
+                memoryTasks[index] = { ...memoryTasks[index], ...updates };
+                console.log(`[Tasks] Tarea en MEMORIA actualizada: ${id} (Status: ${updates.status})`);
+            }
+        }
 
         // Si se asignaron técnicos en la actualización, notificar
         if (updates.assigned_technicians && updates.assigned_technicians.length > 0) {

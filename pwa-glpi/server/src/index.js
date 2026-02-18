@@ -31,7 +31,6 @@ mongoose.connect(MONGO_URI, {
     })
     .catch(err => {
         console.error('❌ MongoDB Connection Error:', err.message);
-        console.error('Asegúrate de que el servicio de MongoDB esté corriendo localmente.');
     });
 
 app.use(helmet());
@@ -41,7 +40,7 @@ app.use(express.json({ limit: '50mb' }));
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
-        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected (local mode)',
+        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
         timestamp: new Date().toISOString()
     });
 });
@@ -53,6 +52,7 @@ app.use('/api/tasks', tasksRoutes);
 app.use('/api/glpi', glpiRoutes);
 
 app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    // Arrancamos el servicio AQUÍ para que siempre inicie
     reminderService.start();
 });

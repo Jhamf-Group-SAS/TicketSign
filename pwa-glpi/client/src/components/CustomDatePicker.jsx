@@ -24,6 +24,7 @@ const CustomDatePicker = ({ value, onChange, onClose, hideTime = false }) => {
     const handleDateSelect = (day) => {
         const newDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day, hours, minutes);
         setSelectedDate(newDate);
+        // Si es solo fecha, podríamos cerrar, pero como hay hora, mejor dejar que el usuario de a "Guardar"
     };
 
     const handleMonthSelect = (monthIndex) => {
@@ -139,8 +140,16 @@ const CustomDatePicker = ({ value, onChange, onClose, hideTime = false }) => {
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] p-6 w-full max-w-[340px] animate-in zoom-in-95 duration-300">
+        <div
+            className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+        >
+            <div
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] p-6 w-full max-w-[340px] animate-in zoom-in-95 duration-300"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* Header */}
                 <div className="flex justify-between items-center mb-6">
                     {viewMode === 'calendar' && (

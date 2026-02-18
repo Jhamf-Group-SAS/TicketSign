@@ -68,7 +68,12 @@ class WhatsAppService {
             console.log(`[WhatsApp] Mensaje enviado a ${cleanTo}:`, response.data);
             return true;
         } catch (error) {
-            console.error('[WhatsApp] Error enviando mensaje:', error.response?.data || error.message);
+            const errorData = error.response?.data?.error || {};
+            console.error('[WhatsApp] Fallo crítico de Meta API:');
+            console.error(`  - Mensaje: ${errorData.message || error.message}`);
+            console.error(`  - Tipo: ${errorData.type || 'N/A'}`);
+            console.error(`  - Código: ${errorData.code || 'N/A'}`);
+            console.error(`  - Sub-código: ${errorData.error_subcode || 'N/A'}`);
             return false;
         }
     }
