@@ -304,15 +304,25 @@ router.patch('/:id', async (req, res) => {
             }
         }
 
-        // Si se asignaron técnicos en la actualización, notificar
-        if (updates.assigned_technicians && updates.assigned_technicians.length > 0) {
+        // Solo notificar si se agregaron técnicos nuevos que no estaban antes
+        const oldTechs = existingTask ? (existingTask.assigned_technicians || []) : [];
+        const newTechs = updates.assigned_technicians || [];
+
+        // Determinar quiénes son realmente nuevos
+        const trulyNewTechs = newTechs.filter(t => !oldTechs.includes(t));
+
+        if (trulyNewTechs.length > 0) {
             setImmediate(async () => {
                 try {
+                    console.log(`[WhatsApp] Notificando a ${trulyNewTechs.length} técnicos nuevos asignados.`);
                     const technicians = await glpi.getEligibleTechnicians();
-                    for (const techName of updates.assigned_technicians) {
-                        const techData = technicians.find(t => t.fullName === techName || t.name === techName);
+                    for (const techName of trulyNewTechs) {
+                        const techData = technicians.find(t =>
+                            (t.fullName || '').toLowerCase().trim() === (techName || '').toLowerCase().trim() ||
+                            (t.name || '').toLowerCase().trim() === (techName || '').toLowerCase().trim()
+                        );
                         if (techData && techData.mobile) {
-                            const dateObj = new Date(task.scheduled_at);
+                            const dateObj = new Date(task ? task.scheduled_at : existingTask.scheduled_at);
                             const formattedDate = isNaN(dateObj.getTime()) ? 'Pendiente' : dateObj.toLocaleString('es-CO', {
                                 timeZone: 'America/Bogota',
                                 day: '2-digit', month: '2-digit', year: 'numeric',
@@ -321,8 +331,8 @@ router.patch('/:id', async (req, res) => {
 
                             await whatsapp.sendTaskNotification(techData.mobile, {
                                 techName: techData.fullName || techData.name,
-                                title: task.title,
-                                description: task.description || 'Sin descripción adicional',
+                                title: updates.title || (task ? task.title : existingTask.title),
+                                description: updates.description || (task ? task.description : existingTask.description) || 'Sin descripción adicional',
                                 date: formattedDate
                             });
                         }
