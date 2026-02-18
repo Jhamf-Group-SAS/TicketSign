@@ -1,6 +1,7 @@
 import express from 'express';
 import { generateConsolidatedPDF, generateMaintenancePDF, CHECKLIST_LABELS } from '../services/pdf.js';
-import { Parser } from 'json2csv';
+import pkg from 'json2csv';
+const { Parser } = pkg;
 import glpi from '../services/glpi.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -101,6 +102,5 @@ router.post('/individual', async (req, res) => {
         res.status(500).json({ status: 'error', message: error.message });
     }
 });
-
 
 export default router;

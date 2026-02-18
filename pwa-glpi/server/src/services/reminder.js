@@ -31,9 +31,10 @@ class ReminderService {
             let allWithReminders = [];
 
             if (mongoose.connection.readyState === 1) {
-                console.log(`\n--- [ReminderService] Escaneando Base de Datos (${now.toLocaleTimeString()}) ---`);
+                // En producción con DB conectada, solo registramos si hay algo que hacer para no saturar logs
                 allWithReminders = await Task.find({ reminder_at: { $exists: true } });
             } else {
+                // En local o sin DB, el log es útil para saber que el modo memoria está activo
                 console.log(`\n--- [ReminderService] Escaneando Memoria Local (Modo sin DB) [${now.toLocaleTimeString()}] ---`);
                 allWithReminders = (memoryTasks || []).filter(t => t.reminder_at);
             }
@@ -67,8 +68,8 @@ class ReminderService {
                 for (const task of tasksToRemind) {
                     await this.sendReminder(task, allTechs);
                 }
+                console.log('--- [ReminderService] Escaneo Finalizado ---\n');
             }
-            console.log('--- [ReminderService] Finalizado ---\n');
 
         } catch (error) {
             console.error('[ReminderService] Error crítico:', error.message);
