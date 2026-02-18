@@ -123,13 +123,13 @@ class ReminderService {
                 // En este paso asumimos que ya agregamos el campo o que el modelo lo soporta.
                 // Si el modelo es estricto, hay que agregar 'reminder_sent' al Schema de Task.js
 
-                // Si es una tarea real de BD, actualizar en BD
-                if (typeof task._id === 'string' && !task._id.startsWith('temp_') && mongoose.connection.readyState === 1) {
+                // Si es una tarea real de BD (no temporal), actualizar en BD
+                const idStr = task._id.toString();
+                if (!idStr.startsWith('temp_') && mongoose.connection.readyState === 1) {
                     await Task.findByIdAndUpdate(task._id, { reminder_sent: true });
-                    console.log(`[ReminderService] Recordatorio marcado como enviado en BD para ${task._id}`);
+                    console.log(`[ReminderService] Recordatorio marcado como enviado en BD para ${idStr}`);
                 } else {
-                    // Si es memoria, ya actualizamos el objeto localmente arriba (task.reminder_sent = true)
-                    console.log(`[ReminderService] Recordatorio marcado como enviado en MEMORIA para ${task._id}`);
+                    console.log(`[ReminderService] Recordatorio marcado como enviado en MEMORIA para ${idStr}`);
                 }
             }
 
