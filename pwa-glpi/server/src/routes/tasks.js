@@ -286,13 +286,6 @@ router.patch('/:id', async (req, res) => {
             }
         }
 
-        // Regla de Negocio: PROGRAMADA -> ASIGNADA se maneja implícitamente por el cliente
-        if (updates.status === 'COMPLETADA' && !updates.acta_id) {
-            if (!existingTask.acta_id && !id.startsWith('temp_')) {
-                return res.status(400).json({ message: 'No se puede completar una tarea sin un acta firmada vinculada.' });
-            }
-        }
-
         // Cancelar recordatorios si la tarea se marca como completada o cancelada
         if (updates.status === 'COMPLETADA' || updates.status === 'CANCELADA') {
             updates.reminder_sent = true; // Marcar como enviado para que no se dispare el recordatorio
@@ -342,8 +335,15 @@ router.patch('/:id', async (req, res) => {
 
         res.json(task);
     } catch (error) {
-        console.error('[Tasks] Error in PATCH /:', error);
-        res.status(400).json({ message: error.message });
+        console.error(`[Tasks] Error crítico en PATCH /${req.params.id}:`, {
+            mensaje: error.message,
+            stack: error.stack,
+            body: req.body
+        });
+        res.status(400).json({
+            message: 'Error al actualizar la tarea',
+            details: error.message
+        });
     }
 });
 
