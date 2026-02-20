@@ -94,6 +94,31 @@ class GLPIConnector {
     }
 
     /**
+     * Cambia la entidad activa de la sesión
+     */
+    async changeActiveEntity(entityId, recursive = true) {
+        if (!this.sessionToken) await this.initSession();
+        const { apiUrl, appToken } = this.config;
+
+        try {
+            console.log(`[GLPI] Cambiando a entidad ID: ${entityId} (recursive: ${recursive})`);
+            await axios.post(`${apiUrl}/changeActiveEntity`, {
+                entities_id: entityId,
+                is_recursive: recursive ? 1 : 0
+            }, {
+                headers: {
+                    'App-Token': appToken,
+                    'Session-Token': this.sessionToken
+                }
+            });
+            return true;
+        } catch (error) {
+            console.error(`[GLPI] Error al cambiar entidad a ${entityId}:`, error.response?.data || error.message);
+            return false;
+        }
+    }
+
+    /**
      * Busca un activo (Computadora) por Numero de Inventario o Serial
      */
     async findComputer(query) {
@@ -126,28 +151,16 @@ class GLPIConnector {
         const { apiUrl, appToken } = this.config;
 
         try {
-            // 0. Diagnóstico previo (solo para Tickets)
-            if (false && itemtype === 'Ticket') {
-                try {
-                    const ticketResponse = await axios.get(`${apiUrl}/Ticket/${itemId}`, {
-                        headers: {
-                            'App-Token': appToken,
-                            'Session-Token': this.sessionToken
-                        }
-                    });
-                    const ticket = ticketResponse.data;
-                    console.log(`[GLPI] Diagnóstico Ticket #${itemId}: Estado=${ticket.status}, Entidad=${ticket.entities_id}`);
-
-                    // Verificar Entidad Activa
-                    const sessionResponse = await axios.get(`${apiUrl}/getMyProfiles`, {
-                        headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
-                    });
-                    // Nota: getMyProfiles no da la entidad activa, usamos session token info si fuera posible o asumimos la default.
-                    // Mejor intentar cambiar entidad si difiere
-
-                } catch (ticketError) {
-                    console.error(`[GLPI] Error al consultar Ticket #${itemId}:`, ticketError.message);
-                }
+            // 0. Detectar entidad del ticket y cambiar contexto
+            try {
+                const ticketRes = await axios.get(`${apiUrl}/Ticket/${itemId}`, {
+                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                });
+                const entityId = ticketRes.data.entities_id;
+                console.log(`[GLPI] Ticket #${itemId} pertenece a entidad: ${entityId}. Asegurando contexto...`);
+                await this.changeActiveEntity(entityId);
+            } catch (e) {
+                console.warn(`[GLPI] No se pudo verificar entidad del ticket #${itemId}, procediendo con entidad actual.`);
             }
 
             console.log(`[GLPI] Subiendo archivo a: ${apiUrl}/Document`);
@@ -210,9 +223,18 @@ class GLPIConnector {
         // GLPI usa ITILFollowup para Tickets, pero para Projects podría variar. 
         // Si es Project, solemos usar un comentario o el Document_Item es suficiente.
         // Mantenemos ITILFollowup solo para Tickets por ahora.
+        // Mantenemos ITILFollowup solo para Tickets por ahora.
         if (itemtype !== 'Ticket') return;
 
         try {
+            // Asegurar entidad correcta antes de seguimiento
+            try {
+                const ticketRes = await axios.get(`${apiUrl}/Ticket/${itemId}`, {
+                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                });
+                await this.changeActiveEntity(ticketRes.data.entities_id);
+            } catch (e) { }
+
             await axios.post(`${apiUrl}/ITILFollowup`, {
                 input: {
                     items_id: itemId,
@@ -845,9 +867,15 @@ class GLPIConnector {
         const { apiUrl, appToken } = this.config;
 
         try {
+            // Asegurar entidad correcta
+            try {
+                const ticketRes = await axios.get(`${apiUrl}/Ticket/${ticketId}`, {
+                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                });
+                await this.changeActiveEntity(ticketRes.data.entities_id);
+            } catch (e) { }
+
             console.log(`[GLPI] Creando solución para Ticket #${ticketId}`);
-            // Tipo de solución por defecto (puede requerir ajuste según configuración GLPI)
-            const solutionType = 1;
 
             const response = await axios.post(`${apiUrl}/ITILSolution`, {
                 input: {
@@ -875,6 +903,14 @@ class GLPIConnector {
         const { apiUrl, appToken } = this.config;
 
         try {
+            // Asegurar entidad correcta
+            try {
+                const ticketRes = await axios.get(`${apiUrl}/Ticket/${id}`, {
+                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                });
+                await this.changeActiveEntity(ticketRes.data.entities_id);
+            } catch (e) { }
+
             console.log(`[GLPI] Actualizando Ticket #${id}`, input);
             const response = await axios.put(`${apiUrl}/Ticket/${id}`, {
                 input: {
