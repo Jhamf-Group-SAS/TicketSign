@@ -149,11 +149,21 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
 
                 if (entRes.ok) {
                     const entData = await entRes.json();
-                    setEntities(entData.map(e => ({ id: e.name, label: e.name, originalId: e.id })));
+                    setEntities(entData.map(e => ({
+                        id: String(e.id),
+                        label: e.name,
+                        entityName: e.name,
+                        originalId: e.id
+                    })));
                 }
                 if (techRes.ok) {
                     const techData = await techRes.json();
-                    setTechnicians(techData.map(t => ({ id: t.fullName, label: t.fullName, originalId: t.id })));
+                    setTechnicians(techData.map(t => ({
+                        id: String(t.id), // Use ID as React key
+                        label: `${t.fullName} (${t.name})`, // Differentiate with username
+                        fullName: t.fullName, // Keep clean name for storage
+                        originalId: t.id
+                    })));
                 }
                 if (tickRes.ok) {
                     const tickData = await tickRes.json();
@@ -356,8 +366,11 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
                             <CustomSelect
                                 label="EMPRESA"
                                 placeholder="Seleccionar Entidad..."
-                                value={formData.client_name}
-                                onChange={(val) => setFormData(p => ({ ...p, client_name: val }))}
+                                value={entities.find(e => e.entityName === formData.client_name)?.id || formData.client_name}
+                                onChange={(id) => {
+                                    const entity = entities.find(e => e.id === id);
+                                    setFormData(p => ({ ...p, client_name: entity ? entity.entityName : id }));
+                                }}
                                 options={entities}
                                 withSearch={true}
                                 icon={Building2}
@@ -369,8 +382,11 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
                             <CustomSelect
                                 label="Técnico Responsable"
                                 placeholder="Seleccionar Técnico..."
-                                value={formData.technical_name}
-                                onChange={(val) => setFormData(p => ({ ...p, technical_name: val }))}
+                                value={technicians.find(t => t.fullName === formData.technical_name)?.id || formData.technical_name}
+                                onChange={(id) => {
+                                    const tech = technicians.find(t => t.id === id);
+                                    setFormData(p => ({ ...p, technical_name: tech ? tech.fullName : id }));
+                                }}
                                 options={technicians}
                                 withSearch={true}
                                 icon={User}
