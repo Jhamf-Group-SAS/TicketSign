@@ -199,6 +199,16 @@ router.post('/sync', async (req, res) => {
             let task = null;
             try {
                 if (_id && _id.length === 24) { // MongoDB ID
+                    const existingOnServer = await Task.findById(_id);
+                    // Regla de Oro: Si ya se envió en el servidor, no permitir que el cliente lo resetee a false
+                    if (existingOnServer?.reminder_sent === true) {
+                        updateData.reminder_sent = true;
+                    }
+                    // Si el estado que viene es final, marcar como enviado
+                    if (updateData.status === 'COMPLETADA' || updateData.status === 'CANCELADA') {
+                        updateData.reminder_sent = true;
+                    }
+
                     task = await Task.findByIdAndUpdate(_id, updateData, { new: true, upsert: false });
                 } else if (_id && _id.startsWith('temp_')) {
                     // Actualizar en memoria
@@ -284,6 +294,11 @@ router.patch('/:id', async (req, res) => {
             } else {
                 return res.status(403).json({ message: 'No tienes permisos para editar esta tarea' });
             }
+        }
+
+        // Regla de Oro: Si ya se envió en el servidor, no permitir que el cliente lo resetee a false
+        if (existingTask && existingTask.reminder_sent === true) {
+            updates.reminder_sent = true;
         }
 
         // Cancelar recordatorios si la tarea se marca como completada o cancelada

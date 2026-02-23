@@ -49,17 +49,29 @@ class ReminderService {
             const tasksToRemind = [];
 
             for (const task of allWithReminders) {
-                const isPast = new Date(task.reminder_at) <= now;
+                const reminderDate = new Date(task.reminder_at);
+                const isPast = reminderDate <= now;
+
+                // IMPORTANTE: Ventana de expiración de 24 horas.
+                // Si el recordatorio es de hace más de 24 horas, ya expiró y no se debe enviar.
+                const isExpired = (now - reminderDate) > (24 * 60 * 60 * 1000);
+
                 const notSent = task.reminder_sent !== true;
                 const currentStatus = (task.status || '').toUpperCase();
+
+                // Las notificaciones no se deben enviar si el estado es Completada o Cancelada
                 const activeStatus = !['COMPLETADA', 'CANCELADA'].includes(currentStatus);
                 const hasTechs = task.assigned_technicians && task.assigned_technicians.length > 0;
 
-                if (isPast && notSent && activeStatus && hasTechs) {
+                if (isPast && !isExpired && notSent && activeStatus && hasTechs) {
                     tasksToRemind.push(task);
                     console.log(`  - ✅ Tarea "${task.title}" cumple criterios. AGREGADA.`);
                 } else if (isPast) {
-                    console.log(`  - ❌ Saltando "${task.title}": Sent=${task.reminder_sent}, Status=${currentStatus}, Techs=${task.assigned_technicians?.length}`);
+                    const reason = isExpired ? 'EXPIRADA (>24h)' :
+                        !notSent ? 'YA ENVIADA' :
+                            !activeStatus ? `ESTADO INACTIVO (${currentStatus})` :
+                                !hasTechs ? 'SIN TECNICOS' : 'DESCONOCIDO';
+                    console.log(`  - ❌ Saltando "${task.title}": ${reason}`);
                 }
             }
 
