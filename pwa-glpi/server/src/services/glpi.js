@@ -17,9 +17,6 @@ class GLPIConnector {
         };
     }
 
-    /**
-     * Inicializa la sesión en GLPI
-     */
     async initSession() {
         const { apiUrl, appToken, userToken } = this.config;
         console.log(`[GLPI] Iniciando sesión en: ${apiUrl}`);
@@ -40,38 +37,26 @@ class GLPIConnector {
             });
 
             this.sessionToken = response.data.session_token;
-            const currentProfile = response.data.session?.glpiprofiles?.name || 'Desconocido';
-            const activeProfileId = response.data.session.glpiactiveprofile?.id;
-            const activeProfileName = response.data.session.glpiactiveprofile?.name;
+            const activeProfileName = response.data.session?.glpiactiveprofile?.name;
+            const activeProfileId = response.data.session?.glpiactiveprofile?.id;
 
             console.log(`[GLPI] Sesión establecida. ID Sesión: ${this.sessionToken?.substring(0, 10)}...`);
             console.log(`[GLPI] Perfil Activo: ${activeProfileName} (ID: ${activeProfileId})`);
 
-            // Auto-switch profile logic
+            // Lógica de cambio de perfil si es necesario
             let profiles = response.data.session?.glpiprofiles || [];
-
-            // Si profiles no es un array (ej: un objeto si solo hay uno), convertirlo
-            if (!Array.isArray(profiles)) {
-                // Si es un objeto, lo ponemos en un array. Si es null/undefined, array vacío.
-                profiles = profiles ? [profiles] : [];
-            }
+            if (!Array.isArray(profiles)) profiles = profiles ? [profiles] : [];
 
             const currentProfileName = (activeProfileName || '').toLowerCase();
-            const allowedProfiles = ['especialistas', 'super-admin', 'admin'];
+            const allowedProfiles = ['super-admin', 'especialistas', 'admin'];
 
-            // Verificar si el perfil actual ya es de alto privilegio
-            const isAlreadyAllowed = allowedProfiles.some(p => currentProfileName.includes(p));
-
-            if (isAlreadyAllowed) {
-                console.log(`[GLPI] Perfil actual '${activeProfileName}' tiene privilegios suficientes. No se requiere cambio.`);
-            } else {
-                // Intentar encontrar un perfil de alto privilegio en la lista
+            if (!allowedProfiles.some(p => currentProfileName.includes(p))) {
                 const targetProfile = profiles.find(p =>
                     p.name && allowedProfiles.some(hp => p.name.toLowerCase().includes(hp))
                 );
 
                 if (targetProfile && targetProfile.id !== activeProfileId) {
-                    console.log(`[GLPI] Cambiando a perfil con mayores privilegios: ${targetProfile.name} (ID: ${targetProfile.id})`);
+                    console.log(`[GLPI] Cambiando a perfil con mayores privilegios: ${targetProfile.name}`);
                     await axios.post(`${apiUrl}/changeActiveProfile`, {
                         profiles_id: targetProfile.id
                     }, {
@@ -80,11 +65,13 @@ class GLPIConnector {
                             'Session-Token': this.sessionToken
                         }
                     });
-                    console.log('[GLPI] Perfil cambiado exitosamente.');
-                } else {
-                    console.log(`[GLPI] No se encontró un perfil mejor. Operando con: ${activeProfileName}`);
                 }
             }
+
+            // ASEGURAR VISIBILIDAD RECURSIVA DESDE ROOT (Entidad 0)
+            // Esto es crucial para operaciones entre entidades (Super Admin recursivo)
+            console.log(`[GLPI] Forzando contexto: Entidad 0 (Root) + Recursivo`);
+            await this.changeActiveEntity(0, true);
 
             return this.sessionToken;
         } catch (error) {
@@ -101,8 +88,9 @@ class GLPIConnector {
         const { apiUrl, appToken } = this.config;
 
         try {
-            console.log(`[GLPI] Cambiando a entidad ID: ${entityId} (recursive: ${recursive})`);
-            await axios.post(`${apiUrl}/changeActiveEntity`, {
+            const url = `${apiUrl}/changeActiveEntity`;
+            console.log(`[GLPI] POST a ${url} con entities_id: ${entityId}`);
+            const success = await axios.post(url, {
                 entities_id: entityId,
                 is_recursive: recursive ? 1 : 0
             }, {
@@ -111,6 +99,7 @@ class GLPIConnector {
                     'Session-Token': this.sessionToken
                 }
             });
+            console.log(`[GLPI] Cambio de entidad exitoso: ${entityId}`);
             return true;
         } catch (error) {
             console.error(`[GLPI] Error al cambiar entidad a ${entityId}:`, error.response?.data || error.message);
@@ -143,37 +132,47 @@ class GLPIConnector {
         }
     }
 
-    /**
-     * Sube un documento y lo asocia a un ítem (Ticket o Project)
-     */
     async uploadDocument(itemId, filePath, fileName, itemtype = 'Ticket') {
         if (!this.sessionToken) await this.initSession();
         const { apiUrl, appToken } = this.config;
 
         try {
-            // 0. Detectar entidad del ticket y cambiar contexto
+            // 1. Obtener el ticket para conocer su entidad
+            console.log(`[GLPI] Obteniendo entidad para ${itemtype} #${itemId}...`);
+            const itemRes = await axios.get(`${apiUrl}/${itemtype}/${itemId}`, {
+                headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+            });
+            const entityId = itemRes.data.entities_id;
+            console.log(`[GLPI] El ${itemtype} #${itemId} pertenece a la entidad ID: ${entityId}`);
+
+            // 2. Cambiar a esa entidad para asegurar permisos de escritura
+            // No bloqueamos aquí si falla, ya que como Super Admin podríamos tener permisos globales
             try {
-                const ticketRes = await axios.get(`${apiUrl}/Ticket/${itemId}`, {
+                await this.changeActiveEntity(entityId, true);
+            } catch (e) {
+                console.warn(`[GLPI] No se pudo cambiar a entidad ${entityId}, continuando como Super Admin...`);
+            }
+
+            // Verificar sesión actual (opcional, solo log)
+            try {
+                const sessionRes = await axios.get(`${apiUrl}/getFullSession`, {
                     headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
                 });
-                const entityId = ticketRes.data.entities_id;
-                console.log(`[GLPI] Ticket #${itemId} pertenece a entidad: ${entityId}. Asegurando contexto...`);
-                await this.changeActiveEntity(entityId);
-            } catch (e) {
-                console.warn(`[GLPI] No se pudo verificar entidad del ticket #${itemId}, procediendo con entidad actual.`);
-            }
+                const s = sessionRes.data.session;
+                console.log(`[GLPI] Contexto actual - User: ${s.glpiname}, Entity ID: ${s.glpiactiveentity}`);
+            } catch (e) { }
 
             console.log(`[GLPI] Subiendo archivo a: ${apiUrl}/Document`);
             const form = new FormData();
             form.append('uploadManifest', JSON.stringify({
                 input: {
                     name: `Consolidado - ${fileName}`,
-                    _filename: [fileName]
+                    _filename: [fileName],
+                    entities_id: entityId
                 }
             }));
-            form.append('filename', fs.createReadStream(filePath));
+            form.append('filename[0]', fs.createReadStream(filePath));
 
-            // 1. Subir documento
             const response = await axios.post(`${apiUrl}/Document`, form, {
                 headers: {
                     ...form.getHeaders(),
@@ -185,29 +184,46 @@ class GLPIConnector {
             const docId = response.data.id;
             console.log(`[GLPI] Documento creado (ID: ${docId}). Vinculando al ${itemtype} #${itemId}...`);
 
-            // 2. Asociar al Ítem
-            await axios.post(`${apiUrl}/Document_Item`, {
-                input: {
-                    documents_id: docId,
-                    items_id: itemId,
-                    itemtype: itemtype
+            // Intento de vinculación con fallback
+            // GLPI 10+ prefiere ITILDocument_Item para Tickets, pero versiones anteriores o custom usan Document_Item
+            const linkTypes = (itemtype === 'Ticket' || itemtype === 'Problem' || itemtype === 'Change')
+                ? ['ITILDocument_Item', 'Document_Item']
+                : ['Document_Item'];
+
+            let linked = false;
+            let lastError = null;
+
+            for (const linkType of linkTypes) {
+                try {
+                    console.log(`[GLPI] Intentando vinculación mediante ${linkType}...`);
+                    await axios.post(`${apiUrl}/${linkType}`, {
+                        input: {
+                            documents_id: docId,
+                            items_id: itemId,
+                            itemtype: itemtype
+                        }
+                    }, {
+                        headers: {
+                            'App-Token': appToken,
+                            'Session-Token': this.sessionToken
+                        }
+                    });
+                    console.log(`[GLPI] Vinculación exitosa con ${linkType}`);
+                    linked = true;
+                    break;
+                } catch (err) {
+                    lastError = err.response?.data || err.message;
+                    console.warn(`[GLPI] Falló vinculación con ${linkType}:`, lastError);
                 }
-            }, {
-                headers: {
-                    'App-Token': appToken,
-                    'Session-Token': this.sessionToken
-                }
-            });
+            }
+
+            if (!linked) {
+                throw new Error(`No se pudo vincular el documento al ticket después de intentar con: ${linkTypes.join(', ')}. Último error: ${JSON.stringify(lastError)}`);
+            }
 
             return { id: docId, success: true };
         } catch (error) {
-            console.error(`[GLPI] ERROR DETALLADO en uploadDocument:`, {
-                status: error.response?.status,
-                data: error.response?.data,
-                itemtype,
-                itemId,
-                url: this.config.apiUrl
-            });
+            console.error(`[GLPI] ERROR final en uploadDocument:`, error.response?.data || error.message);
             const errorMessage = JSON.stringify(error.response?.data) || error.message;
             throw new Error(`GLPI Upload Error: ${errorMessage}`);
         }
@@ -220,21 +236,9 @@ class GLPIConnector {
         if (!this.sessionToken) await this.initSession();
         const { apiUrl, appToken } = this.config;
 
-        // GLPI usa ITILFollowup para Tickets, pero para Projects podría variar. 
-        // Si es Project, solemos usar un comentario o el Document_Item es suficiente.
-        // Mantenemos ITILFollowup solo para Tickets por ahora.
-        // Mantenemos ITILFollowup solo para Tickets por ahora.
         if (itemtype !== 'Ticket') return;
 
         try {
-            // Asegurar entidad correcta antes de seguimiento
-            try {
-                const ticketRes = await axios.get(`${apiUrl}/Ticket/${itemId}`, {
-                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
-                });
-                await this.changeActiveEntity(ticketRes.data.entities_id);
-            } catch (e) { }
-
             await axios.post(`${apiUrl}/ITILFollowup`, {
                 input: {
                     items_id: itemId,
