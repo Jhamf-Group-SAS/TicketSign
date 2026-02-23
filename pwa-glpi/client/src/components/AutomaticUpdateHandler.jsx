@@ -7,8 +7,8 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
  * and automatically reloads the page when a new version is available.
  */
 const AutomaticUpdateHandler = () => {
-    // Interval for update checking (e.g., every 15 minutes)
-    const UPDATE_CHECK_INTERVAL = 15 * 60 * 1000;
+    // Interval for update checking (e.g., every 5 minutes)
+    const UPDATE_CHECK_INTERVAL = 5 * 60 * 1000;
 
     const {
         updateServiceWorker,
@@ -16,7 +16,7 @@ const AutomaticUpdateHandler = () => {
         onRegisteredSW(swUrl, r) {
             if (r) {
                 // Periodically check for service worker updates
-                setInterval(async () => {
+                const checkUpdate = async () => {
                     if (!(!r.installing && navigator.onLine)) return;
 
                     const resp = await fetch(swUrl, {
@@ -29,7 +29,18 @@ const AutomaticUpdateHandler = () => {
                     if (resp?.status === 200) {
                         await r.update();
                     }
-                }, UPDATE_CHECK_INTERVAL);
+                };
+
+                setInterval(checkUpdate, UPDATE_CHECK_INTERVAL);
+
+                // Immediate check when window becomes visible
+                const handleVisibilityChange = () => {
+                    if (document.visibilityState === 'visible') {
+                        checkUpdate();
+                    }
+                };
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+                return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
             }
         },
         onNeedRefresh() {

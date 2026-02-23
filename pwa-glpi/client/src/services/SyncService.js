@@ -106,10 +106,17 @@ export const SyncService = {
                             await db.tasks.bulkPut(tasksToSave);
                         }
 
-                        // 3. (Opcional) Limpieza de tareas que ya no existen en el servidor
-                        // IMPORTANTE: Solo borrar si estamos seguros que el endpoint devuelve TODO lo visible.
-                        // Por ahora, para evitar borrar tareas privadas locales o drafts, NO borramos masivamente.
-                        // Solo actualizamos/insertamos las que vienen del servidor.
+                        // 3. RECONCILIACION: Borrar tareas locales que ya no existen en el servidor
+                        // (Si la tarea tiene _id pero no está en el array que trajo el servidor)
+                        const remoteIds = new Set(remoteTasks.map(t => t._id));
+                        const idsToDelete = localTasks
+                            .filter(t => t._id && !remoteIds.has(t._id))
+                            .map(t => t.id);
+
+                        if (idsToDelete.length > 0) {
+                            console.log(`[Sync] Borrando ${idsToDelete.length} tareas locales que no existen en el servidor.`);
+                            await db.tasks.bulkDelete(idsToDelete);
+                        }
 
                         console.log(`[Sync] Sincronizadas ${tasksToSave.length} tareas del servidor.`);
                     }
@@ -207,9 +214,13 @@ export const SyncService = {
     },
 
     /**
-     * Inicia un listener para cambios de conexión
+     * Inicia un listener para cambios de conexión y polling periódico
      */
     init() {
+        // Evitar múltiples inicializaciones
+        if (this._initialized) return;
+        this._initialized = true;
+
         window.addEventListener('online', () => {
             console.log('Conexión restaurada. Intentando sincronizar...');
             this.syncPendingActs();
@@ -217,9 +228,18 @@ export const SyncService = {
             this.pullRemoteChanges();
         });
 
-        // También intentar sincronizar al cargar la app
+        // Intentar sincronizar al cargar la app
         this.syncPendingActs();
         this.syncPendingTasks();
         this.pullRemoteChanges();
+
+        // Polling periódico cada 60 segundos si hay sesión y red
+        setInterval(() => {
+            if (navigator.onLine && localStorage.getItem('glpi_pro_token')) {
+                console.log('[Sync] Ejecutando sincronización periódica...');
+                this.pullRemoteChanges();
+                this.syncPendingTasks();
+            }
+        }, 60000);
     }
 };
