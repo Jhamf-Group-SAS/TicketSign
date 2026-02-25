@@ -41,7 +41,7 @@ router.get('/', async (req, res) => {
         const userProfile = req.user.profile || '';
         // Normalizamos roles para comparación case-insensitive
         const isAdmin = ['super-admin', 'admin-mesa', 'admin'].some(role =>
-            userProfile.toLowerCase().includes(role)
+            userProfile.toLowerCase().split(',').map(p => p.trim()).includes(role)
         );
 
         if (!username) {
