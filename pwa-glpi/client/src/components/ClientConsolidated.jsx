@@ -76,7 +76,8 @@ const ClientConsolidated = ({ onBack }) => {
                 setTimeout(() => {
                     document.body.removeChild(a);
                     window.URL.revokeObjectURL(url);
-                }, 500);
+                }, 30000); // 30s timeout para evitar bug UUID
+
 
                 toast.success('PDF exportado con éxito');
             } else {
@@ -120,7 +121,8 @@ const ClientConsolidated = ({ onBack }) => {
                 setTimeout(() => {
                     document.body.removeChild(a);
                     window.URL.revokeObjectURL(url);
-                }, 500);
+                }, 30000); // 30s timeout para evitar bug UUID
+
 
                 toast.success('Excel (CSV) exportado con éxito');
             } else {

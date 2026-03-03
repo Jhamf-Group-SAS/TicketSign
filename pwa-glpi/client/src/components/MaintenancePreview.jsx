@@ -131,7 +131,7 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
                 setTimeout(() => {
                     document.body.removeChild(a);
                     window.URL.revokeObjectURL(url);
-                }, 500);
+                }, 30000); // 30s timeout para prevenir bug de nombres de archivo UUID en PWA
 
                 toast.success('PDF generado con éxito');
             } else {

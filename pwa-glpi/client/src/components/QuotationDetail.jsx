@@ -183,7 +183,7 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
             setTimeout(() => {
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
-            }, 500);
+            }, 30000); // 30s timeout para prevenir bug de nombres de archivo UUID (PWA)
         } catch (e) {
             setError(e.message);
         } finally {
