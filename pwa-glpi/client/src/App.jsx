@@ -72,6 +72,7 @@ function App() {
     }, [view, selectedTicketId, selectedQuotationId, selectedAct]);
     const [isOnline, setIsOnline] = useState(window.navigator.onLine);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+    const [globalSearchQuery, setGlobalSearchQuery] = useState('');
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [theme, setTheme] = useState(() => localStorage.getItem('glpi_pro_theme') || 'light');
 
@@ -278,6 +279,19 @@ function App() {
                         onDeleteNotification={handleDeleteNotification}
                         onClearAllNotifications={handleClearAllNotifications}
                         onOpenSidebar={() => setIsMobileSidebarOpen(true)}
+                        onGlobalSearch={(val) => {
+                            if (typeof val === 'string') {
+                                setGlobalSearchQuery(val);
+                                if (view !== 'history' && view !== 'task-list' && val.trim().length > 0) {
+                                    setView('history');
+                                }
+                            } else if (val && val.resultType === 'act') {
+                                setSelectedAct(val);
+                                setView('preview');
+                            } else if (val && val.resultType === 'task') {
+                                setView('task-list');
+                            }
+                        }}
                     />
                 </div>
 
@@ -403,7 +417,10 @@ function App() {
                     )}
 
                     {view === 'preview' && selectedAct && (
-                        <MaintenancePreview act={selectedAct} onBack={() => setView('home')} theme={theme} />
+                        <MaintenancePreview act={selectedAct} onBack={() => {
+                            // If we opened this from history, go back to history. Else home.
+                            setView('history')
+                        }} theme={theme} />
                     )}
 
                     {view === 'consolidated' && <ClientConsolidated onBack={() => setView('home')} />}
@@ -411,6 +428,7 @@ function App() {
                     {view === 'task-list' && <TaskList onBack={() => setView('home')} />}
                     {view === 'history' && (
                         <HistoricalActs
+                            globalSearch={globalSearchQuery}
                             onViewAct={(act) => {
                                 if (act.isQuotation) {
                                     setSelectedQuotationId(act.id);
@@ -420,7 +438,6 @@ function App() {
                                     setView('preview');
                                 }
                             }}
-                            onBack={() => setView('home')}
                         />
                     )}
                     {view === 'tickets' && (

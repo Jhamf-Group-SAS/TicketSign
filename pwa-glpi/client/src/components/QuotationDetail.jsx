@@ -34,6 +34,15 @@ function StatusBadge({ status }) {
     );
 }
 
+const formatName = (str) => {
+    if (!str) return 'SISTEMA';
+    // Si era un fallback a email que se guardó temporalmente, lo limpiamos para que luzca como un nombre
+    if (str.includes('@')) {
+        return str.split('@')[0].replace(/[_.]/g, ' ').toUpperCase();
+    }
+    return str.toUpperCase();
+};
+
 const DetailRow = ({ label, value, icon: Icon, color = "text-primary-500" }) => {
     if (!value) return null;
     return (
@@ -192,7 +201,8 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
     const handleDownloadObject = async (url, originalName) => {
         try {
             const token = localStorage.getItem('glpi_pro_token');
-            const filename = (url || '').split(/[\\/]/).pop();
+            const cleanUrl = (url || '').split('?')[0]; // Remove previous query parameters
+            const filename = cleanUrl.split(/[\\/]/).pop();
             const res = await fetch(`${API_BASE}/quotations/view/${filename}?token=${token}`);
             if (!res.ok) throw new Error('Error al obtener archivo');
             const blob = await res.blob();
@@ -417,7 +427,7 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
                                     c.author === user?.name ? "bg-primary-500/10 border-primary-500/20 ml-6" : "bg-tertiary border-color mr-6"
                                 )}>
                                     <div className="flex justify-between items-center mb-1">
-                                        <span className="text-[11px] font-[700] uppercase text-primary-500">{c.author}</span>
+                                        <span className="text-[11px] font-[700] uppercase text-primary-500">{formatName(c.author)}</span>
                                         <span className="text-[10px] text-text-muted">{new Date(c.createdAt).toLocaleDateString()}</span>
                                     </div>
                                     <p className="text-text-secondary leading-tight font-[500]">{c.text}</p>
@@ -453,7 +463,7 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
                                 <div key={i} className="relative pl-5 border-l-2 border-color pb-2 last:pb-0">
                                     <div className="absolute -left-[7px] top-0 w-3 h-3 rounded-full bg-secondary border-2 border-primary-500 shadow-sm" />
                                     <p className="text-[11px] font-[700] text-text-primary uppercase leading-none mb-1">{h.to}</p>
-                                    <p className="text-[10px] text-text-muted font-[600] uppercase tracking-wide">{h.by} &bull; {new Date(h.at).toLocaleDateString()}</p>
+                                    <p className="text-[10px] text-text-muted font-[600] uppercase tracking-wide">{formatName(h.by)} &bull; {new Date(h.at).toLocaleDateString()}</p>
                                 </div>
                             ))}
                         </div>

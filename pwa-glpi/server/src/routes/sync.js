@@ -87,4 +87,17 @@ router.post('/maintenance', async (req, res) => {
     }
 });
 
+router.delete('/maintenance/:id', async (req, res) => {
+    try {
+        const deletedAct = await Act.findByIdAndDelete(req.params.id);
+        if (!deletedAct) {
+            return res.status(404).json({ status: 'error', message: 'Acta no encontrada en la base central' });
+        }
+        res.json({ status: 'success', message: 'Acta eliminada permanentemente del sistema' });
+    } catch (error) {
+        console.error('Error eliminando acta:', error);
+        res.status(500).json({ status: 'error', message: 'No se pudo eliminar el acta' });
+    }
+});
+
 export default router;

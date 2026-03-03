@@ -255,7 +255,7 @@ router.patch('/:id', async (req, res) => {
             quotation.history.push({
                 from: quotation.status,
                 to: status,
-                by: req.user.username,
+                by: req.user.name || req.user.fullName || req.user.displayName || req.user.username,
                 note: rejection_reason || ''
             });
             quotation.status = status;
@@ -350,7 +350,7 @@ router.post('/:id/comments', async (req, res) => {
         }
 
         quotation.comments.push({
-            author: req.user.displayName || req.user.username,
+            author: req.user.name || req.user.fullName || req.user.displayName || req.user.username,
             text: text.trim()
         });
 

@@ -37,7 +37,7 @@ const navItems = [
     },
     { id: 'quotations', label: 'Cotizaciones', icon: ShoppingBag },
     { id: 'tickets', label: 'Soporte GLPI', icon: LifeBuoy },
-    { id: 'history', label: 'Historial', icon: History },
+    { id: 'history', label: 'Actas', icon: History },
 ];
 
 const Sidebar = ({ activeView, onViewChange, user, onLogout, isCollapsed, onToggleCollapse }) => {
