@@ -3,10 +3,26 @@ import glpi from '../services/glpi.js';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 
-const upload = multer({ dest: 'uploads/' });
+// Limitar uploads: solo PDFs e imágenes, máximo 20MB
+const upload = multer({
+    dest: 'uploads/',
+    limits: { fileSize: 20 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+        if (allowed.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error(`Tipo de archivo no permitido: ${file.mimetype}`), false);
+        }
+    }
+});
 
 const router = express.Router();
+
+// AUDIT-003: Todas las rutas GLPI requieren autenticación
+router.use(authenticateToken);
 
 // GET /api/glpi/tickets - Listar tickets
 router.get('/tickets', async (req, res) => {
@@ -31,7 +47,7 @@ router.get('/tickets/:id', async (req, res) => {
 });
 
 // POST /api/glpi/tickets/:id/followup - Agregar seguimiento
-router.post('/tickets/:id/followup', async (req, res) => {
+router.post('/tickets/:id/followup', authorizeRoles('Super-Admin', 'Admin-Mesa', 'Especialistas', 'Administrativo'), async (req, res) => {
     try {
         const { content } = req.body;
         if (!content) return res.status(400).json({ error: 'Content is required' });
@@ -44,7 +60,7 @@ router.post('/tickets/:id/followup', async (req, res) => {
 });
 
 // POST /api/glpi/tickets/:id/solution - Solucionar ticket
-router.post('/tickets/:id/solution', async (req, res) => {
+router.post('/tickets/:id/solution', authorizeRoles('Super-Admin', 'Admin-Mesa', 'Especialistas'), async (req, res) => {
     try {
         const { content } = req.body;
         if (!content) return res.status(400).json({ error: 'Content is required' });
@@ -117,7 +133,7 @@ router.get('/users', async (req, res) => {
 });
 
 // POST /api/glpi/tickets/:id/actors - Actualizar actor de ticket
-router.post('/tickets/:id/actors', async (req, res) => {
+router.post('/tickets/:id/actors', authorizeRoles('Super-Admin', 'Admin-Mesa'), async (req, res) => {
     try {
         const { userId, type, isGroup } = req.body;
         const result = await glpi.updateActor(req.params.id, userId, type, isGroup);
@@ -128,7 +144,7 @@ router.post('/tickets/:id/actors', async (req, res) => {
 });
 
 // POST /api/glpi/tickets/:id/document - Subir documento a ticket
-router.post('/tickets/:id/document', upload.single('file'), async (req, res) => {
+router.post('/tickets/:id/document', authorizeRoles('Super-Admin', 'Admin-Mesa', 'Especialistas', 'Administrativo'), upload.single('file'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -150,7 +166,7 @@ router.post('/tickets/:id/document', upload.single('file'), async (req, res) => 
 });
 
 // PUT /api/glpi/tickets/:id - Actualizar ticket
-router.put('/tickets/:id', async (req, res) => {
+router.put('/tickets/:id', authorizeRoles('Super-Admin', 'Admin-Mesa'), async (req, res) => {
     try {
         const result = await glpi.updateTicket(req.params.id, req.body);
         res.json(result);

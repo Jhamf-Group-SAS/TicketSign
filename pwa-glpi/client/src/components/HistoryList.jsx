@@ -1,25 +1,18 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getHistory } from '../store/db';
-import { Search, Calendar, User, ChevronRight, FileCheck, Filter, Download, History, ChevronLeft, X } from 'lucide-react';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { Search, Calendar, User, ChevronRight, FileCheck, Filter, History, ChevronLeft, X, Building2, Loader2, Eye } from 'lucide-react';
 import CustomDatePicker from './CustomDatePicker';
-
-const cn = (...inputs) => twMerge(clsx(inputs));
+import { cn } from '../utils/cn';
 
 const HistoryList = ({ onSelectAct, onBack }) => {
-    // Usamos useLiveQuery para que la lista se actualice automáticamente
-    // cuando SyncService guarde nuevos registros del servidor.
     const history = useLiveQuery(() => getHistory(), []) || [];
-    const loading = !history; // useLiveQuery retorna undefined inicialmente
+    const loading = !history;
 
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('ALL');
     const [selectedDate, setSelectedDate] = useState('');
     const [showDatePicker, setShowDatePicker] = useState(false);
-
-    // Eliminamos useEffect y loadHistory ya que useLiveQuery maneja la suscripción
 
     const filteredHistory = history.filter(act => {
         const matchesSearch =
@@ -28,94 +21,77 @@ const HistoryList = ({ onSelectAct, onBack }) => {
             act.equipment_hostname?.toLowerCase().includes(searchTerm.toLowerCase());
 
         const matchesType = filterType === 'ALL' || act.type === filterType;
-
         const matchesDate = !selectedDate || new Date(act.createdAt).toISOString().split('T')[0] === selectedDate;
 
         return matchesSearch && matchesType && matchesDate;
     });
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-6 animate-in fade-in duration-500 max-w-5xl mx-auto">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center justify-between bg-secondary py-4 px-6 rounded-[12px] border border-color shadow-sm">
                 <div className="flex items-center gap-4">
-                    <button onClick={onBack} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full text-slate-500 dark:text-slate-400 transition-colors">
-                        <ChevronLeft size={24} />
+                    <button onClick={onBack} className="w-10 h-10 flex items-center justify-center hover:bg-tertiary border border-color rounded-xl text-text-muted transition-all">
+                        <ChevronLeft size={20} />
                     </button>
                     <div>
-                        <h2 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-                            <History className="text-blue-500" size={28} />
-                            Historial de Procesos
+                        <h2 className="text-[17px] font-[700] text-text-primary uppercase tracking-tight flex items-center gap-2">
+                            <History className="text-primary-500" size={20} />
+                            HISTORIAL
                         </h2>
-                        <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
-                            Bitácora local de actas sincronizadas
-                        </p>
+                        <p className="text-[11px] font-[600] text-text-muted uppercase tracking-[1px]">Bitácora de actas finalizadas</p>
                     </div>
                 </div>
             </div>
 
-            {/* Filters & Search */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Filters Bar */}
+            <div className="bg-secondary p-4 rounded-xl border border-color shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="md:col-span-2 relative group">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-blue-500 transition-colors">
-                        <Search size={18} />
-                    </div>
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={15} />
                     <input
                         type="text"
-                        placeholder="Buscar por cliente, ticket o hostname..."
+                        placeholder="Buscar por cliente, ticket o activo..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="block w-full pl-11 pr-4 py-3.5 bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all shadow-sm dark:shadow-2xl"
+                        className="w-full h-10 pl-10 pr-4 bg-tertiary border border-color rounded-lg text-[13px] text-text-primary outline-none focus:border-primary-500 transition-all placeholder:text-text-muted/40"
                     />
                 </div>
-                <div className="flex bg-white dark:bg-slate-900/40 p-1 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
-                    {['ALL', 'PREVENTIVO', 'CORRECTIVO', 'ENTREGA'].map((type) => (
+
+                <div className="flex bg-tertiary p-1 rounded-lg shrink-0 border border-color overflow-x-auto no-scrollbar">
+                    {['ALL', 'PREVENTIVO', 'CORRECTIVO', 'ENTREGA', 'COTIZ'].map((type) => (
                         <button
                             key={type}
                             onClick={() => setFilterType(type)}
-                            className={`flex-1 py-3 text-[10px] font-black uppercase tracking-tighter rounded-xl transition-all ${filterType === type
-                                ? 'bg-blue-600 text-white shadow-lg'
-                                : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5'
-                                }`}
+                            className={cn(
+                                "flex-1 py-1.5 text-[10px] font-[700] uppercase tracking-wide rounded-md transition-all",
+                                filterType === type ? "bg-secondary text-primary-500 shadow-sm" : "text-text-muted hover:text-text-primary"
+                            )}
                         >
-                            {type === 'ALL' ? 'Todos' : type === 'ENTREGA' ? 'Entregas' : type.slice(0, 4)}
+                            {type === 'ALL' ? 'Todos' : type.slice(0, 4)}
                         </button>
                     ))}
                 </div>
 
-                {/* Date Filter */}
                 <div className="relative">
                     <button
                         onClick={() => setShowDatePicker(true)}
                         className={cn(
-                            "w-full h-full flex items-center justify-between gap-3 px-4 py-3.5 bg-white dark:bg-slate-900/40 backdrop-blur-xl border rounded-2xl transition-all",
-                            selectedDate
-                                ? "border-blue-500 text-blue-500 shadow-lg"
-                                : "border-slate-200 dark:border-white/5 text-slate-400"
+                            "w-full h-10 flex items-center justify-between px-3 bg-tertiary border rounded-lg transition-all",
+                            selectedDate ? "border-primary-500 text-primary-500" : "border-color text-text-muted"
                         )}
                     >
-                        <div className="flex items-center gap-3">
-                            <Calendar size={18} />
-                            <span className="text-[10px] font-black uppercase tracking-widest">
-                                {selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString() : 'Filtrar por Fecha'}
+                        <div className="flex items-center gap-2">
+                            <Calendar size={14} />
+                            <span className="text-[11px] font-[600] uppercase">
+                                {selectedDate ? new Date(selectedDate + 'T12:00:00').toLocaleDateString() : 'Por Fecha'}
                             </span>
                         </div>
-                        {selectedDate && (
-                            <div
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedDate('');
-                                }}
-                                className="p-1 hover:bg-blue-500/10 rounded-lg transition-colors"
-                            >
-                                <X size={14} />
-                            </div>
-                        )}
+                        {selectedDate && <X size={12} onClick={(e) => { e.stopPropagation(); setSelectedDate(''); }} />}
                     </button>
 
                     {showDatePicker && (
                         <CustomDatePicker
-                            value={selectedDate ? new Date(selectedDate + 'T00:00:00') : new Date()}
+                            value={selectedDate ? new Date(selectedDate + 'T12:00:00') : new Date()}
                             hideTime={true}
                             onChange={(val) => {
                                 setSelectedDate(new Date(val).toISOString().split('T')[0]);
@@ -129,60 +105,96 @@ const HistoryList = ({ onSelectAct, onBack }) => {
 
             {/* List */}
             {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 animate-pulse">
-                    <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-                    <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Cargando bitácora...</p>
+                <div className="flex flex-col items-center justify-center py-24">
+                    <Loader2 className="animate-spin text-primary-500" size={32} />
                 </div>
             ) : filteredHistory.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4">
-                    {filteredHistory.map((act) => (
-                        <button
-                            key={act.id}
-                            onClick={() => onSelectAct(act)}
-                            className="group bg-white dark:bg-slate-900/30 backdrop-blur-sm p-5 rounded-3xl border border-slate-200 dark:border-white/5 hover:border-blue-500/30 transition-all text-left flex items-center justify-between shadow-sm dark:shadow-none hover:shadow-xl dark:hover:shadow-blue-900/10 active:scale-[0.99]"
-                        >
-                            <div className="flex items-center gap-4">
-                                <div className={`p-3 rounded-2xl ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-500' :
-                                    act.type === 'ENTREGA' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-orange-500/10 text-orange-500'
-                                    } group-hover:scale-110 transition-transform`}>
-                                    <FileCheck size={24} />
-                                </div>
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                        <h4 className="font-bold text-slate-900 dark:text-white">{act.client_name}</h4>
-                                        <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-widest ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-500' :
-                                            act.type === 'ENTREGA' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-orange-500/10 text-orange-500'
-                                            }`}>
-                                            {act.type}
-                                        </span>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-                                        <span className="flex items-center gap-1">
-                                            <Calendar size={12} /> {new Date(act.createdAt).toLocaleDateString()}
-                                        </span>
-                                        <span className="flex items-center gap-1 font-bold text-blue-500 dark:text-blue-400">
-                                            #{act.glpi_ticket_id}
-                                        </span>
-                                        <span className="hidden xs:inline text-slate-300 dark:text-slate-700">|</span>
-                                        <span className="capitalize">{act.equipment_hostname || 'Sin Hostname'}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="bg-slate-50 dark:bg-white/5 p-2 rounded-xl text-slate-300 dark:text-slate-700 group-hover:text-blue-500 group-hover:bg-blue-500/10 transition-all">
-                                <ChevronRight size={20} />
-                            </div>
-                        </button>
-                    ))}
+                <div className="bg-secondary rounded-[16px] border border-color shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto no-scrollbar">
+                        <table className="w-full text-left border-collapse min-w-[1000px]">
+                            <thead>
+                                <tr className="bg-tertiary border-b border-color">
+                                    <th className="pl-10 pr-4 py-4 text-[10px] font-[800] text-text-muted uppercase tracking-wider">ID</th>
+                                    <th className="px-4 py-4 text-[10px] font-[800] text-text-muted uppercase tracking-wider">CLIENTE / ENTIDAD</th>
+                                    <th className="px-4 py-4 text-[10px] font-[800] text-text-muted uppercase tracking-wider">TIPO</th>
+                                    <th className="px-4 py-4 text-[10px] font-[800] text-text-muted uppercase tracking-wider">ESTADO</th>
+                                    <th className="px-4 py-4 text-[10px] font-[800] text-text-muted uppercase tracking-wider">FECHA</th>
+                                    <th className="px-4 py-4 text-[10px] font-[800] text-text-muted uppercase tracking-wider">TICKET GLPI</th>
+                                    <th className="px-4 py-4 text-[10px] font-[800] text-text-muted uppercase tracking-wider">TÉCNICO</th>
+                                    <th className="px-4 py-4 text-[10px] font-[800] text-text-muted uppercase tracking-wider text-right pr-10">ACCIONES</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-color">
+                                {filteredHistory.map((act) => {
+                                    let typeColor = 'bg-tertiary text-text-muted';
+                                    if (act.type === 'CORRECTIVO') typeColor = 'bg-orange-500/10 text-orange-500';
+                                    else if (act.type === 'PREVENTIVO') typeColor = 'bg-emerald-500/10 text-emerald-500';
+                                    else if (act.type === 'ENTREGA') typeColor = 'bg-purple-500/10 text-purple-500';
+
+                                    const statusStyles = {
+                                        'PENDIENTE_SINCRONIZACION': { label: 'Pendiente Sync', color: 'text-orange-500', bg: 'bg-orange-500' },
+                                        'BORRADOR': { label: 'Borrador', color: 'text-amber-500', bg: 'bg-amber-500' },
+                                        'SINCRONIZADO': { label: 'Sincronizado', color: 'text-emerald-500', bg: 'bg-emerald-500' },
+                                        'PENDIENTE': { label: 'Pendiente', color: 'text-orange-500', bg: 'bg-orange-500' },
+                                        'EN_REVISION': { label: 'En Revisión', color: 'text-primary-500', bg: 'bg-primary-500' },
+                                        'APROBADA': { label: 'Aprobada', color: 'text-emerald-500', bg: 'bg-emerald-500' },
+                                        'RECHAZADA': { label: 'Rechazada', color: 'text-red-500', bg: 'bg-red-500' },
+                                        'COMPRADA': { label: 'Comprada', color: 'text-purple-500', bg: 'bg-purple-500' },
+                                        'CANCELADA': { label: 'Cancelada', color: 'text-text-muted', bg: 'bg-slate-400' },
+                                    };
+
+                                    const statusStyle = statusStyles[act.status] || { label: act.status || 'Completado', color: 'text-emerald-500', bg: 'bg-emerald-500' };
+
+                                    if (act.isQuotation) {
+                                        typeColor = 'bg-amber-500/10 text-amber-600 dark:text-amber-500';
+                                    }
+
+                                    return (
+                                        <tr key={act.id} className="hover:bg-tertiary transition-colors">
+                                            <td className="pl-10 pr-4 py-4 align-middle text-[13px] text-text-muted font-[600]">
+                                                {act.id}
+                                            </td>
+                                            <td className="px-4 py-4 align-middle text-[13px] text-primary-500 font-[700] hover:underline cursor-pointer" onClick={() => onSelectAct(act)}>
+                                                {act.client_name || 'Cliente Genérico'}
+                                            </td>
+                                            <td className="px-4 py-4 align-middle">
+                                                <span className={cn("px-2 py-1 rounded text-[11px] font-[700] uppercase", typeColor)}>
+                                                    {act.type}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-4 align-middle text-[13px] text-text-primary font-[600] flex items-center gap-2 h-full min-h-[50px]">
+                                                <div className={cn("w-2 h-2 rounded-full shrink-0", statusStyle.bg)} /> {statusStyle.label}
+                                            </td>
+                                            <td className="px-4 py-4 align-middle text-[12px] text-text-muted">
+                                                {new Date(act.createdAt).toLocaleString([], { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                            </td>
+                                            <td className="px-4 py-4 align-middle text-[12px] text-text-muted font-[600]">
+                                                {act.glpi_ticket_id ? `#${act.glpi_ticket_id}` : '---'}
+                                            </td>
+                                            <td className="px-4 py-4 align-middle text-[12px] text-text-primary font-[500]">
+                                                {act.technical_name || '---'}
+                                            </td>
+                                            <td className="px-4 py-4 align-middle text-right pr-10">
+                                                <button
+                                                    onClick={() => onSelectAct(act)}
+                                                    className="w-8 h-8 rounded-lg bg-tertiary text-text-muted flex items-center justify-center hover:bg-secondary hover:text-primary-500 border border-color transition-colors ml-auto"
+                                                    title="Ver Acta"
+                                                >
+                                                    <Eye size={14} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             ) : (
-                <div className="bg-white dark:bg-slate-900/20 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-white/5 py-20 px-6 text-center">
-                    <div className="bg-slate-100 dark:bg-white/5 p-4 rounded-3xl inline-block text-slate-300 dark:text-slate-800 mb-4">
-                        <Filter size={40} />
-                    </div>
-                    <h3 className="text-slate-900 dark:text-white font-bold text-lg">No hay procesos registrados</h3>
-                    <p className="text-slate-500 text-sm max-w-xs mx-auto mt-2">
-                        {searchTerm ? 'No se encontraron resultados para tu búsqueda.' : 'Las actas sincronizadas aparecerán aquí automáticamente.'}
-                    </p>
+                <div className="bg-secondary rounded-2xl border border-dashed border-color py-32 text-center">
+                    <History size={48} className="text-text-muted mx-auto mb-4 opacity-40" />
+                    <p className="text-text-primary text-[11px] font-[700] uppercase tracking-[1px]">Sin registros encontrados</p>
+                    <p className="text-text-muted text-[12px] mt-1 font-medium italic">Intenta ajustar los filtros de búsqueda</p>
                 </div>
             )}
         </div>

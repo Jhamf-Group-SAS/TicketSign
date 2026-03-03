@@ -1,76 +1,40 @@
-# Manual de Usuario - PWA Gestión de Mantenimiento
+# Manual de Usuario - TicketSign
 
-Este manual describe el uso de la aplicación web progresiva (PWA) para la gestión y reporte de mantenimientos preventivos y correctivos.
+Bienvenido a TicketSign, su herramienta para la gestión eficiente de actas de mantenimiento y tareas.
 
-## 1. Acceso y Primeros Pasos
+## 1. Introducción
+TicketSign le permite registrar sus actividades de mantenimiento, capturar firmas digitales, tomar fotografías y gestionar su calendario de tareas, incluso cuando no tiene acceso a internet.
 
-### 1.1. Inicio de Sesión
-1. Abra la aplicación en su navegador o desde el icono instalado en su dispositivo.
-2. Ingrese sus credenciales (mismas de GLPI, si está integrado, o locales).
-3. Si el login es exitoso, accederá al **Panel Principal**.
-   
-> **Nota:** La primera vez debe tener conexión a internet para descargar los datos básicos. Posteriormente, podrá iniciar sesión incluso sin internet si "Recordar sesión" está activo.
+## 2. Inicio de Sesión
+Para acceder, utilice sus credenciales corporativas vinculadas a GLPI.
+- La aplicación recordará su sesión para facilitar el acceso offline.
+- Si la aplicación detecta una nueva versión disponible, verá un mensaje de actualización automática o la página se recargará al volver a la pestaña.
 
-### 1.2. Interfaz Principal (Dashboard)
-El panel principal le muestra:
-- **Resumen de Actividades:** Estadísticas rápidas.
-- **Navegación Rápida:** Botones para ir a Preventivo, Correctivo, Tareas, etc.
-- **Estado de Conexión:** Un indicador (verde/rojo) muestra si está En Línea o Sin Conexión.
-- **Menú Lateral/Usuario:** Acceso a perfil, historial y cierre de sesión.
+## 3. El Tablero de Tareas (Kanban)
+En la sección de "Calendario" o "Tareas", podrá ver sus actividades asignadas.
+- **Columnas**: Las tareas se dividen en: Programadas, Asignadas, En Ejecución, Canceladas y Completadas.
+- **Mover Tareas**: Puede arrastrar y soltar tareas entre columnas para cambiar su estado (solo en modo escritorio/tablet).
+- **Filtros**: Utilice el buscador o los filtros por estado para encontrar tareas específicas.
 
-## 2. Gestión de Tareas (Kanban)
+## 4. Gestión de Actas de Mantenimiento
+Cuando esté realizando un servicio relacionado con un ticket de GLPI:
+1. Localice el ticket en la lista de servicios.
+2. Complete el formulario de mantenimiento.
+3. Capture fotos de evidencia si es necesario.
+4. Solicite la firma del cliente directamente en la pantalla de su dispositivo.
+5. **Guardar**: Si no tiene red, el acta se guardará localmente. Verá un icono de "Pendiente" hasta que recupere la conexión y se suba a GLPI.
 
-En la sección **Tareas** (icono de tablero), verá un flujo de trabajo visual:
-- **Columnas:** Programada, Asignada, En Ejecución, Completada.
-- **Crear Tarea:** Pulse el botón "+" para agendar un nuevo servicio.
-- **Mover Tarea:** Arrastre y suelte las tarjetas para cambiar su estado (o use el menú de opciones).
-- **Detalle:** Haga clic en una tarjeta para ver la descripción completa o editarla.
+## 5. Recordatorios de WhatsApp
+Si programa un recordatorio para una tarea:
+- Recibirá un mensaje de WhatsApp en su celular registrado a la hora configurada.
+- Los recordatorios solo se envían para tareas activas (no para completadas o canceladas).
+- Si una tarea ya pasó hace más de 24 horas y no se notificó, el sistema ya no enviará el mensaje para evitar molestias.
 
-## 3. Realizar un Mantenimiento
+## 6. Uso sin Conexión (Offline)
+Puede seguir usando la aplicación aunque pierda la señal de internet.
+- Las actas creadas se guardarán en la memoria del navegador.
+- Al recuperar la conexión (WiFi o Datos), la aplicación detectará el cambio y subirá automáticamente la información al servidor de GLPI.
+- **No cierre la pestaña ni borre el historial del navegador** si tiene actas pendientes de sincronización.
 
-Desde el inicio, elija **Preventivo** (Azul) o **Correctivo** (Naranja).
-
-### 3.1. Formulario de Acta
-Complete los campos requeridos:
-1. **Ticket GLPI:** Número del ticket asociado (si aplica).
-2. **Empresa:** Nombre del cliente.
-3. **Datos del Equipo:** Serial, Modelo, Hostname (obligatorios).
-4. **Checklist:**
-   - *Preventivo:* Marque las casillas de limpieza física, lógica, antivirus, etc.
-   - *Correctivo:* Describa el diagnóstico, falla y solución aplicada.
-5. **Observaciones:** Notas adicionales relevantes.
-
-### 3.2. Evidencias Fotográficas
-Use la sección de fotos para:
-- Capturar imagen directamente con la cámara.
-- Subir imágenes desde la galería.
-- *Recomendación:* Tome fotos del antes y después.
-
-### 3.3. Firmas Digitales
-Al final del formulario:
-- **Firma Técnico:** Su firma como responsable.
-- **Firma Cliente:** Solicite al encargado que firme en pantalla para dar conformidad.
-
-### 3.4. Guardar y Sincronizar
-- **Botón "Finalizar Acta":** Guarda el reporte.
-  - *Con Internet:* Se envía inmediatamente al servidor/GLPI.
-  - *Sin Internet:* Se guarda localmente como "Pendiente" y se enviará automáticamente cuando recupere la conexión.
-
-## 4. Historial y Reportes
-
-En la sección **Historial**:
-- Verá una lista de todos los servicios realizados.
-- **Estados:**
-  - 🟢 *Sincronizado:* Ya está en el servidor.
-  - 🟡 *Pendiente:* Aún no se ha subido (requiere internet).
-- Haga clic en un item para ver el detalle.
-- **Descargar PDF:** Si está sincronizado, podrá descargar el acta en formato PDF firmada.
-
-## 5. Funcionamiento Sin Conexión (Offline)
-
-La aplicación está diseñada para trabajar sin internet. Puede:
-- Consultar tareas previamente cargadas.
-- Crear nuevas actas de mantenimiento.
-- Tomar fotos y firmas.
-
-Cuando su dispositivo detecte internet nuevamente, verá un mensaje de "Sincronizando..." y sus datos se actualizarán en el servidor central.
+## 7. Ayuda y Soporte
+Si encuentra errores o el sistema no sincroniza, verifique su conexión a internet y asegúrese de que la hora de su dispositivo sea correcta.

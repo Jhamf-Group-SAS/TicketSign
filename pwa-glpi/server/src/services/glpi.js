@@ -1,6 +1,7 @@
 import axios from 'axios';
 import FormData from 'form-data';
 import fs from 'fs';
+import configService from './configService.js';
 
 class GLPIConnector {
     constructor() {
@@ -9,16 +10,16 @@ class GLPIConnector {
         this.loginCache = new Map(); // login/name -> { fullName, id }
     }
 
-    get config() {
+    async getConfig() {
         return {
-            apiUrl: process.env.GLPI_API_URL,      // Debe ser https://service.jhamf.com/apirest.php
-            appToken: process.env.GLPI_APP_TOKEN,
-            userToken: process.env.GLPI_USER_TOKEN
+            apiUrl: await configService.get('glpi_api_url'),
+            appToken: await configService.get('glpi_app_token'),
+            userToken: await configService.get('glpi_user_token')
         };
     }
 
     async initSession() {
-        const { apiUrl, appToken, userToken } = this.config;
+        const { apiUrl, appToken, userToken } = await this.getConfig();
         console.log(`[GLPI] Iniciando sesión en: ${apiUrl}`);
 
         if (!apiUrl) throw new Error('GLPI_API_URL no configurado');
@@ -85,7 +86,7 @@ class GLPIConnector {
      */
     async changeActiveEntity(entityId, recursive = true) {
         if (!this.sessionToken) await this.initSession();
-        const { apiUrl, appToken } = this.config;
+        const { apiUrl, appToken } = await this.getConfig();
 
         try {
             const url = `${apiUrl}/changeActiveEntity`;
@@ -112,7 +113,7 @@ class GLPIConnector {
      */
     async findComputer(query) {
         if (!this.sessionToken) await this.initSession();
-        const { apiUrl, appToken } = this.config;
+        const { apiUrl, appToken } = await this.getConfig();
 
         try {
             const response = await axios.get(`${apiUrl}/Computer`, {
@@ -134,7 +135,7 @@ class GLPIConnector {
 
     async uploadDocument(itemId, filePath, fileName, itemtype = 'Ticket') {
         if (!this.sessionToken) await this.initSession();
-        const { apiUrl, appToken } = this.config;
+        const { apiUrl, appToken } = await this.getConfig();
 
         try {
             // 1. Obtener el ticket para conocer su entidad
@@ -234,7 +235,7 @@ class GLPIConnector {
      */
     async addFollowup(itemId, content, itemtype = 'Ticket') {
         if (!this.sessionToken) await this.initSession();
-        const { apiUrl, appToken } = this.config;
+        const { apiUrl, appToken } = await this.getConfig();
 
         if (itemtype !== 'Ticket') return;
 
@@ -263,11 +264,11 @@ class GLPIConnector {
      */
     async getEligibleTechnicians() {
         if (!this.sessionToken) await this.initSession();
-        const { apiUrl, appToken } = this.config;
+        const { apiUrl, appToken } = await this.getConfig();
 
         try {
             console.log('[GLPI] Buscando técnicos mediante Profile_User...');
-            const targetProfiles = ['Super-Admin', 'Especialistas', 'Admin-Mesa', 'Administrativo'];
+            const targetProfiles = ['Super-Admin', 'Especialistas', 'Admin-Mesa', 'Administrativo', 'Compras'];
 
             // 1. Obtener todas las asociaciones de perfiles
             // Expandimos dropdowns para tener los nombres de perfiles y usuarios
@@ -381,7 +382,7 @@ class GLPIConnector {
      */
     async getTickets(criteria = {}) {
         if (!this.sessionToken) await this.initSession();
-        const { apiUrl, appToken } = this.config;
+        const { apiUrl, appToken } = await this.getConfig();
 
         try {
             console.log(`[GLPI] Consultando tickets... Criteria:`, criteria);
@@ -391,7 +392,8 @@ class GLPIConnector {
                 'sort': 'id',
                 'order': 'DESC',
                 'is_deleted': 0,
-                'status': (criteria.status === 'pending' || !criteria.status) ? undefined : criteria.status,
+                // Usamos 'notold' (no resuelto/cerrado) nativo de GLPI si queremos tickets pendientes
+                'status': (criteria.status === 'pending') ? 'notold' : (criteria.status || undefined),
                 'expand_dropdowns': true
             };
 
@@ -539,9 +541,9 @@ class GLPIConnector {
                     const statusInfo = tickets.slice(0, 10).map(t => ({ id: t.id, status: t.status, status_desc: t.status_desc }));
                     console.log(`[DEBUG-SRV] Ejemplo de tickets antes del filtro:`, statusInfo);
 
-                    // Estados permitidos: 1 (Nuevo), 2 (En curso - asignada), 3 (En curso - planificada), 4 (En espera)
+                    // Excluimos 5 (Solucionado) y 6 (Cerrado) para traer todos los estados "abiertos" (Nuevo, Asignado, En espera, Validaciones, Planificada, etc)
                     const beforeFilter = tickets.length;
-                    tickets = tickets.filter(t => [1, 2, 3, 4].includes(Number(t.status)));
+                    tickets = tickets.filter(t => ![5, 6].includes(Number(t.status)));
                     console.log(`[DEBUG-SRV] Filtro finalizado: ${beforeFilter} -> ${tickets.length} tickets`);
                 } else if (!isNaN(criteria.status)) {
                     tickets = tickets.filter(t => t.status == criteria.status);
@@ -596,7 +598,7 @@ class GLPIConnector {
      */
     async getTicket(id) {
         if (!this.sessionToken) await this.initSession();
-        const { apiUrl, appToken } = this.config;
+        const { apiUrl, appToken } = await this.getConfig();
 
         try {
             console.log(`[GLPI] Obteniendo detalle Ticket #${id}`);
@@ -904,7 +906,7 @@ class GLPIConnector {
      */
     async updateTicket(id, input) {
         if (!this.sessionToken) await this.initSession();
-        const { apiUrl, appToken } = this.config;
+        const { apiUrl, appToken } = await this.getConfig();
 
         try {
             // Asegurar entidad correcta
@@ -937,7 +939,7 @@ class GLPIConnector {
      */
     async getUsers() {
         if (!this.sessionToken) await this.initSession();
-        const { apiUrl, appToken } = this.config;
+        const { apiUrl, appToken } = await this.getConfig();
 
         try {
             const response = await axios.get(`${apiUrl}/User`, {
@@ -981,7 +983,7 @@ class GLPIConnector {
      */
     async getItems(itemtype, criteria = {}) {
         if (!this.sessionToken) await this.initSession();
-        const { apiUrl, appToken } = this.config;
+        const { apiUrl, appToken } = await this.getConfig();
 
         try {
             const response = await axios.get(`${apiUrl}/${itemtype}`, {
@@ -1004,7 +1006,7 @@ class GLPIConnector {
      */
     async getGroups() {
         if (!this.sessionToken) await this.initSession();
-        const { apiUrl, appToken } = this.config;
+        const { apiUrl, appToken } = await this.getConfig();
 
         try {
             const response = await axios.get(`${apiUrl}/Group`, {
@@ -1034,7 +1036,7 @@ class GLPIConnector {
      */
     async updateActor(ticketId, actorId, type, isGroup = false) {
         if (!this.sessionToken) await this.initSession();
-        const { apiUrl, appToken } = this.config;
+        const { apiUrl, appToken } = await this.getConfig();
 
         const itemtype = isGroup ? 'Ticket_Group' : 'Ticket_User';
         const idField = isGroup ? 'groups_id' : 'users_id';

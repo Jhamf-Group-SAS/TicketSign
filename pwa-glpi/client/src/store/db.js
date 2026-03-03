@@ -3,12 +3,18 @@ import Dexie from 'dexie';
 export const db = new Dexie('MaintenanceDB');
 
 // Esquema de la base de datos local
-db.version(8).stores({
-    acts: '++id, glpi_ticket_id, status, type, client_name, technical_name, createdAt, updatedAt',
+db.version(13).stores({
+    acts: '++id, _id, glpi_ticket_id, status, type, client_name, technical_name, createdAt, updatedAt',
     assets_cache: '++id, serial, hostname, ticket_id',
     sync_logs: '++id, act_id, task_id, timestamp, status, error',
     tasks: '++id, _id, status, priority, type, scheduled_at, reminder_at, reminder_sent, isPrivate, glpi_ticket_id, createdAt, updatedAt',
-    notification_log: 'task_id, sent_at'
+    notification_log: 'task_id, sent_at',
+    notifications: '++id, title, message, time, type, read, createdAt',
+    glpi_entities: 'id, label, entityName',
+    glpi_technicians: 'id, label, fullName',
+    glpi_tickets: 'id, label',
+    day_settings: 'date, color',
+    settings: 'key, value'
 });
 
 /**
@@ -24,6 +30,7 @@ export const saveDraftAct = async (actData) => {
     }
     return await db.acts.add({
         ...actData,
+        glpi_ticket_id: actData.glpi_ticket_id ? String(actData.glpi_ticket_id) : '',
         status: 'BORRADOR',
         createdAt: timestamp,
         updatedAt: timestamp
@@ -50,9 +57,13 @@ export const getPendingSync = async () => {
 /**
  * Actualiza el estado después de un intento de sincronización
  */
-export const updateSyncStatus = async (id, status, error = null) => {
+export const updateSyncStatus = async (id, status, error = null, extraData = {}) => {
     const timestamp = new Date().toISOString();
-    await db.acts.update(id, { status, updatedAt: timestamp });
+    await db.acts.update(id, {
+        status,
+        updatedAt: timestamp,
+        ...extraData
+    });
     await db.sync_logs.add({
         act_id: id,
         timestamp,
@@ -66,38 +77,56 @@ export const updateSyncStatus = async (id, status, error = null) => {
  */
 export const getHistory = async () => {
     return await db.acts
-        .where('status')
-        .anyOf('SINCRONIZADA', 'SINCRONIZADO') // Soportar ambos por compatibilidad
         .reverse()
         .sortBy('createdAt');
 };
 
 /**
- * Guarda actas provenientes del servidor
+ * Guarda actas provenientes del servidor de forma inteligente
  */
 export const saveRemoteActs = async (acts) => {
-    const operations = acts.map(act => {
-        // Aseguramos que el estado sea consistente localmente
-        const localAct = {
-            ...act,
-            status: 'SINCRONIZADA', // Forzar estado correcto
-            id: undefined // Dejar que IndexedDB maneje los IDs o usar el del server si es consistente
-        };
+    const operations = acts.map(async (remoteAct) => {
+        // 1. Prioridad: Buscar por _id del servidor
+        if (remoteAct._id) {
+            const existingById = await db.acts.where('_id').equals(remoteAct._id).first();
+            if (existingById) {
+                return await db.acts.update(existingById.id, {
+                    ...remoteAct,
+                    id: existingById.id,
+                    status: 'SINCRONIZADO'
+                });
+            }
+        }
 
-        // Usamos put para insertar o actualizar basado en glpi_ticket_id si es único,
-        // pero como los IDs locales y remotos pueden diferir, usamos glpi_ticket_id como clave lógica.
-        // Nota: Si el schema no tiene glpi_ticket_id como key secundaria única, esto podría duplicar.
-        // Revisando el schema: '++id, glpi_ticket_id...'
+        // 2. Si no hay _id o no se encontró, buscar coincidencias locales pendientes
+        // Usamos una combinación de ticket + técnico + fecha aproximada
+        const tid = remoteAct.glpi_ticket_id ? String(remoteAct.glpi_ticket_id) : '';
+        const createdAtDate = remoteAct.createdAt ? new Date(remoteAct.createdAt).toISOString() : '';
 
-        return db.acts.where('glpi_ticket_id').equals(act.glpi_ticket_id).first()
-            .then(existing => {
-                if (existing) {
-                    // Actualizar solo si es necesario, o ignorar si ya está local
-                    return db.acts.update(existing.id, { ...localAct, id: existing.id });
-                } else {
-                    return db.acts.add(localAct);
-                }
+        // Buscamos un acta local PENDIENTE que coincida exactamente
+        const localMatch = await db.acts
+            .where('glpi_ticket_id').equals(tid)
+            .and(a => a.status === 'PENDIENTE_SINCRONIZACION' && a.technical_name === remoteAct.technical_name)
+            .filter(a => {
+                // Si coinciden en un margen de 1 minuto, probablemente sean la misma
+                return Math.abs(new Date(a.createdAt) - new Date(createdAtDate)) < 60000;
+            })
+            .first();
+
+        if (localMatch) {
+            return await db.acts.update(localMatch.id, {
+                ...remoteAct,
+                id: localMatch.id,
+                status: 'SINCRONIZADO'
             });
+        }
+
+        // 3. Si no existe ninguna coincidencia razonable, añadir como nueva
+        const { id, ...actWithoutDexieId } = remoteAct;
+        return await db.acts.add({
+            ...actWithoutDexieId,
+            status: 'SINCRONIZADO'
+        });
     });
 
     return Promise.all(operations);

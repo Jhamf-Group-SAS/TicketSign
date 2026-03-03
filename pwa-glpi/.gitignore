@@ -1,0 +1,43 @@
+# ─── Dependencias ──────────────────────────────────────────────────────────────
+node_modules/
+**/node_modules/
+
+# ─── Variables de entorno — NUNCA subir al repositorio ─────────────────────────
+.env
+.env.local
+.env.production
+.env.staging
+**/.env
+**/.env.local
+**/.env.production
+# NOTA: .env.example SÍ se incluye (es la plantilla pública sin valores reales)
+
+# ─── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+*.out
+logs/
+**/logs/
+build_*.log
+
+# ─── Uploads, PDFs y archivos generados (datos sensibles de clientes) ──────────
+server/uploads/
+server/temp/
+
+# ─── Archivos de diagnóstico / scripts de prueba (datos sensibles) ─────────────
+*.json
+!package.json
+!package-lock.json
+!**/package.json
+!**/package-lock.json
+
+# ─── Build artifacts ───────────────────────────────────────────────────────────
+dist/
+**/dist/
+client/build/
+
+# ─── Sistema operativo / IDE ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+*.swp
+*.suo

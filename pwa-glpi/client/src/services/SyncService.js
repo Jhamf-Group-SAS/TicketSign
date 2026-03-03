@@ -1,8 +1,26 @@
 import { db, updateSyncStatus, getPendingSync } from '../store/db';
+import NotificationService from './NotificationService';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+
+const listeners = new Set();
+let isSyncing = false;
 
 export const SyncService = {
+    subscribe(callback) {
+        listeners.add(callback);
+        return () => listeners.delete(callback);
+    },
+
+    notify() {
+        listeners.forEach(cb => cb(isSyncing));
+    },
+
+    setSyncing(val) {
+        isSyncing = val;
+        this.notify();
+    },
+
     /**
      * Intenta sincronizar todas las actas pendientes
      */
@@ -15,31 +33,36 @@ export const SyncService = {
         const pending = await getPendingSync();
         if (pending.length === 0) return;
 
-        console.log(`Iniciando sincronización de ${pending.length} actas...`);
+        this.setSyncing(true);
+        // No active client logs
 
-        for (const act of pending) {
-            try {
-                const response = await fetch(`${API_BASE_URL}/sync/maintenance`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify(act)
-                });
+        try {
+            for (const act of pending) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/sync/maintenance`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(act)
+                    });
 
-                if (response.ok) {
-                    const result = await response.json();
-                    await updateSyncStatus(act.id, 'SINCRONIZADA');
-                    console.log(`Acta ${act.id} sincronizada correctamente. GLPI ID: ${result.glpiId}`);
-                } else {
-                    const error = await response.text();
-                    await updateSyncStatus(act.id, 'ERROR', error);
+                    if (response.ok) {
+                        const result = await response.json();
+                        await updateSyncStatus(act.id, 'SINCRONIZADO', null, { _id: result._id });
+                        // Sincronizada correctamente
+                    } else {
+                        const error = await response.text();
+                        await updateSyncStatus(act.id, 'ERROR', error);
+                    }
+                } catch (err) {
+                    // Error en sincronización de acta
+                    await updateSyncStatus(act.id, 'ERROR', err.message);
                 }
-            } catch (err) {
-                console.error(`Error sincronizando acta ${act.id}:`, err);
-                await updateSyncStatus(act.id, 'ERROR', err.message);
             }
+        } finally {
+            this.setSyncing(false);
         }
     },
 
@@ -52,6 +75,7 @@ export const SyncService = {
         const token = localStorage.getItem('glpi_pro_token');
         if (!token) return;
 
+        this.setSyncing(true);
         try {
             // --- Sincronizar Actas ---
             try {
@@ -63,11 +87,11 @@ export const SyncService = {
                     if (Array.isArray(remoteActs)) {
                         const { saveRemoteActs } = await import('../store/db');
                         await saveRemoteActs(remoteActs);
-                        console.log(`[Sync] Sincronizados ${remoteActs.length} registros de actas.`);
+                        // Pull actas success
                     }
                 }
             } catch (e) {
-                console.error('[Sync] Error pulling acts:', e);
+                // Pull actas error
             }
 
             // --- Sincronizar Tareas ---
@@ -104,31 +128,52 @@ export const SyncService = {
 
                         if (tasksToSave.length > 0) {
                             await db.tasks.bulkPut(tasksToSave);
+
+                            // Notificar a NotificationService sobre tareas nuevas para este dispositivo
+                            const newTasks = remoteTasks.filter(rt => !localMap.has(rt._id));
+                            if (newTasks.length > 0) {
+                                NotificationService.handleNewRemoteTasks(newTasks);
+                            }
                         }
 
                         // 3. RECONCILIACION: Borrar tareas locales que ya no existen en el servidor
-                        // (Si la tarea tiene _id pero no está en el array que trajo el servidor)
+                        // O que están duplicadas localmente (mismos _id)
                         const remoteIds = new Set(remoteTasks.map(t => t._id));
-                        const idsToDelete = localTasks
-                            .filter(t => t._id && !remoteIds.has(t._id))
-                            .map(t => t.id);
+                        const idsToDelete = [];
+                        const seenIds = new Set();
+
+                        // Procesamos las tareas que acabamos de guardar para marcarlas como "vistas"
+                        tasksToSave.forEach(t => { if (t._id) seenIds.add(t._id); });
+
+                        localTasks.forEach(t => {
+                            if (!t._id) return; // No borrar tareas locales aún no sincronizadas
+
+                            // Si el _id ya no está en el servidor
+                            if (!remoteIds.has(t._id)) {
+                                idsToDelete.push(t.id);
+                            }
+                            // O si es un duplicado local (mismo _id pero diferente PK que el que ya guardamos)
+                            // Nota: t.id es la PK de Dexie. Si no está en tasksToSave, es una copia vieja.
+                            else if (seenIds.has(t._id) && !tasksToSave.some(s => s.id === t.id)) {
+                                idsToDelete.push(t.id);
+                            }
+                        });
 
                         if (idsToDelete.length > 0) {
-                            console.log(`[Sync] Borrando ${idsToDelete.length} tareas locales que no existen en el servidor.`);
                             await db.tasks.bulkDelete(idsToDelete);
                         }
 
-                        console.log(`[Sync] Sincronizadas ${tasksToSave.length} tareas del servidor.`);
+                        // Sync tasks success
                     }
                 } else {
-                    console.warn(`[Sync] Error fetching tasks: ${responseTasks.status} ${responseTasks.statusText}`);
+                    // Pull tasks warn
                 }
             } catch (e) {
-                console.error('[Sync] Error pulling tasks:', e);
+                // Pull tasks error
             }
 
-        } catch (error) {
-            console.error('[Sync] General error:', error);
+        } finally {
+            this.setSyncing(false);
         }
     },
 
@@ -146,6 +191,7 @@ export const SyncService = {
         const localTasks = await db.tasks.toArray();
         if (localTasks.length === 0) return;
 
+        this.setSyncing(true);
         try {
             const response = await fetch(`${API_BASE_URL}/tasks/sync`, {
                 method: 'POST',
@@ -163,54 +209,81 @@ export const SyncService = {
                 // PERO conservando el ID local (dexie PK)
                 const updates = [];
                 for (const remote of syncedTasks) {
-                    // Buscar tarea local que coincida (por id "temporal" o si ya tenia _id)
-                    // Como syncedTasks viene del servidor, DEBERÍA tener _id
                     if (remote._id) {
-                        try {
-                            const localMatch = await db.tasks.get({ _id: remote._id });
-                            if (localMatch) {
-                                updates.push({ ...remote, id: localMatch.id });
-                            } else {
-                                // Si no existe por _id, tal vez es una de las que acabamos de enviar?
-                                // Es difícil saber cuál es cuál sin un ID temporal compartido.
-                                // Por ahora, asumimos que si sync devuelve algo es una actualización de lo que enviamos
-                                // OJO: La estrategia de "enviar todo" de arriba es peligrosa si no mapeamos bien.
-                            }
-                        } catch (e) { console.warn(e); }
+                        const localMatch = localTasks.find(t =>
+                            t._id === remote._id ||
+                            (!t._id && t.createdAt === remote.createdAt && t.title === remote.title)
+                        );
+                        if (localMatch) {
+                            updates.push({ ...remote, id: localMatch.id });
+                        }
                     }
                 }
 
                 if (updates.length > 0) {
                     await db.tasks.bulkPut(updates);
                 }
-                console.log('Tareas locales sincronizadas con el servidor.');
+                // Local tasks synced
             }
-        } catch (error) {
-            console.error('Error sincronizando tareas:', error);
+        } finally {
+            this.setSyncing(false);
         }
     },
 
     /**
-     * Obtiene los técnicos elegibles del servidor
+     * Cachea entidades, técnicos y tickets de GLPI localmente
+     */
+    async syncGLPICache() {
+        if (!navigator.onLine) return;
+        const token = localStorage.getItem('glpi_pro_token');
+        if (!token || token.split('.').length !== 3) return;
+
+        try {
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+            const headers = { 'Authorization': `Bearer ${token}` };
+
+            const [entRes, techRes, tickRes] = await Promise.all([
+                fetch(`${baseUrl}/glpi/entities`, { headers }),
+                fetch(`${baseUrl}/glpi/technicians`, { headers }),
+                fetch(`${baseUrl}/glpi/tickets?range=0-1500&status=pending`, { headers })
+            ]);
+
+            if (entRes.ok) {
+                const entities = (await entRes.json()).map(e => ({ id: String(e.id), label: e.name, entityName: e.name }));
+                await db.glpi_entities.clear();
+                await db.glpi_entities.bulkAdd(entities);
+            }
+            if (techRes.ok) {
+                const techs = (await techRes.json()).map(t => ({ id: String(t.id), label: `${t.fullName} (${t.name})`, fullName: t.fullName }));
+                await db.glpi_technicians.clear();
+                await db.glpi_technicians.bulkAdd(techs);
+            }
+            if (tickRes.ok) {
+                const tickets = (await tickRes.json()).map(t => ({ id: String(t.id), label: `#${t.id} - ${t.title}`, original: t }));
+                await db.glpi_tickets.clear();
+                await db.glpi_tickets.bulkAdd(tickets);
+            }
+        } catch (error) {
+            console.error('Error syncing GLPI cache', error);
+        }
+    },
+
+    async getCachedEntities() { return await db.glpi_entities.toArray() || []; },
+    async getCachedTechnicians() { return await db.glpi_technicians.toArray() || []; },
+    async getCachedTickets() { return await db.glpi_tickets.toArray() || []; },
+
+    /**
+     * Obtiene los técnicos elegibles del servidor (para tareas)
      */
     async getTechnicians() {
         if (!navigator.onLine) return [];
-
         const token = localStorage.getItem('glpi_pro_token');
         if (!token || token.split('.').length !== 3) return [];
-
         try {
-            const response = await fetch(`${API_BASE_URL}/tasks/technicians`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-                return await response.json();
-            }
+            const response = await fetch(`${API_BASE_URL}/tasks/technicians`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (response.ok) return await response.json();
             return [];
-        } catch (error) {
-            console.error('Error fetching technicians:', error);
-            return [];
-        }
+        } catch (error) { return []; }
     },
 
     /**
@@ -222,7 +295,7 @@ export const SyncService = {
         this._initialized = true;
 
         window.addEventListener('online', () => {
-            console.log('Conexión restaurada. Intentando sincronizar...');
+            // Connection restored
             this.syncPendingActs();
             this.syncPendingTasks();
             this.pullRemoteChanges();
@@ -236,10 +309,12 @@ export const SyncService = {
         // Polling periódico cada 60 segundos si hay sesión y red
         setInterval(() => {
             if (navigator.onLine && localStorage.getItem('glpi_pro_token')) {
-                console.log('[Sync] Ejecutando sincronización periódica...');
+                // Periodic sync
                 this.pullRemoteChanges();
                 this.syncPendingTasks();
             }
         }, 60000);
     }
 };
+
+export default SyncService;

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Camera, X, Image as ImageIcon } from 'lucide-react';
+import { Camera, X, ImageIcon } from 'lucide-react';
+import { cn } from '../utils/cn';
 
 const PhotoCapture = ({ onPhotosUpdate }) => {
     const [photos, setPhotos] = useState([]);
@@ -7,7 +8,6 @@ const PhotoCapture = ({ onPhotosUpdate }) => {
     const handleCapture = (e) => {
         const file = e.target.files[0];
         if (file) {
-            // Compresión de imagen antes de guardar
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = (event) => {
@@ -15,7 +15,7 @@ const PhotoCapture = ({ onPhotosUpdate }) => {
                 img.src = event.target.result;
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800; // Ancho máximo razonable para reportes
+                    const MAX_WIDTH = 800;
                     let width = img.width;
                     let height = img.height;
 
@@ -29,8 +29,6 @@ const PhotoCapture = ({ onPhotosUpdate }) => {
 
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
-
-                    // Comprimir a JPEG calidad 0.6
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
 
                     const newPhotos = [...photos, dataUrl];
@@ -48,26 +46,28 @@ const PhotoCapture = ({ onPhotosUpdate }) => {
     };
 
     return (
-        <div className="space-y-4">
-            <label className="text-sm font-medium text-slate-400">Evidencias Fotográficas</label>
+        <div className="flex flex-col w-full">
+            <label className="text-[12px] font-[600] text-text-muted block mb-3 uppercase tracking-wide">
+                Evidencias Fotográficas
+            </label>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-3 w-full">
                 {photos.map((photo, index) => (
-                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700">
+                    <div key={index} className="relative aspect-square rounded-[12px] overflow-hidden border border-color shadow-sm group">
                         <img src={photo} alt={`Evidence ${index}`} className="w-full h-full object-cover" />
                         <button
                             onClick={() => removePhoto(index)}
-                            className="absolute top-1 right-1 bg-red-600 rounded-full p-1"
+                            className="absolute top-1.5 right-1.5 bg-red-500 text-white rounded-md p-1 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-600 shadow-md"
                         >
-                            <X size={12} />
+                            <X size={12} strokeWidth={3} />
                         </button>
                     </div>
                 ))}
 
-                {photos.length < 5 && (
-                    <label className="flex flex-col items-center justify-center aspect-square rounded-lg border-2 border-dashed border-slate-700 bg-slate-800 cursor-pointer hover:bg-slate-750 transition-colors">
-                        <Camera className="text-slate-500 mb-1" />
-                        <span className="text-[10px] text-slate-500 font-medium">Capturar</span>
+                {photos.length < 4 && (
+                    <label className="flex flex-col items-center justify-center aspect-square rounded-[12px] border-2 border-dashed border-color bg-tertiary cursor-pointer hover:border-primary-500 hover:bg-primary-500/10 transition-all group">
+                        <Camera className="text-text-muted group-hover:text-primary-500 transition-colors" size={22} />
+                        <span className="text-[10px] text-text-muted font-[700] tracking-widest uppercase group-hover:text-primary-500 transition-colors">Capturar</span>
                         <input
                             type="file"
                             accept="image/*"

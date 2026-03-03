@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { db } from '../store/db';
-import { ChevronLeft, Users, FileText, Send, Search, Building2, Package, CheckCircle, Calendar } from 'lucide-react';
-import Toast from './Toast';
+import { ChevronLeft, Users, FileText, Send, Search, Building2, Package, CheckCircle, Calendar, RefreshCw } from 'lucide-react';
+import { toast } from './Toast';
 import CustomDatePicker from './CustomDatePicker';
+import { cn } from '../utils/cn';
 
 const ClientConsolidated = ({ onBack }) => {
     const [clients, setClients] = useState([]);
@@ -13,10 +14,10 @@ const ClientConsolidated = ({ onBack }) => {
     const [isExporting, setIsExporting] = useState(false);
     const [isExportingCSV, setIsExportingCSV] = useState(false);
     const [projectId, setProjectId] = useState('');
-    const [toast, setToast] = useState(null);
     const [filterType, setFilterType] = useState('ALL');
     const [selectedDate, setSelectedDate] = useState('');
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
 
     useEffect(() => {
         loadClients();
@@ -42,12 +43,13 @@ const ClientConsolidated = ({ onBack }) => {
         const acts = await db.acts.where('client_name').equals(clientName).sortBy('createdAt');
         setSelectedClient(clientName);
         setClientActs(acts.reverse());
+        setCurrentPage(1);
     };
 
     const handleExportPDF = async () => {
         setIsExporting(true);
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/reports/export-consolidated`, {
+            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/reports/export-consolidated`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -60,20 +62,28 @@ const ClientConsolidated = ({ onBack }) => {
             });
 
             if (response.ok) {
-                const blob = await response.blob();
+                const data = await response.blob();
+                const blob = new Blob([data], { type: 'application/pdf' });
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
+                a.style.display = 'none';
                 a.href = url;
-                a.download = `Consolidado_${selectedClient.replace(/\s+/g, '_')}.pdf`;
+                const safeName = (selectedClient || 'Consolidado').replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, '_');
+                a.download = `Consolidado_${safeName}.pdf`;
                 document.body.appendChild(a);
                 a.click();
-                a.remove();
-                setToast({ message: 'PDF exportado con éxito', type: 'success' });
+
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                }, 500);
+
+                toast.success('PDF exportado con éxito');
             } else {
-                setToast({ message: 'Error al exportar PDF', type: 'error' });
+                toast.error('Error al exportar PDF');
             }
         } catch (error) {
-            setToast({ message: 'Error de conexión', type: 'error' });
+            toast.error('Error de conexión');
         } finally {
             setIsExporting(false);
         }
@@ -82,7 +92,7 @@ const ClientConsolidated = ({ onBack }) => {
     const handleExportCSV = async () => {
         setIsExportingCSV(true);
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/reports/export-csv`, {
+            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/reports/export-csv`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -95,20 +105,29 @@ const ClientConsolidated = ({ onBack }) => {
             });
 
             if (response.ok) {
-                const blob = await response.blob();
+                const data = await response.blob();
+                // Usamos un tipo específico para asegurar que Excel lo reconozca
+                const blob = new Blob([data], { type: 'text/csv;charset=utf-8;' });
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
+                a.style.display = 'none';
                 a.href = url;
-                a.download = `Consolidado_${selectedClient.replace(/\s+/g, '_')}.csv`;
+                const safeName = (selectedClient || 'Reporte').replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, '_');
+                a.download = `Consolidado_${safeName}.csv`;
                 document.body.appendChild(a);
                 a.click();
-                a.remove();
-                setToast({ message: 'Excel (CSV) exportado con éxito', type: 'success' });
+
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                }, 500);
+
+                toast.success('Excel (CSV) exportado con éxito');
             } else {
-                setToast({ message: 'Error al exportar CSV', type: 'error' });
+                toast.error('Error al exportar CSV');
             }
         } catch (error) {
-            setToast({ message: 'Error de conexión', type: 'error' });
+            toast.error('Error de conexión');
         } finally {
             setIsExportingCSV(false);
         }
@@ -116,13 +135,13 @@ const ClientConsolidated = ({ onBack }) => {
 
     const handleGenerateReport = async () => {
         if (!projectId) {
-            setToast({ message: 'Debe especificar el ID de la Tarea de Proyecto de GLPI', type: 'error' });
+            toast.error('Debe especificar el ID del Proyecto de GLPI');
             return;
         }
 
         setIsGenerating(true);
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/reports/consolidated`, {
+            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/reports/consolidated`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -137,13 +156,13 @@ const ClientConsolidated = ({ onBack }) => {
 
             if (response.ok) {
                 const data = await response.json();
-                setToast({ message: `Sincronizado con éxito en Proyecto ID: ${data.glpiId}`, type: 'success' });
+                toast.success(`Sincronizado con éxito en Proyecto ID: ${data.glpiId}`);
             } else {
                 const err = await response.json();
-                setToast({ message: `Error: ${err.message}`, type: 'error' });
+                toast.error(`Error: ${err.message}`);
             }
         } catch (error) {
-            setToast({ message: 'Error de conexión con el servidor', type: 'error' });
+            toast.error('Error de conexión con el servidor');
         } finally {
             setIsGenerating(false);
         }
@@ -154,166 +173,172 @@ const ClientConsolidated = ({ onBack }) => {
     );
 
     return (
-        <div className="space-y-8 pb-32 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-[73px] z-40 bg-slate-50/80 dark:bg-[#020617]/80 backdrop-blur-md py-4 border-b border-slate-200 dark:border-white/5 mx-[-1rem] px-4 transition-colors">
-                <div className="flex items-center gap-3">
-                    <button onClick={selectedClient ? () => setSelectedClient(null) : onBack} className="p-2 hover:bg-slate-200 dark:hover:bg-white/5 rounded-full text-slate-500 dark:text-slate-400 shrink-0">
-                        <ChevronLeft size={24} />
+        <div className="space-y-10 pb-32 max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-5 duration-700">
+            {/* Header Area */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-secondary p-5 rounded-2xl border border-color shadow-premium/5 sticky top-[73px] z-40 transition-all">
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={selectedClient ? () => setSelectedClient(null) : onBack}
+                        className="p-3 bg-tertiary border border-color text-text-muted hover:text-primary-500 rounded-xl transition-all active:scale-90 group"
+                    >
+                        <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
                     </button>
                     <div className="min-w-0">
-                        <h2 className="text-sm md:text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-white truncate">
+                        <h2 className="text-lg font-black flex items-center gap-3 text-text-primary uppercase tracking-tighter truncate">
                             {selectedClient ? (
                                 <>
-                                    <Building2 size={18} className="text-blue-500 shrink-0" />
-                                    <span className="truncate">Resumen: {selectedClient}</span>
+                                    <Building2 size={20} className="text-primary-500 shrink-0" />
+                                    <span className="truncate">Consolidado: {selectedClient}</span>
                                 </>
                             ) : (
                                 <>
-                                    <Users size={20} className="text-blue-500 shrink-0" />
-                                    <span>Consolidado por Cliente</span>
+                                    <Users size={20} className="text-primary-500 shrink-0" />
+                                    <span>Control de Cartera</span>
                                 </>
                             )}
                         </h2>
-                        <p className="text-[9px] md:text-[10px] uppercase font-black text-slate-400 dark:text-slate-500 tracking-widest truncate">
-                            {selectedClient ? 'Revisión y Generación' : 'Selecciona un cliente'}
+                        <p className="text-[10px] uppercase font-black text-text-muted tracking-[0.25em] mt-1 pr-4 border-l-2 border-primary-500/30 pl-4 ml-1 opacity-70">
+                            {selectedClient ? 'Reporte Operativo Detallado' : 'Gestión Centralizada por Cliente'}
                         </p>
                     </div>
                 </div>
+
                 {selectedClient && (
-                    <div className="flex gap-2 w-full md:w-auto justify-between md:justify-end pl-11 md:pl-0">
+                    <div className="flex gap-3 w-full md:w-auto h-fit">
                         <button
                             onClick={handleExportCSV}
                             disabled={isExportingCSV}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 text-xs font-bold"
+                            className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-500/20 flex items-center gap-2.5 transition-all active:scale-95 disabled:opacity-50 text-[11px] font-black uppercase tracking-widest group"
                         >
-                            {isExportingCSV ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <Building2 size={16} />}
-                            <span className="hidden sm:inline">Excel</span>
+                            {isExportingCSV ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Package size={16} className="group-hover:scale-110 transition-transform" />}
+                            <span className="hidden sm:inline">CSV</span>
                         </button>
                         <button
                             onClick={handleExportPDF}
                             disabled={isExporting}
-                            className="bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-700 dark:text-white px-4 py-2 rounded-xl shadow-sm dark:shadow-lg border border-slate-200 dark:border-white/5 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 text-xs font-bold"
+                            className="bg-tertiary border border-color hover:bg-secondary text-text-primary px-5 py-2.5 rounded-xl shadow-sm flex items-center gap-2.5 transition-all active:scale-95 disabled:opacity-50 text-[11px] font-black uppercase tracking-widest group"
                         >
-                            {isExporting ? <div className="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div> : <FileText size={16} />}
+                            {isExporting ? <RefreshCw className="w-4 h-4 animate-spin text-primary-500" /> : <FileText size={16} className="text-primary-500 group-hover:scale-110 transition-transform" />}
                             <span className="hidden sm:inline">PDF</span>
                         </button>
                         <button
                             onClick={handleGenerateReport}
                             disabled={isGenerating}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 text-xs font-bold"
+                            className="bg-primary-500 hover:bg-primary-600 text-white px-7 py-2.5 rounded-xl shadow-xl shadow-primary-500/20 flex items-center gap-2.5 transition-all active:scale-95 disabled:opacity-50 text-[11px] font-black uppercase tracking-widest group"
                         >
-                            {isGenerating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <Send size={16} />}
-                            <span>Enviar</span>
+                            {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send size={16} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />}
+                            <span>Sincronizar</span>
                         </button>
                     </div>
                 )}
             </div>
 
             {!selectedClient ? (
-                <div className="space-y-6">
-                    {/* Search */}
-                    <div className="relative group">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-blue-500 transition-colors">
-                            <Search size={18} />
+                <div className="space-y-8">
+                    {/* Search Field */}
+                    <div className="relative group/search max-w-2xl">
+                        <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-text-muted group-focus-within/search:text-primary-500 transition-colors">
+                            <Search size={20} />
                         </div>
                         <input
                             type="text"
-                            placeholder="Buscar cliente..."
+                            placeholder="Encontrar cliente o entidad..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="block w-full pl-11 pr-4 py-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all shadow-sm dark:shadow-2xl"
+                            className="block w-full pl-14 pr-6 py-4 bg-secondary border border-color rounded-2xl text-text-primary placeholder:text-text-muted/40 focus:outline-none focus:ring-4 focus:ring-primary-500/5 focus:border-primary-500 transition-all shadow-premium/5"
                         />
                     </div>
 
-                    {/* Client Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Client Selection Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {filteredClients.map((client, idx) => (
                             <button
                                 key={idx}
                                 onClick={() => handleSelectClient(client.name)}
-                                className="bg-white dark:bg-slate-900/30 backdrop-blur-sm p-6 rounded-[2rem] border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all text-left flex items-center justify-between group shadow-sm dark:shadow-none"
+                                className="bg-secondary p-7 rounded-2xl border border-color hover:border-primary-500/40 transition-all text-left flex items-center justify-between group shadow-premium/5 hover:shadow-xl hover:-translate-y-1"
                             >
-                                <div className="flex items-center gap-4">
-                                    <div className="bg-blue-500/10 p-3 rounded-2xl text-blue-500 group-hover:scale-110 transition-transform">
-                                        <Building2 size={24} />
+                                <div className="flex items-center gap-5">
+                                    <div className="bg-primary-500/10 p-3.5 rounded-2xl text-primary-500 group-hover:scale-110 transition-transform duration-500">
+                                        <Building2 size={22} />
                                     </div>
                                     <div>
-                                        <h4 className="font-bold text-slate-900 dark:text-white">{client.name}</h4>
-                                        <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
-                                            {client.count} Computadores registrados
-                                        </p>
+                                        <h4 className="font-black text-[16px] text-text-primary uppercase tracking-tight group-hover:text-primary-500 transition-colors">{client.name}</h4>
+                                        <div className="flex items-center gap-3 mt-1 opacity-60">
+                                            <div className="px-2.5 py-0.5 bg-tertiary rounded-lg text-[10px] font-black text-text-muted uppercase tracking-widest border border-color">
+                                                {client.count} Activos
+                                            </div>
+                                            <span className="text-[9px] font-bold text-text-muted uppercase tracking-tighter">Último reporte: {new Date(client.lastActivity).toLocaleDateString()}</span>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="bg-slate-100 dark:bg-white/5 p-2 rounded-full text-slate-400 dark:text-slate-600 group-hover:text-blue-500 transition-colors">
-                                    <ChevronLeft size={20} className="rotate-180" />
+                                <div className="p-2.5 bg-tertiary border border-color rounded-xl text-text-muted group-hover:text-primary-500 group-hover:bg-primary-500/10 transition-all">
+                                    <ChevronLeft size={18} className="rotate-180" />
                                 </div>
                             </button>
                         ))}
                     </div>
                 </div>
             ) : (
-                <div className="space-y-6">
-                    {/* Project & Stats - Sticky on Desktop */}
-                    <div className="md:sticky md:top-[160px] z-30 transition-all md:bg-slate-50/95 md:dark:bg-[#020617]/95 md:backdrop-blur-md md:py-4 md:mx-[-1rem] md:px-4 md:border-b md:border-slate-200 md:dark:border-white/5">
-                        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                            <div className="col-span-2 md:col-span-1 bg-slate-900/40 p-3 rounded-2xl border border-white/5 space-y-1">
-                                <label className="text-[9px] uppercase font-black text-blue-500 tracking-widest block">ID Tarea GLPI</label>
+                <div className="space-y-10">
+                    {/* Sticky Metrics & Filters */}
+                    <div className="transition-all bg-secondary p-5 rounded-2xl border border-color shadow-xl">
+                        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+                            <div className="col-span-2 lg:col-span-1 bg-tertiary p-3 rounded-xl border border-color hover:border-primary-500/30 transition-colors flex flex-col justify-center">
+                                <label className="text-[9px] uppercase font-black text-primary-500 tracking-[0.2em] block mb-1.5 opacity-80 pl-1">Proyecto GLPI</label>
                                 <input
                                     type="number"
-                                    placeholder="Ej: 4"
+                                    placeholder="ID Proyecto"
                                     value={projectId}
                                     onChange={(e) => setProjectId(e.target.value)}
-                                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                                    className="w-full bg-secondary border border-color rounded-lg px-3 py-2 text-[11px] font-black text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all shadow-inner"
                                 />
                             </div>
 
                             <button
-                                onClick={() => setFilterType('ALL')}
-                                className={`p-3 rounded-2xl border transition-all text-center flex flex-col justify-center ${filterType === 'ALL' ? 'bg-blue-500/20 border-blue-500/50 shadow-lg scale-105' : 'bg-slate-900/40 border-white/5 hover:bg-slate-800/60'}`}
+                                onClick={() => { setFilterType('ALL'); setCurrentPage(1); }}
+                                className={cn(
+                                    "p-3 rounded-xl border transition-all text-center flex flex-col justify-center gap-1 group",
+                                    filterType === 'ALL'
+                                        ? "bg-primary-500 border-primary-500 text-white shadow-lg shadow-primary-500/20 scale-[1.02]"
+                                        : "bg-tertiary border-color hover:bg-tertiary"
+                                )}
                             >
-                                <span className="text-xl font-black text-white">{clientActs.length}</span>
-                                <p className="text-[8px] uppercase font-bold text-slate-500">Equipos</p>
-                            </button>
-
-                            <button
-                                onClick={() => setFilterType('PREVENTIVO')}
-                                className={`p-3 rounded-2xl border transition-all text-center flex flex-col justify-center ${filterType === 'PREVENTIVO' ? 'bg-blue-500/20 border-blue-500/50 shadow-lg scale-105' : 'bg-slate-900/40 border-white/5 hover:bg-slate-800/60'}`}
-                            >
-                                <span className="text-xl font-black text-blue-500">
-                                    {clientActs.filter(a => a.type === 'PREVENTIVO').length}
+                                <span className={cn("text-xl font-black tabular-nums tracking-tighter", filterType === 'ALL' ? "text-white" : "text-text-primary")}>
+                                    {clientActs.length}
                                 </span>
-                                <p className="text-[8px] uppercase font-bold text-slate-500">Prev.</p>
+                                <p className={cn("text-[9px] uppercase font-black tracking-widest", filterType === 'ALL' ? "text-white/70" : "text-text-muted")}>Registros</p>
                             </button>
 
-                            <button
-                                onClick={() => setFilterType('CORRECTIVO')}
-                                className={`p-3 rounded-2xl border transition-all text-center flex flex-col justify-center ${filterType === 'CORRECTIVO' ? 'bg-orange-500/20 border-orange-500/50 shadow-lg scale-105' : 'bg-slate-900/40 border-white/5 hover:bg-slate-800/60'}`}
-                            >
-                                <span className="text-xl font-black text-orange-500">
-                                    {clientActs.filter(a => a.type === 'CORRECTIVO').length}
-                                </span>
-                                <p className="text-[8px] uppercase font-bold text-slate-500">Corr.</p>
-                            </button>
+                            {[
+                                { id: 'PREVENTIVO', label: 'Prev.', color: 'text-indigo-500', bg: 'bg-indigo-500/20' },
+                                { id: 'CORRECTIVO', label: 'Corr.', color: 'text-amber-500', bg: 'bg-amber-500/20' },
+                                { id: 'ENTREGA', label: 'Entrega', color: 'text-emerald-500', bg: 'bg-emerald-500/20' }
+                            ].map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => { setFilterType(item.id); setCurrentPage(1); }}
+                                    className={cn(
+                                        "p-3 rounded-xl border transition-all text-center flex flex-col justify-center gap-1 group",
+                                        filterType === item.id
+                                            ? item.bg + " border-" + item.color.split('-')[1] + "-500/50 shadow-lg scale-[1.02]"
+                                            : "bg-tertiary border-color hover:bg-tertiary"
+                                    )}
+                                >
+                                    <span className={cn("text-xl font-black tabular-nums tracking-tighter", filterType === item.id ? item.color : "text-text-primary")}>
+                                        {clientActs.filter(a => a.type === item.id).length}
+                                    </span>
+                                    <p className={cn("text-[9px] uppercase font-black tracking-widest", filterType === item.id ? "opacity-70" : "text-text-muted")}>{item.label}</p>
+                                </button>
+                            ))}
 
-                            <button
-                                onClick={() => setFilterType('ENTREGA')}
-                                className={`p-3 rounded-2xl border transition-all text-center flex flex-col justify-center ${filterType === 'ENTREGA' ? 'bg-emerald-500/20 border-emerald-500/50 shadow-lg scale-105' : 'bg-slate-900/40 border-white/5 hover:bg-slate-800/60'}`}
-                            >
-                                <span className="text-xl font-black text-emerald-500">
-                                    {clientActs.filter(a => a.type === 'ENTREGA').length}
-                                </span>
-                                <p className="text-[8px] uppercase font-bold text-slate-500">Entregas</p>
-                            </button>
-
-                            <div className="col-span-2 md:col-span-1 bg-slate-900/40 p-3 rounded-2xl border border-white/5 flex flex-col justify-center relative">
-                                <label className="text-[8px] uppercase font-black text-slate-500 mb-1 text-center">Filtrar Fecha</label>
+                            <div className="col-span-2 lg:col-span-1 bg-tertiary p-3 rounded-xl border border-color flex flex-col justify-center relative group/date">
+                                <label className="text-[9px] uppercase font-black text-text-muted mb-1.5 text-center tracking-[0.2em] opacity-60">Filtrar Fecha</label>
                                 <button
                                     onClick={() => setShowDatePicker(true)}
-                                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white flex items-center justify-between hover:bg-slate-900 transition-colors"
+                                    className="w-full bg-secondary border border-color rounded-lg px-2.5 py-2 text-[10px] font-black text-text-primary flex items-center justify-between hover:bg-tertiary transition-all shadow-inner group-hover/date:border-primary-500/40"
                                 >
-                                    <span>{selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString() : 'Seleccionar'}</span>
-                                    <Calendar size={14} className="text-blue-500" />
+                                    <span className="truncate">{selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString() : 'Todas'}</span>
+                                    <Calendar size={14} className="text-primary-500" />
                                 </button>
 
                                 {showDatePicker && (
@@ -323,6 +348,7 @@ const ClientConsolidated = ({ onBack }) => {
                                         onChange={(val) => {
                                             setSelectedDate(new Date(val).toISOString().split('T')[0]);
                                             setShowDatePicker(false);
+                                            setCurrentPage(1);
                                         }}
                                         onClose={() => setShowDatePicker(false)}
                                     />
@@ -331,7 +357,7 @@ const ClientConsolidated = ({ onBack }) => {
                                 {selectedDate && (
                                     <button
                                         onClick={() => setSelectedDate('')}
-                                        className="text-[8px] text-blue-500 font-bold mt-1 hover:underline"
+                                        className="text-[8px] text-primary-500 font-black uppercase tracking-widest mt-1 hover:underline text-center w-full"
                                     >
                                         Limpiar
                                     </button>
@@ -340,83 +366,200 @@ const ClientConsolidated = ({ onBack }) => {
                         </div>
                     </div>
 
-                    {/* Detailed List */}
-                    <div className="space-y-4">
-                        {clientActs.filter(act => {
+                    {/* Service Records Detailed List (Table View) */}
+                    {(() => {
+                        const filteredResults = clientActs.filter(act => {
                             const matchesType = filterType === 'ALL' || act.type === filterType;
-                            const actDate = new Date(act.createdAt).toISOString().split('T')[0];
+                            const actDateString = act.scheduled_date || act.createdAt;
+                            const actDate = new Date(actDateString).toISOString().split('T')[0];
                             const matchesDate = !selectedDate || actDate === selectedDate;
                             return matchesType && matchesDate;
-                        }).map(act => (
-                            <div key={act.id} className="bg-slate-900/30 backdrop-blur-sm p-6 rounded-3xl border border-white/5 hover:border-blue-500/30 transition-all shadow-lg group">
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                    <div className="flex items-start gap-4">
-                                        <div className={`p-3 rounded-2xl shadow-inner ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-500' :
-                                            act.type === 'ENTREGA' ? 'bg-emerald-500/10 text-emerald-500' :
-                                                'bg-orange-500/10 text-orange-500'
-                                            }`}>
-                                            <Package size={24} />
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <h5 className="text-base font-black text-white">
-                                                    {act.equipment_model} - <span className="text-blue-500">{act.equipment_hostname || 'S/H'}</span>
-                                                </h5>
-                                                <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-400' :
-                                                    act.type === 'ENTREGA' ? 'bg-emerald-500/10 text-emerald-400' :
-                                                        'bg-orange-500/10 text-orange-400'
-                                                    }`}>
-                                                    {act.type}
-                                                </span>
-                                            </div>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-                                                <p className="text-[11px] text-slate-400 flex items-center gap-1.5 uppercase tracking-wide font-medium">
-                                                    <span className="text-slate-600 font-bold">SN:</span> {act.equipment_serial}
-                                                </p>
-                                                <p className="text-[11px] text-slate-400 flex items-center gap-1.5 uppercase tracking-wide font-medium">
-                                                    <span className="text-slate-600 font-bold">MOD:</span> {act.equipment_model || 'Genérico'}
-                                                </p>
-                                                <p className="text-[11px] text-white flex items-center gap-1.5 uppercase tracking-wide font-black">
-                                                    <span className="text-blue-500 font-bold">USER:</span> {act.assigned_user}
-                                                </p>
-                                            </div>
-                                        </div>
+                        });
+
+                        const ITEMS_PER_PAGE = 10;
+                        const totalPages = Math.ceil(filteredResults.length / ITEMS_PER_PAGE);
+                        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+                        const paginatedResults = filteredResults.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+                        return (
+                            <div className="space-y-6">
+                                <div className="bg-secondary rounded-2xl border border-color shadow-sm overflow-hidden transition-all">
+                                    {/* Desktop View Table */}
+                                    <div className="hidden lg:block overflow-x-auto no-scrollbar">
+                                        <table className="w-full text-left border-collapse min-w-full">
+                                            <thead>
+                                                <tr className="bg-tertiary border-b border-color">
+                                                    <th className="pl-10 pr-4 py-4 text-[10px] font-black text-text-muted uppercase tracking-widest">ID Ticket</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-text-muted uppercase tracking-widest">Equipo / Host</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-text-muted uppercase tracking-widest">Modelo</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-text-muted uppercase tracking-widest">Serial</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-text-muted uppercase tracking-widest">Tipo</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-text-muted uppercase tracking-widest">Fecha / Creación</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-text-muted uppercase tracking-widest text-right pr-10">Estado</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-color">
+                                                {paginatedResults.length > 0 ? (
+                                                    paginatedResults.map(act => (
+                                                        <tr key={act.id} className="hover:bg-tertiary/30 transition-colors group">
+                                                            <td className="pl-10 pr-4 py-3.5 align-middle">
+                                                                <span className="text-[12px] font-black text-primary-500 tabular-nums">#{act.glpi_ticket_id || '---'}</span>
+                                                            </td>
+                                                            <td className="px-6 py-3.5 align-middle">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[12px] font-black text-text-primary uppercase tracking-tight">{act.equipment_model || 'Genérico'}</span>
+                                                                    <span className="text-[10px] font-bold text-text-muted opacity-60 uppercase tracking-tighter">{act.equipment_hostname || 'SIN HOST'}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-3.5 align-middle">
+                                                                <span className="text-[11px] font-semibold text-text-secondary uppercase">{act.equipment_model || '---'}</span>
+                                                            </td>
+                                                            <td className="px-6 py-3.5 align-middle">
+                                                                <span className="text-[11px] font-black text-text-muted tabular-nums opacity-80 uppercase tracking-widest">{act.equipment_serial || '---'}</span>
+                                                            </td>
+                                                            <td className="px-6 py-3.5 align-middle">
+                                                                <span className={cn(
+                                                                    "px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border",
+                                                                    act.type === 'PREVENTIVO' ? 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20' :
+                                                                        act.type === 'ENTREGA' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                                                                            'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                                                                )}>
+                                                                    {act.type}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-3.5 align-middle">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[11px] font-black text-text-primary uppercase tracking-tight">
+                                                                        {new Date(act.scheduled_date || act.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                    </span>
+                                                                    <span className="text-[9px] font-bold text-text-muted opacity-50 uppercase tracking-tighter">
+                                                                        Registro: {new Date(act.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short' })}
+                                                                    </span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-3.5 align-middle">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className={cn(
+                                                                        "w-1.5 h-1.5 rounded-full shrink-0",
+                                                                        act.type === 'PREVENTIVO' ? 'bg-indigo-500' :
+                                                                            act.type === 'ENTREGA' ? 'bg-emerald-500' : 'bg-amber-500'
+                                                                    )} />
+                                                                    <span className="text-[11px] font-black text-text-secondary uppercase tracking-tight">
+                                                                        {act.checklist?.estado_final || 'FINALIZADO'}
+                                                                    </span>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan={7} className="py-20 text-center">
+                                                            <div className="flex flex-col items-center gap-3 opacity-30">
+                                                                <RefreshCw size={40} className="animate-spin-slow" />
+                                                                <p className="font-black uppercase tracking-[0.2em] text-[11px]">Sin registros encontrados</p>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
                                     </div>
-                                    <div className="flex md:flex-col items-center md:items-end justify-between border-t md:border-t-0 border-white/5 pt-3 md:pt-0">
-                                        <div className="text-right">
-                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.1em]">{new Date(act.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                                            <p className="text-[11px] text-slate-300 font-medium">Ticket #{act.glpi_ticket_id}</p>
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-2">
-                                            {act.type === 'PREVENTIVO' ? (
-                                                <span className="text-[9px] font-black text-green-500 bg-green-500/10 px-2 py-0.5 rounded-md uppercase tracking-widest border border-green-500/20">
-                                                    MANT. COMPLETADO
-                                                </span>
-                                            ) : act.type === 'ENTREGA' ? (
-                                                <span className="text-[9px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md uppercase tracking-widest border border-emerald-500/20">
-                                                    EQUIPO ENTREGADO
-                                                </span>
-                                            ) : (
-                                                <span className="text-[9px] font-black text-white bg-slate-800 px-2 py-0.5 rounded-md uppercase tracking-widest">
-                                                    {act.checklist.estado_final || 'FINALIZADO'}
-                                                </span>
-                                            )}
-                                        </div>
+
+                                    {/* Mobile View Cards */}
+                                    <div className="lg:hidden flex flex-col divide-y divide-color/40">
+                                        {paginatedResults.length > 0 ? (
+                                            paginatedResults.map(act => (
+                                                <div key={act.id} className="p-5 active:bg-tertiary/30 transition-colors group">
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={cn(
+                                                                "w-2 h-2 rounded-full",
+                                                                act.type === 'PREVENTIVO' ? 'bg-indigo-500' :
+                                                                    act.type === 'ENTREGA' ? 'bg-emerald-500' : 'bg-amber-500'
+                                                            )} />
+                                                            <span className="text-[10px] font-black uppercase text-text-muted tracking-[0.1em]">{act.type}</span>
+                                                        </div>
+                                                        <span className="text-[10px] font-black text-primary-500 bg-primary-500/5 px-2.5 py-1 rounded-lg border border-primary-500/10">
+                                                            #{act.glpi_ticket_id}
+                                                        </span>
+                                                    </div>
+                                                    <h4 className="text-[14px] font-black text-text-primary leading-tight mb-2 uppercase tracking-tight">{act.equipment_model}</h4>
+                                                    <div className="flex flex-wrap gap-x-5 gap-y-2 mt-3 opacity-70">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Calendar size={12} className="text-primary-500" />
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] font-bold text-text-secondary uppercase tracking-tighter">
+                                                                    {new Date(act.scheduled_date || act.createdAt).toLocaleDateString()}
+                                                                </span>
+                                                                <span className="text-[8px] font-bold text-text-muted opacity-50 uppercase">
+                                                                    Creación: {new Date(act.createdAt).toLocaleDateString()}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Package size={12} className="text-primary-500" />
+                                                            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-tighter truncate max-w-[120px]">
+                                                                S/N: {act.equipment_serial}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="py-16 text-center opacity-30">
+                                                <p className="font-black uppercase tracking-[0.1em] text-[11px]">Sin registros</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
+
+                                {/* Pagination Controls */}
+                                {totalPages > 1 && (
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-1">
+                                        <p className="text-[10px] text-text-muted font-black uppercase tracking-widest opacity-60">
+                                            Mostrando <span className="text-primary-500">{startIndex + 1}-{Math.min(startIndex + ITEMS_PER_PAGE, filteredResults.length)}</span> de <span className="text-primary-500">{filteredResults.length}</span>
+                                        </p>
+                                        <div className="flex items-center gap-1.5">
+                                            <button
+                                                disabled={currentPage === 1}
+                                                onClick={() => setCurrentPage(p => p - 1)}
+                                                className="h-8 px-3 rounded-lg border border-color text-[10px] font-black uppercase tracking-widest text-text-secondary hover:bg-tertiary transition-all disabled:opacity-30 disabled:pointer-events-none active:scale-95"
+                                            >
+                                                Ant.
+                                            </button>
+                                            <div className="flex items-center gap-1">
+                                                {[...Array(totalPages)].map((_, i) => (
+                                                    <button
+                                                        key={i + 1}
+                                                        onClick={() => setCurrentPage(i + 1)}
+                                                        className={cn(
+                                                            "w-8 h-8 rounded-lg text-[10px] font-black transition-all border",
+                                                            currentPage === i + 1
+                                                                ? "bg-primary-500 border-primary-500 text-white shadow-md"
+                                                                : "bg-tertiary border-color text-text-muted hover:border-primary-500/40"
+                                                        )}
+                                                    >
+                                                        {i + 1}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <button
+                                                disabled={currentPage === totalPages}
+                                                onClick={() => setCurrentPage(p => p + 1)}
+                                                className="h-8 px-3 rounded-lg border border-color text-[10px] font-black uppercase tracking-widest text-text-secondary hover:bg-tertiary transition-all disabled:opacity-30 disabled:pointer-events-none active:scale-95"
+                                            >
+                                                Sig.
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        ))}
-                    </div>
+                        );
+                    })()}
                 </div>
             )}
 
-            {toast && (
-                <Toast
-                    message={toast.message}
-                    type={toast.type}
-                    onClose={() => setToast(null)}
-                />
-            )}
+            <br />
         </div>
     );
 };

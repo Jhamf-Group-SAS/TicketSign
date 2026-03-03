@@ -1,0 +1,52 @@
+# ─── Dependencias ────────────────────────────────────────────────────────────
+node_modules/
+
+# ─── Variables de entorno — NUNCA subir al repositorio ───────────────────────
+.env
+.env.local
+.env.production
+.env.staging
+# NOTA: .env.example SÍ se sube (es la plantilla sin valores reales)
+
+# ─── Logs y archivos de diagnóstico (datos sensibles) ────────────────────────
+*.log
+*.out
+logs/
+build_*.log
+build_utf8.log
+build_full.log
+
+# ─── Volcados de sesión y datos operacionales ────────────────────────────────
+# Se excluyen todos los JSON *excepto* los de configuración del proyecto
+*.json
+!package.json
+!package-lock.json
+session_dump.json
+full_session_dump.json
+diag_v*.json
+all_tickets.json
+ticket_*.json
+
+# ─── Archivos temporales de uploads, PDFs y generados ────────────────────────
+uploads/
+temp/
+
+# ─── Build artifacts ─────────────────────────────────────────────────────────
+dist/
+
+# ─── Scripts de diagnóstico (eliminados, por precaución) ─────────────────────
+advanced_diag.js
+audit_user.js
+check_ticket.js
+deep_diag*.js
+dump_session.js
+final_diag*.js
+find_tickets.js
+read_log.js
+reset_db_script.js
+test_*.js
+
+# ─── Sistema operativo / IDE ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/settings.json

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Loader2, Send, CheckCircle2, User, Clock, FileText, Tag, AlertCircle, MapPin, Building2, Layers, Users, Search, ChevronDown, FileUp, ThumbsUp, MessageSquare } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -13,23 +13,53 @@ const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
 };
 
+const sanitizeHTML = (html) => {
+    if (!html) return '';
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const allowedTags = ['P', 'BR', 'STRONG', 'B', 'I', 'EM', 'U', 'UL', 'OL', 'LI', 'SPAN', 'DIV', 'H1', 'H2', 'H3', 'A', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD'];
+
+    const sanitize = (node) => {
+        // Eliminar scripts, iframes, etc
+        if (node.nodeType === 1 && !allowedTags.includes(node.tagName)) {
+            const text = node.textContent;
+            node.replaceWith(document.createTextNode(text));
+            return;
+        }
+
+        // Eliminar atributos on* (XSS)
+        if (node.attributes) {
+            Array.from(node.attributes).forEach(attr => {
+                if (attr.name.startsWith('on') || attr.name === 'style' || (attr.name === 'href' && attr.value.startsWith('javascript:'))) {
+                    node.removeAttribute(attr.name);
+                }
+            });
+        }
+
+        // Recursivo
+        Array.from(node.childNodes).forEach(sanitize);
+    };
+
+    sanitize(doc.body);
+    return doc.body.innerHTML;
+};
+
 // Mapas de estados y prioridades para consistencia visual
 const STATUS_MAP = {
-    1: { label: 'Nuevo', color: 'bg-emerald-500', bg: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' },
-    2: { label: 'Asignado', color: 'bg-blue-500', bg: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
-    3: { label: 'Planificado', color: 'bg-cyan-500', bg: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20' },
-    4: { label: 'En Espera', color: 'bg-amber-500', bg: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
-    5: { label: 'Resuelto', color: 'bg-green-600', bg: 'bg-green-600/10 text-green-600 border-green-600/20' },
-    6: { label: 'Cerrado', color: 'bg-slate-500', bg: 'bg-slate-500/10 text-slate-500 border-slate-500/20' }
+    1: { label: 'Nuevo', color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+    2: { label: 'Asignado', color: 'text-primary-500', bg: 'bg-primary-500/10 border-primary-500/20' },
+    3: { label: 'Planificado', color: 'text-primary-500', bg: 'bg-primary-500/10 border-primary-500/20' },
+    4: { label: 'En Espera', color: 'text-amber-500', bg: 'bg-amber-500/10 border-amber-500/20' },
+    5: { label: 'Resuelto', color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+    6: { label: 'Cerrado', color: 'text-text-muted', bg: 'bg-tertiary border-color' }
 };
 
 const PRIORITY_MAP = {
-    1: { label: 'Muy Baja', bg: 'bg-slate-100 text-slate-500 border-slate-200' },
-    2: { label: 'Baja', bg: 'bg-blue-50 text-blue-600 border-blue-100' },
-    3: { label: 'Media', bg: 'bg-yellow-50 text-yellow-600 border-yellow-200' },
-    4: { label: 'Alta', bg: 'bg-orange-100 text-orange-600 border-orange-200' },
-    5: { label: 'Muy Alta', bg: 'bg-red-100 text-red-600 border-red-200' },
-    6: { label: 'Mayor', bg: 'bg-rose-500 text-white border-rose-600' }
+    1: { label: 'Muy Baja', bg: 'bg-secondary text-slate-500 border-slate-500' },
+    2: { label: 'Baja', bg: 'bg-secondary text-blue-500 border-blue-500' },
+    3: { label: 'Media', bg: 'bg-secondary text-amber-500 border-amber-500' },
+    4: { label: 'Alta', bg: 'bg-secondary text-orange-500 border-orange-500' },
+    5: { label: 'Muy Alta', bg: 'bg-secondary text-red-500 border-red-500' },
+    6: { label: 'Mayor', bg: 'bg-rose-500 text-white border-rose-600 shadow-lg shadow-rose-500/20' }
 };
 
 const formatTimeAgo = (date) => {
@@ -105,7 +135,7 @@ const TicketDetail = ({ ticketId, onBack }) => {
                 groups
             });
         } catch (error) {
-            console.error('Error fetching options:', error);
+            // error options
         }
     };
 
@@ -117,7 +147,7 @@ const TicketDetail = ({ ticketId, onBack }) => {
             const data = await res.json();
             setTicket(data);
         } catch (error) {
-            console.error('Error fetching ticket:', error);
+            // error ticket
         } finally {
             setLoading(false);
         }
@@ -203,23 +233,23 @@ const TicketDetail = ({ ticketId, onBack }) => {
         return (
             <div className={cn("group relative", layout === 'vertical' ? "flex items-center gap-3" : "w-full")}>
                 {layout === 'vertical' && (
-                    <div className={cn("p-2 rounded-lg transition-colors bg-opacity-10", colorClass?.replace('text-', 'bg-'))}>
+                    <div className={cn("p-2 rounded-lg transition-colors bg-secondary border border-color")}>
                         <Icon size={16} className={colorClass} />
                     </div>
                 )}
                 <div className="flex-1 min-w-0">
                     {layout === 'vertical' && (
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+                        <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">{label}</p>
                     )}
                     <div className="relative">
                         <button
                             disabled={isUpdating}
                             onClick={() => setOpenDropdown(isOpen ? null : fieldName)}
                             className={cn(
-                                "flex items-center justify-between w-full text-xs font-bold py-2.5 px-4 rounded-xl border transition-all focus:outline-none shadow-sm",
-                                isOpen ? "border-blue-500/50 ring-4 ring-blue-500/10" : "border-slate-200 dark:border-white/10 hover:border-blue-500/30",
+                                "flex items-center justify-between w-full text-xs font-bold py-2 px-3 rounded-xl border transition-all focus:outline-none shadow-sm",
+                                isOpen ? "border-primary-500 ring-2 ring-primary-500" : "border-color bg-tertiary hover:border-primary-500",
                                 isUpdating && "opacity-50",
-                                layout === 'horizontal' && "bg-white dark:bg-slate-900"
+                                layout === 'horizontal' && "bg-secondary"
                             )}
                         >
                             {badgeStyle ? (
@@ -227,13 +257,13 @@ const TicketDetail = ({ ticketId, onBack }) => {
                                     {selectedName}
                                 </span>
                             ) : (
-                                <span className="truncate pr-4 text-slate-700 dark:text-slate-200 font-bold">{selectedName}</span>
+                                <span className="truncate pr-4 text-text-primary font-bold">{selectedName}</span>
                             )}
                             <div className="flex items-center gap-2 shrink-0">
                                 {isUpdating ? (
-                                    <Loader2 size={12} className="animate-spin text-blue-500" />
+                                    <Loader2 size={12} className="animate-spin text-primary-500" />
                                 ) : (
-                                    <ChevronDown size={14} className={cn("text-slate-400 group-hover:text-blue-500 transition-transform duration-200", isOpen && "rotate-180 text-blue-500")} />
+                                    <ChevronDown size={14} className={cn("text-text-muted group-hover:text-primary-500 transition-transform duration-200", isOpen && "rotate-180 text-primary-500")} />
                                 )}
                             </div>
                         </button>
@@ -244,18 +274,18 @@ const TicketDetail = ({ ticketId, onBack }) => {
                                     className="fixed inset-0 z-[60]"
                                     onClick={() => setOpenDropdown(null)}
                                 />
-                                <div className="absolute left-0 top-full mt-2 w-full min-w-[260px] max-h-[400px] flex flex-col bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden shadow-blue-500/5">
+                                <div className="absolute left-0 top-full mt-2 w-full min-w-[280px] max-h-[400px] flex flex-col bg-secondary border border-color rounded-2xl shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
                                     {withSearch && (
-                                        <div className="p-3 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/5">
+                                        <div className="p-3 border-b border-color bg-tertiary">
                                             <div className="relative">
-                                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
                                                 <input
                                                     autoFocus
                                                     type="text"
                                                     value={searchTerm}
                                                     onChange={(e) => setSearchTerm(e.target.value)}
                                                     placeholder="Buscar..."
-                                                    className="w-full pl-9 pr-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-bold"
+                                                    className="w-full pl-9 pr-3 py-2 text-xs bg-secondary border border-color rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all font-bold shadow-sm"
                                                 />
                                             </div>
                                         </div>
@@ -277,10 +307,10 @@ const TicketDetail = ({ ticketId, onBack }) => {
                                                         ? "cursor-default opacity-80"
                                                         : "cursor-pointer",
                                                     opt.id == value
-                                                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/40"
+                                                        ? "bg-primary-500 text-white shadow-lg"
                                                         : opt.isParent
-                                                            ? "text-slate-400 dark:text-slate-500 font-bold bg-slate-50/30 dark:bg-white/5 mt-1 pointer-events-none"
-                                                            : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
+                                                            ? "text-text-muted font-bold bg-tertiary mt-1 pointer-events-none"
+                                                            : "text-text-secondary hover:bg-tertiary"
                                                 )}
                                                 style={{
                                                     paddingLeft: opt.depth ? `${(opt.depth * 10) + 12}px` : '12px'
@@ -297,7 +327,7 @@ const TicketDetail = ({ ticketId, onBack }) => {
                                                 )}
                                             </button>
                                         )) : (
-                                            <div className="p-4 text-center text-xs text-slate-400 italic">No se encontraron resultados</div>
+                                            <div className="p-4 text-center text-xs text-text-muted italic">No se encontraron resultados</div>
                                         )}
                                     </div>
                                 </div>
@@ -354,7 +384,7 @@ const TicketDetail = ({ ticketId, onBack }) => {
             alert('Documento subido correctamente');
             fetchTicket();
         } catch (error) {
-            console.error('Error uploading document:', error);
+            // error upload
             alert('Error al subir el documento');
         } finally {
             setSending(false);
@@ -391,39 +421,39 @@ const TicketDetail = ({ ticketId, onBack }) => {
     };
 
     if (loading) return (
-        <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
-            <Loader2 className="animate-spin text-blue-500 w-8 h-8" />
+        <div className="flex h-screen items-center justify-center bg-primary">
+            <Loader2 className="animate-spin text-primary-500 w-8 h-8" />
         </div>
     );
 
     if (!ticket) return (
-        <div className="flex h-screen items-center justify-center">
-            <p>Ticket no encontrado</p>
-            <button onClick={onBack} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded">Volver</button>
+        <div className="flex h-screen items-center justify-center bg-primary">
+            <div className="text-center">
+                <AlertCircle className="mx-auto text-text-muted mb-3" size={48} />
+                <p className="text-text-primary font-bold">Ticket no encontrado</p>
+                <button onClick={onBack} className="mt-4 px-6 py-2 bg-primary-500 text-white rounded-xl font-bold">Volver</button>
+            </div>
         </div>
     );
 
     return (
-        <div className="flex flex-col h-[calc(100dvh-130px)] sm:h-[calc(100dvh-150px)] bg-slate-50 dark:bg-slate-950 overflow-hidden rounded-2xl border border-slate-200 dark:border-white/5 shadow-2xl relative">
-            {/* Header */}
-            <div className="z-20 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/5 p-4 flex items-center gap-4 shadow-sm shrink-0">
-                <button onClick={onBack} className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl transition-colors">
-                    <ArrowLeft size={20} className="text-slate-600 dark:text-slate-400" />
+        <div className="flex flex-col h-[calc(100vh-theme(spacing.32))] bg-primary overflow-hidden rounded-[12px] border border-color shadow-sm relative animate-in fade-in duration-500">
+            <div className="z-20 bg-secondary border-b border-color p-5 flex items-center gap-5 shrink-0 shadow-sm">
+                <button onClick={onBack} className="w-10 h-10 flex items-center justify-center hover:bg-tertiary border border-color rounded-xl text-text-muted transition-all">
+                    <ArrowLeft size={20} />
                 </button>
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                        <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">#{ticket.id}</span>
-                        <span className={cn("text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded border",
-                            ticket.type === 2 ? "bg-purple-500/10 text-purple-500 border-purple-500/20" : "bg-orange-500/10 text-orange-500 border-orange-500/20"
+                    <div className="flex items-center gap-3 mb-1">
+                        <span className="text-[10px] font-[700] text-[#0695c4] bg-[#e0f4fc] px-2 py-0.5 rounded-md border border-[#bae6fd] uppercase tracking-wide">#{ticket.id}</span>
+                        <span className={cn("text-[10px] font-[700] uppercase tracking-wide px-2 py-0.5 rounded-md border",
+                            ticket.type === 2 ? "bg-[#f5f3ff] text-[#8b5cf6] border-[#ddd6fe]" : "bg-[#fff7ed] text-[#f97316] border-[#fed7aa]"
                         )}>
                             {ticket.type === 2 ? 'Petición' : 'Incidencia'}
                         </span>
-                        <span className={cn("text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded border",
-                            ticket.status === 5 ? "bg-green-500/10 text-green-600 border-green-500/20" :
-                                ticket.status === 6 ? "bg-slate-500/10 text-slate-500 border-slate-500/20" :
-                                    "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                        <div className={cn("flex items-center gap-2 px-2 py-0.5 rounded-md border text-[10px] font-[700] uppercase tracking-wide",
+                            STATUS_MAP[typeof ticket.status === 'object' ? ticket.status.id : ticket.status]?.bg || "bg-slate-50 border-slate-200 text-slate-500"
                         )}>
-                            Status: {typeof ticket.status === 'object' ? ticket.status.name : (
+                            {typeof ticket.status === 'object' ? ticket.status.name : (
                                 ticket.status == 1 ? 'Nuevo' :
                                     ticket.status == 2 ? 'Asignado' :
                                         ticket.status == 3 ? 'Planificado' :
@@ -431,98 +461,92 @@ const TicketDetail = ({ ticketId, onBack }) => {
                                                 ticket.status == 5 ? 'Solucionado' :
                                                     ticket.status == 6 ? 'Cerrado' : ticket.status
                             )}
-                        </span>
+                        </div>
                     </div>
-                    <h1 className="text-lg font-bold text-slate-900 dark:text-white truncate" title={ticket.name}>{ticket.name}</h1>
+                    <h1 className="text-[17px] font-[700] text-[#1e293b] truncate uppercase tracking-tight" title={ticket.name}>{ticket.name}</h1>
                 </div>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/50">
-                <div className="max-w-[1400px] mx-auto p-4 sm:p-6 flex flex-col gap-6 lg:flex-row lg:gap-8">
+            {/* Content Container */}
+            <div className="flex-1 overflow-y-auto bg-primary">
+                <div className="max-w-[1400px] mx-auto p-4 sm:p-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:h-full">
 
                     {/* Left Column: Description & Timeline */}
                     <div className="order-2 lg:order-1 lg:flex-1 space-y-6">
 
-                        {/* Main Description (Green Bubble with Tail) */}
-                        <div className="flex gap-1 items-start group">
-                            <div className="w-10 h-10 rounded-md bg-rose-400 flex items-center justify-center shrink-0 shadow-sm" title={ticket.requester_name}>
-                                <span className="text-xs font-black text-white">
+                        {/* Main Description (Premium Bubble) */}
+                        <div className="flex gap-4 items-start group">
+                            <div className="w-12 h-12 rounded-[1rem] bg-secondary flex items-center justify-center shrink-0 shadow-lg border border-color" title={ticket.requester_name}>
+                                <span className="text-sm font-black text-primary-500">
                                     {getInitials(ticket.requester_name)}
                                 </span>
                             </div>
 
-                            <div className="flex-1 relative ml-2">
-                                {/* Tail */}
-                                <div className="absolute top-3 -left-2 w-0 h-0 border-t-[8px] border-t-transparent border-r-[8px] border-r-emerald-100 border-b-[8px] border-b-transparent" />
-
-                                <div className="bg-emerald-50/80 dark:bg-emerald-500/5 rounded-xl border border-emerald-200 dark:border-emerald-500/20 shadow-sm overflow-hidden">
-                                    <div className="px-3 py-1.5 bg-emerald-100/40 dark:bg-emerald-500/10 border-b border-emerald-200/50 dark:border-emerald-500/10 flex flex-wrap gap-2 items-center">
-                                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white/60 dark:bg-black/20 rounded border border-emerald-200/40 text-[9px] font-bold text-emerald-800 dark:text-emerald-300">
-                                            Creado: <Clock size={10} className="ml-1" /> {formatTimeAgo(ticket.date)} por <User size={10} className="ml-1" /> {ticket.requester_name || 'Solicitante'}
+                            <div className="flex-1 relative">
+                                <div className="bg-secondary rounded-[12px] border border-color shadow-sm overflow-hidden group-hover:border-primary-500 transition-all">
+                                    <div className="px-5 py-2.5 bg-tertiary border-b border-color flex flex-wrap gap-3 items-center">
+                                        <div className="flex items-center gap-2 px-3 py-1 bg-tertiary rounded-lg border border-color text-[10px] font-black text-text-muted uppercase tracking-widest">
+                                            <Clock size={12} className="text-primary-500" /> {formatTimeAgo(ticket.date)}
                                         </div>
-                                        {ticket.date_mod && (
-                                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white/60 dark:bg-black/20 rounded border border-emerald-200/40 text-[9px] font-bold text-emerald-800 dark:text-emerald-300">
-                                                Última actualización: <Clock size={10} className="ml-1" /> {formatTimeAgo(ticket.date_mod)}
-                                            </div>
-                                        )}
+                                        <div className="flex items-center gap-2 px-3 py-1 bg-tertiary rounded-lg border border-color text-[10px] font-black text-text-muted uppercase tracking-widest">
+                                            <User size={12} className="text-primary-500" /> {ticket.requester_name || 'Solicitante'}
+                                        </div>
                                     </div>
-                                    <div className="p-4">
-                                        <h3 className="text-base font-bold text-emerald-900 dark:text-emerald-100 mb-2 leading-tight">{ticket.name}</h3>
+                                    <div className="p-6">
+                                        <h3 className="text-lg font-black text-text-primary mb-4 leading-tight uppercase tracking-tighter">{ticket.name}</h3>
                                         <div
-                                            className="prose prose-sm dark:prose-invert max-w-none text-emerald-800/90 dark:text-emerald-200/80 leading-relaxed"
-                                            dangerouslySetInnerHTML={{ __html: ticket.content }}
+                                            className="prose prose-sm dark:prose-invert max-w-none text-text-secondary leading-relaxed font-medium italic opacity-90"
+                                            dangerouslySetInnerHTML={{ __html: sanitizeHTML(ticket.content) }}
                                         />
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Timeline / Activities (Chat Bubble Format with Tail) */}
-                        <div className="space-y-4 pt-2">
+                        {/* Timeline / Activities (Premium Chat Bubble Format) */}
+                        <div className="space-y-8 pt-4">
                             {ticket.timeline?.map((item, index) => {
                                 const userName = item.users_id_name || (typeof item.users_id === 'object' ? (item.users_id.fullName || item.users_id.name) : item.users_id) || 'System';
                                 const isSolution = item.type === 'solution';
 
                                 return (
-                                    <div key={index} className="flex gap-1 items-start group">
+                                    <div key={index} className="flex gap-4 items-start group">
                                         <div className={cn(
-                                            "w-10 h-10 rounded-md flex items-center justify-center shrink-0 shadow-sm border transition-colors",
-                                            isSolution ? "bg-emerald-400 border-emerald-500" : "bg-purple-500 border-purple-600"
+                                            "w-12 h-12 rounded-[1rem] flex items-center justify-center shrink-0 shadow-lg border transition-all duration-500 group-hover:scale-105",
+                                            isSolution
+                                                ? "bg-emerald-500 border-emerald-400"
+                                                : "bg-tertiary border-color shadow-sm"
                                         )}>
-                                            <span className="text-xs font-black text-white">
+                                            <span className={cn("text-xs font-black", isSolution ? "text-white" : "text-text-muted")}>
                                                 {getInitials(userName)}
                                             </span>
                                         </div>
 
-                                        <div className="flex-1 relative ml-2">
-                                            {/* Tail */}
-                                            <div className={cn(
-                                                "absolute top-3 -left-2 w-0 h-0 border-t-[8px] border-t-transparent border-r-[8px] border-b-[8px] border-b-transparent",
-                                                isSolution ? "border-r-emerald-50" : "border-r-slate-100"
-                                            )} />
-
-                                            <div className={cn("rounded-xl border shadow-sm transition-all hover:shadow-md overflow-hidden",
+                                        <div className="flex-1 relative">
+                                            <div className={cn("rounded-[12px] border shadow-sm transition-all group-hover:shadow-md overflow-hidden",
                                                 isSolution
-                                                    ? "bg-emerald-50/80 dark:bg-emerald-500/5 border-emerald-200 dark:border-emerald-500/20"
-                                                    : "bg-slate-100/50 dark:bg-slate-900/50 border-slate-200 dark:border-white/10"
+                                                    ? "bg-secondary border-emerald-500"
+                                                    : "bg-secondary border-color"
                                             )}>
-                                                <div className={cn("px-3 py-1.5 border-b flex flex-wrap gap-2 items-center",
+                                                <div className={cn("px-5 py-2.5 border-b flex flex-wrap gap-3 items-center",
                                                     isSolution
-                                                        ? "bg-emerald-100/40 dark:bg-emerald-500/10 border-emerald-200/50"
-                                                        : "bg-slate-200/30 dark:bg-white/5 border-slate-200/50"
+                                                        ? "bg-emerald-500 text-white border-emerald-500"
+                                                        : "bg-tertiary border-color"
                                                 )}>
-                                                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white/60 dark:bg-black/20 rounded border border-slate-200/40 text-[9px] font-bold text-slate-500 dark:text-slate-400">
-                                                        <Clock size={10} /> {formatTimeAgo(item.date_creation)} por {userName}
+                                                    <div className="flex items-center gap-2 px-3 py-1 bg-secondary rounded-lg border border-color text-[10px] font-black text-text-muted uppercase tracking-widest">
+                                                        <Clock size={12} className={isSolution ? "text-emerald-500" : "text-primary-500"} /> {formatTimeAgo(item.date_creation)}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 px-3 py-1 bg-secondary rounded-lg border border-color text-[10px] font-black text-text-muted uppercase tracking-widest">
+                                                        <User size={12} className={isSolution ? "text-emerald-500" : "text-primary-500"} /> {userName}
                                                     </div>
                                                     {isSolution && (
-                                                        <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded">Solución</span>
+                                                        <span className="text-[10px] font-black uppercase tracking-widest text-white bg-emerald-500 px-2.5 py-1 rounded-lg border border-emerald-400 shadow-lg">Solución Firmada</span>
                                                     )}
                                                 </div>
-                                                <div className="p-4">
+                                                <div className="p-6">
                                                     <div
-                                                        className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed prose prose-sm dark:prose-invert max-w-none"
-                                                        dangerouslySetInnerHTML={{ __html: item.content }}
+                                                        className="text-sm text-text-secondary leading-relaxed prose prose-sm dark:prose-invert max-w-none font-medium italic opacity-90"
+                                                        dangerouslySetInnerHTML={{ __html: sanitizeHTML(item.content) }}
                                                     />
                                                 </div>
                                             </div>
@@ -534,29 +558,31 @@ const TicketDetail = ({ ticketId, onBack }) => {
                     </div>
 
                     {/* Right Column: Information Panel */}
-                    <div className="order-1 lg:order-2 lg:w-[400px] mt-0 space-y-6">
-                        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm p-6 sticky top-6">
-                            <div className="flex items-center gap-2 mb-6 border-b border-slate-100 dark:border-white/5 pb-4">
-                                <AlertCircle size={16} className="text-blue-500" />
-                                <h2 className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">Información de la {ticket.type === 2 ? 'Petición' : 'Incidencia'}</h2>
+                    <div className="order-1 lg:order-2 lg:w-[420px] lg:h-full lg:overflow-y-auto no-scrollbar space-y-6 pb-32">
+                        <div className="bg-secondary p-6 rounded-[12px] border border-color shadow-sm space-y-6 relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-primary-500 blur-3xl rounded-full -mr-16 -mt-16 opacity-10" />
+                            <div className="flex items-center gap-3 mb-2 border-b border-color pb-5 relative z-10">
+                                <div className="p-2 bg-tertiary rounded-lg border border-color">
+                                    <AlertCircle size={18} className="text-primary-500" />
+                                </div>
+                                <h2 className="text-[11px] font-black text-text-muted uppercase tracking-[0.25em] opacity-80">Arquitectura Técnica</h2>
                             </div>
 
-                            <div className="space-y-5">
+                            <div className="space-y-6 relative z-10">
                                 {/* Entidad */}
-                                <div className="flex items-center">
-                                    <span className="w-24 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Entidad</span>
-                                    <div className="flex-1 min-w-0 flex items-center px-3 py-1.5 bg-slate-100 dark:bg-white/5 rounded-lg border border-slate-200/50 dark:border-white/5">
-                                        <Building2 size={12} className="text-slate-400 mr-2" />
-                                        <span className="text-xs text-slate-600 dark:text-slate-300 font-medium truncate">
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 opacity-70">Entidad Organizadora</label>
+                                    <div className="flex items-center px-5 py-4 bg-tertiary rounded-2xl border border-color shadow-inner group-hover:border-primary-500 transition-all">
+                                        <Building2 size={16} className="text-primary-500 mr-4" />
+                                        <span className="text-sm text-text-primary font-black truncate uppercase tracking-tight">
                                             {typeof ticket.entities_id === 'object' ? ticket.entities_id.name : (ticket.entities_id || 'N/A')}
                                         </span>
                                     </div>
                                 </div>
 
-                                {/* Tipo */}
-                                <div className="flex items-center">
-                                    <span className="w-24 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tipo</span>
-                                    <div className="flex-1 min-w-0">
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 opacity-70">Tipo</label>
                                         <InlineSelect
                                             fieldName="type"
                                             value={ticket.type}
@@ -567,55 +593,40 @@ const TicketDetail = ({ ticketId, onBack }) => {
                                             layout="horizontal"
                                         />
                                     </div>
-                                </div>
-
-                                {/* Categoría */}
-                                <div className="flex items-center">
-                                    <span className="w-24 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Categoría <span className="text-red-500">*</span></span>
-                                    <div className="flex-1 min-w-0">
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 opacity-70">Estado Actual</label>
                                         <InlineSelect
-                                            fieldName="itilcategories_id"
-                                            value={typeof ticket.itilcategories_id === 'object' ? ticket.itilcategories_id.id : ticket.itilcategories_id}
-                                            options={options.categories}
-                                            onChange={(val) => handleUpdateField('itilcategories_id', val)}
-                                            icon={Layers}
-                                            colorClass="text-purple-500"
-                                            withSearch={true}
-                                            fallbackName={ticket.category_name || (typeof ticket.itilcategories_id === 'object' ? (ticket.itilcategories_id.completename || ticket.itilcategories_id.name) : null) || 'Seleccionar...'}
+                                            fieldName="status"
+                                            value={typeof ticket.status === 'object' ? ticket.status.id : ticket.status}
+                                            options={[{ id: 1, name: 'Nuevo' }, { id: 2, name: 'Asignado' }, { id: 3, name: 'Planificado' }, { id: 4, name: 'En espera' }, { id: 5, name: 'Solucionado' }, { id: 6, name: 'Cerrado' }]}
+                                            onChange={(val) => handleUpdateField('status', val)}
+                                            icon={Tag}
+                                            colorClass="text-emerald-500"
                                             layout="horizontal"
+                                            badgeStyle={STATUS_MAP[typeof ticket.status === 'object' ? ticket.status.id : ticket.status]?.bg}
                                         />
                                     </div>
                                 </div>
 
-                                {/* Estado */}
-                                <div className="flex flex-col gap-2">
-                                    <div className="flex items-center">
-                                        <span className="w-24 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Estado</span>
-                                        <div className="flex-1 min-w-0">
-                                            <InlineSelect
-                                                fieldName="status"
-                                                value={typeof ticket.status === 'object' ? ticket.status.id : ticket.status}
-                                                options={[{ id: 1, name: 'Nuevo' }, { id: 2, name: 'Asignado' }, { id: 3, name: 'Planificado' }, { id: 4, name: 'En espera' }, { id: 5, name: 'Solucionado' }, { id: 6, name: 'Cerrado' }]}
-                                                onChange={(val) => handleUpdateField('status', val)}
-                                                icon={Tag}
-                                                colorClass="text-emerald-500"
-                                                layout="horizontal"
-                                                badgeStyle={STATUS_MAP[typeof ticket.status === 'object' ? ticket.status.id : ticket.status]?.bg}
-                                            />
-                                        </div>
-                                    </div>
-                                    {/* Sub-status box from screenshot */}
-                                    <div className="ml-24 flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-100 dark:border-blue-500/20 text-[10px] font-black">
-                                        <CheckCircle2 size={12} />
-                                        <span>EN ESPERA: {ticket.status_desc || 'SISTEMA'}</span>
-                                        <div className="ml-auto w-2 h-2 bg-blue-500 rounded-sm" />
-                                    </div>
+                                {/* Categoría */}
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 opacity-70">Clasificación ITIL</label>
+                                    <InlineSelect
+                                        fieldName="itilcategories_id"
+                                        value={typeof ticket.itilcategories_id === 'object' ? ticket.itilcategories_id.id : ticket.itilcategories_id}
+                                        options={options.categories}
+                                        onChange={(val) => handleUpdateField('itilcategories_id', val)}
+                                        icon={Layers}
+                                        colorClass="text-purple-500"
+                                        withSearch={true}
+                                        fallbackName={ticket.category_name || (typeof ticket.itilcategories_id === 'object' ? (ticket.itilcategories_id.completename || ticket.itilcategories_id.name) : null) || 'Seleccionar...'}
+                                        layout="horizontal"
+                                    />
                                 </div>
 
-                                {/* Prioridad */}
-                                <div className="flex items-center">
-                                    <span className="w-24 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Prioridad <span className="text-red-500">*</span></span>
-                                    <div className="flex-1 min-w-0">
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 opacity-70">Prioridad</label>
                                         <InlineSelect
                                             fieldName="priority"
                                             value={typeof ticket.priority === 'object' ? ticket.priority.id : ticket.priority}
@@ -627,12 +638,8 @@ const TicketDetail = ({ ticketId, onBack }) => {
                                             badgeStyle={PRIORITY_MAP[typeof ticket.priority === 'object' ? ticket.priority.id : ticket.priority]?.bg}
                                         />
                                     </div>
-                                </div>
-
-                                {/* Ubicaciones */}
-                                <div className="flex items-center">
-                                    <span className="w-24 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Ubicación <span className="text-red-500">*</span></span>
-                                    <div className="flex-1 min-w-0">
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 opacity-70">Ubicación</label>
                                         <InlineSelect
                                             fieldName="locations_id"
                                             value={typeof ticket.locations_id === 'object' ? ticket.locations_id.id : ticket.locations_id}
@@ -646,201 +653,200 @@ const TicketDetail = ({ ticketId, onBack }) => {
                                         />
                                     </div>
                                 </div>
-
-                                {/* Asignada a */}
-                                <div className="pt-4 border-t border-slate-100 dark:border-white/5 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">Actores</h3>
-                                        <Users size={14} className="text-slate-400" />
+                            </div>
+                        </div>
+                        {/* Actors Panel */}
+                        <div className="bg-secondary p-6 rounded-[12px] border border-color shadow-sm space-y-6 relative overflow-hidden group">
+                            <div className="absolute bottom-0 left-0 w-32 h-32 bg-primary-500 blur-3xl rounded-full -ml-16 -mb-16 opacity-10" />
+                            <div className="flex items-center justify-between border-b border-color pb-5 relative z-10">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-tertiary rounded-lg border border-color">
+                                        <Users size={18} className="text-indigo-500" />
                                     </div>
+                                    <h3 className="text-[11px] font-black text-text-muted uppercase tracking-[0.25em]">Actores Clave</h3>
+                                </div>
+                            </div>
 
-                                    <div className="space-y-4">
-                                        {/* Solicitante */}
-                                        <div className="relative">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Solicitante</p>
-                                            <button
-                                                disabled={updatingField === 'requester'}
-                                                onClick={() => setOpenDropdown(openDropdown === 'requester' ? null : 'requester')}
-                                                className={cn(
-                                                    "flex items-center gap-3 w-full p-2 rounded-xl border transition-all text-left group",
-                                                    openDropdown === 'requester' ? "border-blue-500 ring-2 ring-blue-500/20 shadow-sm" : "border-slate-200 dark:border-white/5 bg-slate-50/50 dark:bg-white/5",
-                                                    updatingField === 'requester' && "opacity-50"
-                                                )}
-                                            >
-                                                <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
-                                                    <User size={16} className="text-blue-600" />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">
-                                                        {ticket.requester_name || 'Sin solicitante'}
-                                                    </p>
-                                                </div>
-                                                {updatingField === 'requester' ? (
-                                                    <Loader2 size={12} className="animate-spin text-blue-500" />
-                                                ) : (
-                                                    <ChevronDown size={14} className={cn("text-slate-400 group-hover:text-blue-500 transition-transform duration-200", openDropdown === 'requester' && "rotate-180 text-blue-500")} />
-                                                )}
-                                            </button>
-
-                                            {openDropdown === 'requester' && (
-                                                <>
-                                                    <div className="fixed inset-0 z-30" onClick={() => setOpenDropdown(null)} />
-                                                    <div className="absolute left-0 top-full mt-2 w-full min-w-[260px] max-h-[350px] flex flex-col bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden shadow-blue-500/5">
-                                                        <div className="p-3 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/5">
-                                                            <div className="relative">
-                                                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                                                <input
-                                                                    autoFocus
-                                                                    type="text"
-                                                                    placeholder="Buscar usuario..."
-                                                                    className="w-full pl-9 pr-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-bold"
-                                                                    onChange={(e) => {
-                                                                        const term = e.target.value.toLowerCase();
-                                                                        const btns = e.target.closest('.absolute').querySelectorAll('.user-btn');
-                                                                        btns.forEach(btn => {
-                                                                            btn.style.display = btn.innerText.toLowerCase().includes(term) ? 'block' : 'none';
-                                                                        });
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        <div className="overflow-y-auto no-scrollbar p-1.5 custom-scrollbar">
-                                                            {(options.users || []).length > 0 ? (options.users || []).map(u => (
-                                                                <button
-                                                                    key={u.id}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleUpdateActor(u.id, 1);
-                                                                        setOpenDropdown(null);
-                                                                    }}
-                                                                    className={cn(
-                                                                        "user-btn w-full text-left px-3 py-2.5 text-xs rounded-xl transition-all font-bold",
-                                                                        ticket.requester_name === u.fullName
-                                                                            ? "bg-blue-600 text-white shadow-lg shadow-blue-500/40"
-                                                                            : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
-                                                                    )}
-                                                                >
-                                                                    {u.fullName || u.name}
-                                                                </button>
-                                                            )) : (
-                                                                <div className="p-4 text-center text-xs text-slate-400 italic">No hay usuarios disponibles</div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </>
-                                            )}
+                            <div className="space-y-6 relative z-10">
+                                {/* Solicitante */}
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 opacity-70">Lider de Requerimiento</label>
+                                    <button
+                                        disabled={updatingField === 'requester'}
+                                        onClick={() => setOpenDropdown(openDropdown === 'requester' ? null : 'requester')}
+                                        className={cn(
+                                            "flex items-center gap-4 w-full p-4 rounded-2xl border transition-all text-left bg-tertiary group/actor hover:bg-secondary",
+                                            openDropdown === 'requester' ? "border-primary-500 shadow-lg" : "border-color",
+                                            updatingField === 'requester' && "opacity-50"
+                                        )}
+                                    >
+                                        <div className="w-10 h-10 rounded-xl bg-tertiary flex items-center justify-center border border-color group-hover/actor:scale-110 transition-transform duration-500 shadow-inner">
+                                            <User size={18} className="text-primary-500" />
                                         </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[13px] font-black text-text-primary truncate uppercase tracking-tight">
+                                                {ticket.requester_name || 'PENDIENTE DE ASIGNACIÓN'}
+                                            </p>
+                                        </div>
+                                        {updatingField === 'requester' ? (
+                                            <Loader2 size={14} className="animate-spin text-primary-500" />
+                                        ) : (
+                                            <ChevronDown size={16} className={cn("text-text-muted group-hover/actor:text-primary-500 transition-transform duration-300", openDropdown === 'requester' && "rotate-180 text-primary-500")} />
+                                        )}
+                                    </button>
 
-                                        {/* Asignada a */}
-                                        <div className="relative">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Asignada a</p>
-                                            <button
-                                                disabled={updatingField === 'actor'}
-                                                onClick={() => setOpenDropdown(openDropdown === 'actor' ? null : 'actor')}
-                                                className={cn(
-                                                    "flex items-center gap-3 w-full p-2 rounded-xl border transition-all text-left group",
-                                                    openDropdown === 'actor' ? "border-blue-500 ring-2 ring-blue-500/20 shadow-sm" : "border-slate-200 dark:border-white/5",
-                                                    updatingField === 'actor' && "opacity-50"
-                                                )}
-                                            >
-                                                <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                                                    {ticket.groupActors?.some(a => a.type == 2) ? (
-                                                        <Users size={16} className="text-emerald-600" />
-                                                    ) : (
-                                                        <User size={16} className="text-emerald-600" />
+                                    {openDropdown === 'requester' && (
+                                        <>
+                                            <div className="fixed inset-0 z-[100]" onClick={() => setOpenDropdown(null)} />
+                                            <div className="absolute left-0 top-full mt-3 w-full min-w-[300px] max-h-[400px] flex flex-col bg-secondary border border-color rounded-[2rem] shadow-2xl z-[110] animate-in fade-in slide-in-from-top-4 duration-300 overflow-hidden">
+                                                <div className="p-4 border-b border-color bg-tertiary">
+                                                    <div className="relative">
+                                                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                                                        <input
+                                                            autoFocus
+                                                            type="text"
+                                                            placeholder="Filtrar solicitantes..."
+                                                            className="w-full pl-9 pr-3 py-2.5 text-xs bg-secondary border border-color rounded-xl focus:outline-none focus:ring-4 focus:ring-primary-500/10 transition-all font-black uppercase tracking-tight shadow-sm"
+                                                            onChange={(e) => {
+                                                                const term = e.target.value.toLowerCase();
+                                                                const btns = e.target.closest('.absolute').querySelectorAll('.user-btn');
+                                                                btns.forEach(btn => {
+                                                                    btn.style.display = btn.innerText.toLowerCase().includes(term) ? 'flex' : 'none';
+                                                                });
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="overflow-y-auto no-scrollbar p-2 custom-scrollbar">
+                                                    {(options.users || []).length > 0 ? (options.users || []).map(u => (
+                                                        <button
+                                                            key={u.id}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleUpdateActor(u.id, 1);
+                                                                setOpenDropdown(null);
+                                                            }}
+                                                            className={cn(
+                                                                "user-btn w-full text-left px-4 py-3 text-[10px] rounded-xl transition-all font-black uppercase tracking-widest flex items-center gap-3",
+                                                                ticket.requester_name === u.fullName
+                                                                    ? "bg-primary-500 text-white shadow-xl shadow-primary-500/30"
+                                                                    : "text-text-secondary hover:bg-tertiary"
+                                                            )}
+                                                        >
+                                                            <div className={cn("w-2 h-2 rounded-full", ticket.requester_name === u.fullName ? "bg-primary-500" : "bg-primary-500/40")} />
+                                                            {u.fullName || u.name}
+                                                        </button>
+                                                    )) : (
+                                                        <div className="p-6 text-center text-xs text-text-muted italic opacity-60">Sin técnicos mapeados</div>
                                                     )}
                                                 </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">
-                                                        {ticket.technician_name || 'Sin asignar'}
-                                                    </p>
-                                                </div>
-                                                {updatingField === 'actor' ? (
-                                                    <Loader2 size={12} className="animate-spin text-blue-500" />
-                                                ) : (
-                                                    <ChevronDown size={14} className={cn("text-slate-400 group-hover:text-emerald-500 transition-transform duration-200", openDropdown === 'actor' && "rotate-180 text-emerald-500")} />
-                                                )}
-                                            </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
 
-                                            {openDropdown === 'actor' && (
-                                                <>
-                                                    <div className="fixed inset-0 z-30" onClick={() => setOpenDropdown(null)} />
-                                                    <div className="absolute left-0 bottom-full mb-2 w-full min-w-[260px] max-h-[350px] flex flex-col bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden shadow-emerald-500/5">
-                                                        <div className="p-3 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/5">
-                                                            <div className="relative">
-                                                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                                                <input
-                                                                    autoFocus
-                                                                    type="text"
-                                                                    placeholder="Buscar técnico..."
-                                                                    className="w-full pl-9 pr-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all font-bold"
-                                                                    onChange={(e) => {
-                                                                        const term = e.target.value.toLowerCase();
-                                                                        const btns = e.target.closest('.absolute').querySelectorAll('.tech-btn');
-                                                                        btns.forEach(btn => {
-                                                                            btn.style.display = btn.innerText.toLowerCase().includes(term) ? 'block' : 'none';
-                                                                        });
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        <div className="overflow-y-auto no-scrollbar p-1.5 custom-scrollbar">
-                                                            {/* Usuarios Técnicos */}
-                                                            {options.technicians.length > 0 && options.technicians.map(tech => (
+                                {/* Asignada a */}
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 opacity-70">Responsable Técnico</label>
+                                    <button
+                                        disabled={updatingField === 'actor'}
+                                        onClick={() => setOpenDropdown(openDropdown === 'actor' ? null : 'actor')}
+                                        className={cn(
+                                            "flex items-center gap-4 w-full p-4 rounded-2xl border transition-all text-left bg-tertiary group/actor hover:bg-secondary",
+                                            openDropdown === 'actor' ? "border-emerald-500 shadow-lg" : "border-color",
+                                            updatingField === 'actor' && "opacity-50"
+                                        )}
+                                    >
+                                        <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center border border-emerald-500 group-hover/actor:scale-110 transition-transform duration-500 shadow-inner">
+                                            {ticket.groupActors?.some(a => a.type == 2) ? (
+                                                <Users size={18} className="text-emerald-500" />
+                                            ) : (
+                                                <User size={18} className="text-emerald-500" />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[13px] font-black text-text-primary truncate uppercase tracking-tight">
+                                                {ticket.technician_name || 'SIN ASIGNACIÓN TÉCNICA'}
+                                            </p>
+                                        </div>
+                                        {updatingField === 'actor' ? (
+                                            <Loader2 size={14} className="animate-spin text-emerald-500" />
+                                        ) : (
+                                            <ChevronDown size={16} className={cn("text-text-muted group-hover/actor:text-emerald-500 transition-transform duration-300", openDropdown === 'actor' && "rotate-180 text-emerald-500")} />
+                                        )}
+                                    </button>
+
+                                    {openDropdown === 'actor' && (
+                                        <>
+                                            <div className="fixed inset-0 z-[100]" onClick={() => setOpenDropdown(null)} />
+                                            <div className="absolute left-0 bottom-full mb-3 w-full min-w-[300px] max-h-[400px] flex flex-col bg-secondary border border-color rounded-[2rem] shadow-2xl z-[110] animate-in fade-in slide-in-from-bottom-4 duration-300 overflow-hidden">
+                                                <div className="p-4 border-b border-color bg-tertiary">
+                                                    <div className="relative">
+                                                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                                                        <input
+                                                            autoFocus
+                                                            type="text"
+                                                            placeholder="Filtrar especialistas..."
+                                                            className="w-full pl-9 pr-3 py-2.5 text-xs bg-secondary border border-color rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all font-black uppercase tracking-tight shadow-sm"
+                                                            onChange={(e) => {
+                                                                const term = e.target.value.toLowerCase();
+                                                                const btns = e.target.closest('.absolute').querySelectorAll('.tech-btn');
+                                                                btns.forEach(btn => {
+                                                                    btn.style.display = btn.innerText.toLowerCase().includes(term) ? 'flex' : 'none';
+                                                                });
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="overflow-y-auto no-scrollbar p-2 custom-scrollbar">
+                                                    {options.technicians.length > 0 && options.technicians.map(tech => (
+                                                        <button
+                                                            key={`user-${tech.id}`}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleUpdateActor(tech.id, 2, false);
+                                                                setOpenDropdown(null);
+                                                            }}
+                                                            className={cn(
+                                                                "tech-btn w-full text-left px-4 py-3 text-[10px] rounded-xl transition-all flex items-center gap-3 font-black uppercase tracking-widest",
+                                                                ticket.actors?.some(a => a.type == 2 && a.users_id && (a.users_id.id == tech.id || a.users_id == tech.id))
+                                                                    ? "bg-emerald-500 text-white shadow-xl shadow-emerald-500/30"
+                                                                    : "text-text-secondary hover:bg-tertiary"
+                                                            )}
+                                                        >
+                                                            <div className={cn("w-2 h-2 rounded-full", ticket.actors?.some(a => a.type == 2 && a.users_id && (a.users_id.id == tech.id || a.users_id == tech.id)) ? "bg-emerald-500" : "bg-emerald-500/40")} />
+                                                            {tech.fullName || tech.name}
+                                                        </button>
+                                                    ))}
+
+                                                    {options.groups && options.groups.length > 0 && (
+                                                        <>
+                                                            <div className="px-4 py-3 text-[9px] font-black text-text-muted uppercase tracking-[0.25em] border-t border-color mt-2 bg-tertiary">Cell Grupos de Trabajo</div>
+                                                            {options.groups.map(group => (
                                                                 <button
-                                                                    key={`user-${tech.id}`}
+                                                                    key={`group-${group.id}`}
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        handleUpdateActor(tech.id, 2, false);
+                                                                        handleUpdateActor(group.id, 2, true);
                                                                         setOpenDropdown(null);
                                                                     }}
                                                                     className={cn(
-                                                                        "tech-btn w-full text-left px-3 py-2.5 text-xs rounded-xl transition-all flex items-center gap-2 font-bold",
-                                                                        ticket.actors?.some(a => a.type == 2 && a.users_id && (a.users_id.id == tech.id || a.users_id == tech.id))
-                                                                            ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/40"
-                                                                            : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
+                                                                        "tech-btn w-full text-left px-4 py-3 text-[10px] rounded-xl transition-all flex items-center gap-3 font-black uppercase tracking-widest",
+                                                                        ticket.actors?.some(a => a.type == 2 && a.groups_id && (a.groups_id.id == group.id || a.groups_id == group.id))
+                                                                            ? "bg-indigo-500 text-white shadow-xl shadow-indigo-500/30"
+                                                                            : "text-text-secondary hover:bg-tertiary"
                                                                     )}
                                                                 >
-                                                                    <User size={12} className="opacity-40" />
-                                                                    {tech.fullName || tech.name}
+                                                                    <div className={cn("w-2 h-2 rounded-full", ticket.actors?.some(a => a.type == 2 && a.groups_id && (a.groups_id.id == group.id || a.groups_id == group.id)) ? "bg-indigo-500" : "bg-indigo-500/40")} />
+                                                                    {group.fullName || group.name}
                                                                 </button>
                                                             ))}
-
-                                                            {/* Grupos */}
-                                                            {options.groups && options.groups.length > 0 && (
-                                                                <>
-                                                                    <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-t border-slate-100 dark:border-white/5 mt-1 bg-slate-50/50 dark:bg-white/5">Grupos</div>
-                                                                    {options.groups.map(group => (
-                                                                        <button
-                                                                            key={`group-${group.id}`}
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleUpdateActor(group.id, 2, true);
-                                                                                setOpenDropdown(null);
-                                                                            }}
-                                                                            className={cn(
-                                                                                "tech-btn w-full text-left px-3 py-2.5 text-xs rounded-xl transition-all flex items-center gap-2 font-bold",
-                                                                                ticket.actors?.some(a => a.type == 2 && a.groups_id && (a.groups_id.id == group.id || a.groups_id == group.id))
-                                                                                    ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/40"
-                                                                                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
-                                                                            )}
-                                                                        >
-                                                                            <Users size={12} className="opacity-40" />
-                                                                            {group.fullName || group.name}
-                                                                        </button>
-                                                                    ))}
-                                                                </>
-                                                            )}
-
-                                                            {options.technicians.length === 0 && (!options.groups || options.groups.length === 0) && (
-                                                                <div className="p-4 text-center text-xs text-slate-400 italic">No hay resultados</div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -848,26 +854,36 @@ const TicketDetail = ({ ticketId, onBack }) => {
                 </div>
             </div>
 
-            {/* Input Bar */}
-            <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/5 z-20 shrink-0">
-                <form onSubmit={handleAddFollowup} className="flex gap-2 max-w-4xl mx-auto items-center">
-                    <input
-                        type="text"
-                        value={newFollowup}
-                        onChange={(e) => setNewFollowup(e.target.value)}
-                        placeholder="Escribe una respuesta o seguimiento..."
-                        className="flex-1 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all text-sm"
-                    />
+            {/* Premium Enterprise Input Bar */}
+            <div className="fixed bottom-0 left-0 right-0 p-8 bg-secondary border-t border-color z-[60] shadow-[0_-20px_50px_rgba(0,0,0,0.15)] flex justify-center animate-in slide-in-from-bottom-full duration-700">
+                <form onSubmit={handleAddFollowup} className="flex gap-4 max-w-5xl w-full items-center">
+                    <div className="flex-1 relative group/input">
+                        <textarea
+                            rows="1"
+                            value={newFollowup}
+                            onChange={(e) => setNewFollowup(e.target.value)}
+                            placeholder="Proponer respuesta técnica o actualización de Bitácora..."
+                            className="w-full px-6 py-4 rounded-2xl bg-tertiary border border-color focus:border-primary-500 focus:ring-4 focus:ring-primary-500/5 outline-none transition-all text-sm font-bold text-text-primary shadow-inner placeholder:text-text-muted italic resize-none"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleAddFollowup(e);
+                                }
+                            }}
+                        />
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-4 opacity-40 group-focus-within/input:opacity-100 transition-opacity">
+                            <MessageSquare size={18} className="text-text-muted" />
+                        </div>
+                    </div>
 
-                    <div className="relative flex h-[46px]">
-                        {/* Responder Button Partitioned */}
+                    <div className="relative flex shadow-2xl shadow-primary-500/20 group/btn-main">
                         <button
                             type="submit"
                             disabled={sending || !newFollowup.trim()}
-                            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 font-bold px-3 sm:px-5 rounded-l-xl transition-all active:scale-[0.98] border-r border-amber-600/20 whitespace-nowrap"
+                            className="flex items-center gap-3 bg-primary-500 hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-8 py-4 rounded-l-2xl transition-all active:scale-[0.98] border-r border-primary-600 uppercase tracking-[0.2em] text-[11px]"
                         >
-                            {sending ? <Loader2 size={18} className="animate-spin" /> : <MessageSquare size={18} />}
-                            <span className="hidden sm:inline">Responder</span>
+                            {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                            <span className="hidden sm:inline">Ejecutar</span>
                         </button>
 
                         <button
@@ -877,28 +893,34 @@ const TicketDetail = ({ ticketId, onBack }) => {
                                 e.stopPropagation();
                                 setIsResponderMenuOpen(!isResponderMenuOpen);
                             }}
-                            className="bg-amber-500 hover:bg-amber-600 text-slate-900 px-2 sm:px-3 rounded-r-xl transition-all active:scale-[0.98] flex items-center justify-center"
+                            className="bg-primary-500 hover:bg-primary-600 text-white px-5 rounded-r-2xl transition-all active:scale-[0.98] flex items-center justify-center border-l border-primary-600 group-hover/btn-main:bg-primary-600 shadow-inner"
                         >
-                            <ChevronDown size={18} className={cn("transition-transform duration-200", isResponderMenuOpen && "rotate-180")} />
+                            <ChevronDown size={22} className={cn("transition-transform duration-500 text-white", isResponderMenuOpen && "rotate-180")} />
                         </button>
 
-                        {/* Responder Menu Dropdown */}
+                        {/* Responder Menu Dropdown (Premium) */}
                         {isResponderMenuOpen && (
                             <>
                                 <div className="fixed inset-0 z-30" onClick={() => setIsResponderMenuOpen(false)} />
-                                <div className="absolute right-0 bottom-full mb-3 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl z-40 overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+                                <div className="absolute right-0 bottom-full mb-6 w-80 bg-secondary border border-color rounded-[2.5rem] shadow-2xl z-[70] overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-500">
+                                    <div className="p-4 bg-tertiary border-b border-color">
+                                        <p className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] ml-2">Protocolos de Acción</p>
+                                    </div>
                                     <button
                                         type="button"
                                         onClick={() => {
                                             setIsSoluModalOpen(true);
                                             setIsResponderMenuOpen(false);
                                         }}
-                                        className="w-full flex items-center gap-4 px-5 py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors border-b border-slate-100 dark:border-white/5 group"
+                                        className="w-full flex items-center gap-5 px-6 py-5 text-[11px] font-black text-text-primary hover:bg-tertiary transition-all border-b border-color group/item uppercase tracking-widest"
                                     >
-                                        <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-500/20 text-blue-600 group-hover:scale-110 transition-transform">
-                                            <CheckCircle2 size={18} />
+                                        <div className="p-3 rounded-2xl bg-secondary text-emerald-500 group-hover/item:scale-110 group-hover/item:bg-emerald-500 group-hover/item:text-white transition-all shadow-sm">
+                                            <CheckCircle2 size={20} />
                                         </div>
-                                        <span>Añade una solución</span>
+                                        <div className="text-left">
+                                            <span className="block">Liberar Solución</span>
+                                            <span className="text-[9px] font-bold text-text-muted opacity-60">Finalización formal del ciclo</span>
+                                        </div>
                                     </button>
 
                                     <button
@@ -907,12 +929,15 @@ const TicketDetail = ({ ticketId, onBack }) => {
                                             fileInputRef.current?.click();
                                             setIsResponderMenuOpen(false);
                                         }}
-                                        className="w-full flex items-center gap-4 px-5 py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors border-b border-slate-100 dark:border-white/5 group"
+                                        className="w-full flex items-center gap-5 px-6 py-5 text-[11px] font-black text-text-primary hover:bg-tertiary transition-all border-b border-color group/item uppercase tracking-widest"
                                     >
-                                        <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 group-hover:scale-110 transition-transform">
-                                            <FileUp size={18} />
+                                        <div className="p-3 rounded-2xl bg-secondary text-indigo-500 group-hover/item:scale-110 group-hover/item:bg-indigo-500 group-hover/item:text-white transition-all shadow-sm">
+                                            <FileUp size={20} />
                                         </div>
-                                        <span>Añadir un documento</span>
+                                        <div className="text-left">
+                                            <span className="block">Adjuntar Reporte</span>
+                                            <span className="text-[9px] font-bold text-text-muted opacity-60">Soportes, PDFs o Imágenes</span>
+                                        </div>
                                     </button>
 
                                     <button
@@ -921,52 +946,64 @@ const TicketDetail = ({ ticketId, onBack }) => {
                                             handleRequestApproval();
                                             setIsResponderMenuOpen(false);
                                         }}
-                                        className="w-full flex items-center gap-4 px-5 py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors group"
+                                        className="w-full flex items-center gap-5 px-6 py-5 text-[11px] font-black text-text-primary hover:bg-tertiary transition-all group/item uppercase tracking-widest"
                                     >
-                                        <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-500/20 text-amber-600 group-hover:scale-110 transition-transform">
-                                            <ThumbsUp size={18} />
+                                        <div className="p-3 rounded-2xl bg-secondary text-amber-500 group-hover/item:scale-110 group-hover/item:bg-amber-500 group-hover/item:text-white transition-all shadow-sm">
+                                            <ThumbsUp size={20} />
                                         </div>
-                                        <span>Solicitar aprobación</span>
+                                        <div className="text-left">
+                                            <span className="block">Visto Bueno</span>
+                                            <span className="text-[9px] font-bold text-text-muted opacity-60">Validación por Supervisor</span>
+                                        </div>
                                     </button>
                                 </div>
                             </>
                         )}
                     </div>
                 </form>
-
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                    className="hidden"
-                />
+                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
             </div>
 
-            {/* Solution Modal Portal */}
+            {/* Premium Solution Modal Portal */}
             {isSoluModalOpen && createPortal(
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 border border-slate-200 dark:border-white/10">
-                        <h2 className="text-lg font-black text-slate-900 dark:text-white mb-4">Solucionar Ticket</h2>
-                        <textarea
-                            value={solutionContent}
-                            onChange={(e) => setSolutionContent(e.target.value)}
-                            placeholder="Describe la solución aplicada..."
-                            className="w-full h-32 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 resize-none focus:outline-none focus:ring-2 focus:ring-green-500/50 text-sm mb-4"
-                        />
-                        <div className="flex justify-end gap-3">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-primary animate-in fade-in duration-500">
+                    <div className="bg-secondary w-full max-w-xl rounded-[2.5rem] shadow-[0_30px_100px_rgba(0,0,0,0.5)] p-10 animate-in zoom-in-95 slide-in-from-bottom-10 duration-700 border border-color relative overflow-hidden group/modal">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500 blur-3xl rounded-full -mr-32 -mt-32 opacity-10" />
+
+                        <div className="flex items-center gap-5 mb-8 relative z-10">
+                            <div className="p-4 bg-secondary text-emerald-500 rounded-2xl border border-emerald-500 group-hover/modal:scale-110 transition-transform duration-700">
+                                <CheckCircle2 size={32} />
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-black text-text-primary uppercase tracking-tighter">Formalizar Solución</h2>
+                                <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.25em] opacity-60 mt-1 border-l-2 border-emerald-500 pl-3">Protocolo de Cierre Técnico GLPI</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 relative z-10">
+                            <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 opacity-70">Memoria Técnica del Proceso</label>
+                            <textarea
+                                value={solutionContent}
+                                onChange={(e) => setSolutionContent(e.target.value)}
+                                placeholder="Describe detalladamente los pasos técnicos realizados para solventar el requerimiento..."
+                                className="w-full h-52 px-6 py-5 rounded-[1.5rem] bg-tertiary border border-color resize-none focus:border-emerald-500 outline-none transition-all text-sm font-bold text-text-primary mb-8 shadow-inner placeholder:text-text-muted leading-relaxed italic"
+                            />
+                        </div>
+
+                        <div className="flex justify-end gap-5 relative z-10">
                             <button
                                 onClick={() => setIsSoluModalOpen(false)}
-                                className="px-4 py-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl text-sm font-bold transition-colors"
+                                className="px-8 py-4 text-text-muted hover:text-red-500 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95"
                             >
                                 Cancelar
                             </button>
                             <button
                                 onClick={handleSolve}
                                 disabled={sending || !solutionContent.trim()}
-                                className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-xl text-sm font-bold shadow-lg shadow-green-500/20 transition-all active:scale-95 flex items-center gap-2"
+                                className="bg-emerald-500 hover:bg-emerald-600 text-white px-10 py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-lg transition-all active:scale-95 flex items-center gap-3 group/btn"
                             >
-                                {sending && <Loader2 size={14} className="animate-spin" />}
-                                Confirmar Solución
+                                {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} className="group-hover/btn:translate-x-1 transition-transform" />}
+                                Consolidar Solución
                             </button>
                         </div>
                     </div>

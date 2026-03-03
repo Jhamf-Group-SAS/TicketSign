@@ -1,10 +1,45 @@
 import { useState, useEffect } from 'react';
+import {
+    Package,
+    ClipboardList,
+    User,
+    Building2,
+    Monitor,
+    Laptop,
+    ShieldCheck,
+    Settings2,
+    FileCheck,
+    CheckCircle2,
+    AlertCircle,
+    Save,
+    Printer,
+    Wifi,
+    Zap,
+    Layers,
+    Cpu,
+    Database,
+    Mouse,
+    Globe,
+    Keyboard,
+    Power,
+    Calendar,
+    Wrench,
+    Hammer,
+    Wind,
+    Thermometer,
+    Fan,
+    Camera,
+    PenTool,
+    HardDrive
+} from 'lucide-react';
 import SignaturePad from './SignaturePad';
 import PhotoCapture from './PhotoCapture';
-import Toast from './Toast';
+import { toast } from './Toast';
 import { saveDraftAct, markForSync, db } from '../store/db';
-import { Package, ClipboardList, Plus, History, User, Building2, Monitor, Keyboard, Mouse, Laptop, ShieldCheck, Settings2, Globe, FileCheck, CheckCircle2, AlertCircle, ChevronLeft, Save, X, Trash2, HardDrive, Printer, Wifi, Zap, Layers, Power, Cpu, Database } from 'lucide-react'
+import SyncService from '../services/SyncService';
 import CustomSelect from './CustomSelect';
+import CustomDatePicker from './CustomDatePicker';
+import { cn } from '../utils/cn';
 
 const RAM_OPTIONS = ['4 GB', '8 GB', '12 GB', '16 GB', '32 GB', '64 GB', 'OTRO'];
 const DISK_OPTIONS = ['120 GB', '240 GB', '480 GB', '512 GB', '1 TB', '2 TB', 'OTRO'];
@@ -12,62 +47,62 @@ const DISK_TYPE_OPTIONS = ['SSD', 'HDD', 'NVMe'];
 const PROCESSOR_OPTIONS = ['Core i3', 'Core i5', 'Core i7', 'Core i9', 'Ryzen 3', 'Ryzen 5', 'Ryzen 7', 'Ryzen 9', 'Celeron', 'Pentium', 'Xeon'];
 
 const DEVICE_TYPES = [
-    { id: 'COMPUTADOR', label: 'Computador/Laptop', icon: Laptop },
+    { id: 'COMPUTADOR', label: 'Laptop', icon: Laptop },
     { id: 'IMPRESORA', label: 'Impresora', icon: Printer },
-    { id: 'REDES', label: 'Equipos de Red', icon: Wifi },
+    { id: 'REDES', label: 'Redes', icon: Wifi },
     { id: 'PERIFERICO', label: 'Periférico', icon: Mouse },
-    { id: 'OTRO', label: 'Otro Dispositivo', icon: Settings2 }
+    { id: 'OTRO', label: 'Otro', icon: Settings2 }
 ];
 
 const PREVENTIVE_CHECKLIST = [
-    { id: 'limpieza_interna', label: 'Limpieza Interna', icon: Monitor },
-    { id: 'soplado', label: 'Soplado de Polvo', icon: FileCheck },
-    { id: 'cambio_pasta', label: 'Cambio de Pasta Térmica', icon: Settings2 },
-    { id: 'limpieza_externa', label: 'Limpieza Externa (Gabinete/Pantalla)', icon: Monitor },
-    { id: 'ajuste_tornilleria', label: 'Ajuste de Tornillería', icon: Settings2 },
-    { id: 'verificacion_ventiladores', label: 'Verificación de Ventiladores', icon: Settings2 },
-    { id: 'organizacion_cables', label: 'Organización de Cables', icon: Globe },
-    { id: 'revision_voltajes', label: 'Revisión de Voltajes Fuente', icon: ShieldCheck }
+    { id: 'limpieza_interna', label: 'Limpieza Interna', icon: Wrench },
+    { id: 'soplado', label: 'Soplado de Polvo', icon: Wind },
+    { id: 'cambio_pasta', label: 'Cambio de Pasta Térmica', icon: Thermometer },
+    { id: 'limpieza_externa', label: 'Limpieza Externa', icon: Wrench },
+    { id: 'ajuste_tornilleria', label: 'Ajuste de Tornillería', icon: Hammer },
+    { id: 'verificacion_ventiladores', label: 'Verificación Ventiladores', icon: Fan },
+    { id: 'organizacion_cables', label: 'Organización Cables', icon: Layers },
+    { id: 'revision_voltajes', label: 'Revisión Voltajes', icon: Zap }
 ];
 
 const DELIVERY_CHECKLIST = [
     { id: 'monitor', label: 'Monitor / Pantalla', icon: Monitor },
     { id: 'teclado', label: 'Teclado', icon: Keyboard },
     { id: 'mouse', label: 'Mouse', icon: Mouse },
-    { id: 'cargador', label: 'Cargador / Cable Poder', icon: Laptop },
+    { id: 'cargador', label: 'Cargador / Cable Poder', icon: Power },
     { id: 'maletin', label: 'Maletín / Funda', icon: Package },
-    { id: 'cable_video', label: 'Cable Video (HDMI/VGA)', icon: Globe },
-    { id: 'so_configurado', label: 'OS Configurado', icon: ShieldCheck },
-    { id: 'perfil_usuario', label: 'Perfil de Usuario', icon: User },
+    { id: 'cable_video', label: 'Cable Video', icon: Monitor },
+    { id: 'so_configurado', label: 'OS Configurado', icon: FileCheck },
+    { id: 'perfil_usuario', label: 'Perfil Usuario', icon: User },
     { id: 'unido_dominio', label: 'Unido al Dominio', icon: Globe },
     { id: 'antivirus_instalado', label: 'Antivirus Instalado', icon: ShieldCheck },
-    { id: 'aplicaciones_base', label: 'Aplicaciones Base', icon: Settings2 }
+    { id: 'aplicaciones_base', label: 'Aplicaciones Base', icon: Layers }
 ];
 
 const PRINTER_CHECKLIST = [
-    { id: 'encendido_funcional', label: 'Encendido y Funcional', icon: Power },
-    { id: 'conectividad_red', label: 'Conectividad de Red', icon: Globe },
-    { id: 'nivel_tinta', label: 'Nivel Inicial de Tóner/Tinta', icon: Zap },
+    { id: 'encendido_funcional', label: 'Encendido Funcional', icon: Power },
+    { id: 'conectividad_red', label: 'Conectividad Red', icon: Globe },
+    { id: 'nivel_tinta', label: 'Nivel Tinta/Tóner', icon: Zap },
     { id: 'accesorios_impresora', label: 'Accesorios Incluidos', icon: Package }
 ];
 
 const NETWORK_CHECKLIST = [
-    { id: 'luces_ok', label: 'Encendido y Luces Indicadoras OK', icon: Zap },
+    { id: 'luces_ok', label: 'Luces Indicadoras OK', icon: Zap },
     { id: 'puertos_funcionales', label: 'Puertos Funcionales', icon: Layers },
-    { id: 'configuracion_inicial', label: 'Configuración Inicial Completada', icon: Settings2 },
+    { id: 'configuracion_inicial', label: 'Configuración Inicial', icon: Settings2 },
     { id: 'documentacion_red', label: 'Documentación Entregada', icon: FileCheck }
 ];
 
 const PERIPHERAL_CHECKLIST = [
-    { id: 'funcionamiento_verificado', label: 'Encendido/Funcionamiento Verificado', icon: Power },
+    { id: 'funcionamiento_verificado', label: 'Funcionamiento OK', icon: Power },
     { id: 'cables_completos', label: 'Cables Completos', icon: Layers },
-    { id: 'sin_defectos_fabrica', label: 'Sin Defectos de Fabrica', icon: ShieldCheck },
+    { id: 'sin_defectos_fabrica', label: 'Sin Defectos', icon: ShieldCheck },
     { id: 'accesorios_periferico', label: 'Accesorios Incluidos', icon: Package }
 ];
 
 const GENERIC_CHECKLIST = [
-    { id: 'encendido_funcional_gen', label: 'Encendido y Funcional', icon: Power },
-    { id: 'accesorios_completos_gen', label: 'Cables/Accesorios Completos', icon: Package },
+    { id: 'encendido_funcional_gen', label: 'Encendido Funcional', icon: Power },
+    { id: 'accesorios_completos_gen', label: 'Cables/Accesorios', icon: Package },
     { id: 'sin_defectos_visibles_gen', label: 'Sin Defectos Visibles', icon: ShieldCheck },
     { id: 'documentacion_gen', label: 'Documentación Entregada', icon: FileCheck }
 ];
@@ -80,106 +115,58 @@ const DELIVERY_CHECKLISTS = {
     'OTRO': GENERIC_CHECKLIST
 };
 
-// Helper function for conditional class names (assuming `cn` is available or defined elsewhere)
-const cn = (...classes) => classes.filter(Boolean).join(' ');
-
 const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
     const [formData, setFormData] = useState(() => {
         let initialChecklist = {};
         if (type === 'PREVENTIVO') {
             PREVENTIVE_CHECKLIST.forEach(item => initialChecklist[item.id] = false);
         } else if (type === 'ENTREGA') {
-            // Inicializar todas las opciones de checklist posibles para entrega
             Object.values(DELIVERY_CHECKLISTS).flat().forEach(item => initialChecklist[item.id] = false);
-        } else { // CORRECTIVO
-            initialChecklist = {
-                diagnostico: '',
-                falla_reportada: '',
-                accion_realizada: '',
-                repuestos_usados: '',
-                estado_final: 'OPERATIVO'
-            };
+        } else {
+            initialChecklist = { diagnostico: '', falla_reportada: '', accion_realizada: '', repuestos_usados: '', estado_final: 'OPERATIVO' };
         }
 
         return {
-            glpi_ticket_id: '',
-            client_name: '',
-            technical_name: '',
-            equipment_serial: '',
-            equipment_hostname: '',
-            equipment_model: '',
-            equipment_ram: '',
-            equipment_ram_other: '',
-            equipment_disk: '',
-            equipment_disk_other: '',
-            equipment_disk_type: 'SSD',
-            equipment_processor: '',
-            equipment_type: 'COMPUTADOR',
-            assigned_user: '',
-            observations: '',
-            recommendations: '',
-            checklist: initialChecklist,
-            signatures: { technical: null, client: null },
-            photos: []
+            glpi_ticket_id: '', client_name: '', technical_name: '', equipment_serial: '', equipment_hostname: '',
+            equipment_model: '', equipment_ram: '', equipment_ram_other: '', equipment_disk: '', equipment_disk_other: '',
+            equipment_disk_type: 'SSD', equipment_processor: '', equipment_type: 'COMPUTADOR', assigned_user: '',
+            observations: '', recommendations: '', checklist: initialChecklist, signatures: { technical: null, client: null }, photos: [],
+            inventory_number: '', scheduled_date: ''
         };
     });
 
-    const [toast, setToast] = useState(null);
+    // const [toast, setToast] = useState(null); // REMOVED
     const [errors, setErrors] = useState([]);
     const [entities, setEntities] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [tickets, setTickets] = useState([]);
-    const [isLoadingData, setIsLoadingData] = useState(false);
     const [isSearchingTicket, setIsSearchingTicket] = useState(false);
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
-            if (!navigator.onLine) return;
-            setIsLoadingData(true);
             try {
-                const token = localStorage.getItem('glpi_pro_token');
-                const headers = { 'Authorization': `Bearer ${token}` };
-                const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+                // 1. Cargar instantáneamente desde caché local (IndexedDB)
+                const cachedEnt = await SyncService.getCachedEntities();
+                const cachedTech = await SyncService.getCachedTechnicians();
+                const cachedTick = await SyncService.getCachedTickets();
 
-                const [entRes, techRes, tickRes] = await Promise.all([
-                    fetch(`${baseUrl}/glpi/entities`, { headers }),
-                    fetch(`${baseUrl}/glpi/technicians`, { headers }),
-                    fetch(`${baseUrl}/glpi/tickets?range=0-300&status=pending`, { headers })
-                ]);
+                if (cachedEnt.length) setEntities(cachedEnt);
+                if (cachedTech.length) setTechnicians(cachedTech);
+                if (cachedTick.length) setTickets(cachedTick);
 
-                if (entRes.ok) {
-                    const entData = await entRes.json();
-                    setEntities(entData.map(e => ({
-                        id: String(e.id),
-                        label: e.name,
-                        entityName: e.name,
-                        originalId: e.id
-                    })));
-                }
-                if (techRes.ok) {
-                    const techData = await techRes.json();
-                    setTechnicians(techData.map(t => ({
-                        id: String(t.id), // Use ID as React key
-                        label: `${t.fullName} (${t.name})`, // Differentiate with username
-                        fullName: t.fullName, // Keep clean name for storage
-                        originalId: t.id
-                    })));
-                }
-                if (tickRes.ok) {
-                    const tickData = await tickRes.json();
-                    setTickets(tickData.map(t => ({
-                        id: String(t.id),
-                        label: `#${t.id} - ${t.title}`,
-                        original: t
-                    })));
+                // 2. Sincronizar en segundo plano si hay red
+                if (navigator.onLine) {
+                    await SyncService.syncGLPICache(); // Actualiza IndexedDB
+                    // 3. Refrescar UI con los datos más recientes
+                    setEntities(await SyncService.getCachedEntities());
+                    setTechnicians(await SyncService.getCachedTechnicians());
+                    setTickets(await SyncService.getCachedTickets());
                 }
             } catch (error) {
-                console.error('Error fetching GLPI data:', error);
-            } finally {
-                setIsLoadingData(false);
+                console.error('[MaintenanceForm] Error fetching GLPI data', error);
             }
         };
-
         fetchData();
     }, []);
 
@@ -187,81 +174,38 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
         const selectedTicket = tickets.find(t => t.id === ticketId);
         if (selectedTicket) {
             const ticket = selectedTicket.original;
-            setFormData(prev => ({
-                ...prev,
-                glpi_ticket_id: String(ticket.id),
-                client_name: ticket.entity_name || prev.client_name,
-                technical_name: ticket.technician_name || prev.technical_name,
-                assigned_user: ticket.requester_name || prev.assigned_user
-            }));
+            setFormData(prev => ({ ...prev, glpi_ticket_id: String(ticket.id), client_name: ticket.entity_name || prev.client_name, technical_name: ticket.technician_name || prev.technical_name, assigned_user: ticket.requester_name || prev.assigned_user }));
         } else {
-            // If not in the current list, try fetching it directly
             setIsSearchingTicket(true);
             try {
                 const token = localStorage.getItem('glpi_pro_token');
-                const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-                const response = await fetch(`${baseUrl}/glpi/tickets/${ticketId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+                const response = await fetch(`${baseUrl}/glpi/tickets/${ticketId}`, { headers: { 'Authorization': `Bearer ${token}` } });
                 if (response.ok) {
                     const ticket = await response.json();
-                    setFormData(prev => ({
-                        ...prev,
-                        glpi_ticket_id: String(ticket.id),
-                        client_name: ticket.entity_name || prev.client_name,
-                        technical_name: ticket.technician_name || prev.technical_name,
-                        assigned_user: ticket.requester_name || prev.assigned_user
-                    }));
-                } else {
-                    setFormData(prev => ({ ...prev, glpi_ticket_id: ticketId }));
-                }
-            } catch (error) {
-                console.error('Error searching ticket:', error);
-                setFormData(prev => ({ ...prev, glpi_ticket_id: ticketId }));
-            } finally {
-                setIsSearchingTicket(false);
-            }
+                    setFormData(prev => ({ ...prev, glpi_ticket_id: String(ticket.id), client_name: ticket.entity_name || prev.client_name, technical_name: ticket.technician_name || prev.technical_name, assigned_user: ticket.requester_name || prev.assigned_user }));
+                } else setFormData(prev => ({ ...prev, glpi_ticket_id: ticketId }));
+            } catch (error) { setFormData(prev => ({ ...prev, glpi_ticket_id: ticketId })); } finally { setIsSearchingTicket(false); }
         }
     };
 
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleChecklistChange = (key, value) => {
-        setFormData(prev => ({
-            ...prev,
-            checklist: { ...prev.checklist, [key]: value }
-        }));
-    };
+    const handleInputChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleChecklistChange = (key, value) => setFormData(prev => ({ ...prev, checklist: { ...prev.checklist, [key]: value } }));
 
     const validateForm = () => {
         const newErrors = [];
-        // General Data
         if (!formData.glpi_ticket_id) newErrors.push('glpi_ticket_id');
         if (!formData.client_name) newErrors.push('client_name');
         if (!formData.technical_name) newErrors.push('technical_name');
-
-        // Equipment Details
         if (!formData.equipment_serial) newErrors.push('equipment_serial');
         if (!formData.equipment_hostname) newErrors.push('equipment_hostname');
         if (!formData.equipment_model) newErrors.push('equipment_model');
         if (!formData.assigned_user) newErrors.push('assigned_user');
-
-        // Checklist / Work Description
         if (type === 'CORRECTIVO') {
-            if (!formData.checklist.diagnostico) newErrors.push('diagnostico');
-            if (!formData.checklist.falla_reportada) newErrors.push('falla_reportada');
-            if (!formData.checklist.accion_realizada) newErrors.push('accion_realizada');
-            if (!formData.checklist.repuestos_usados) newErrors.push('repuestos_usados');
+            ['diagnostico', 'falla_reportada', 'accion_realizada', 'repuestos_usados'].forEach(k => { if (!formData.checklist[k]) newErrors.push(k); });
         }
-
-        // Observations & Recommendations
         if (!formData.observations) newErrors.push('observations');
         if (type !== 'ENTREGA' && !formData.recommendations) newErrors.push('recommendations');
-
-        // Signatures
         if (!formData.signatures.technical) newErrors.push('signature_technical');
         if (!formData.signatures.client) newErrors.push('signature_client');
 
@@ -270,412 +214,369 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
     };
 
     const handleSaveDraft = async () => {
-        if (!validateForm()) {
-            setToast({ message: 'Por favor complete los campos obligatorios', type: 'error' });
-            return;
-        }
-
+        if (!validateForm()) { toast.error('Complete los campos obligatorios'); return; }
         let actId;
         try {
-            // Guardar localmente primero (Always safety first)
             actId = await saveDraftAct({ ...formData, type });
-
             if (navigator.onLine) {
-                setToast({ message: 'Sincronizando con GLPI...', type: 'info' });
-
-                const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/sync/maintenance`, {
+                toast.info('Sincronizando...');
+                const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/sync/maintenance`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}` },
                     body: JSON.stringify({ ...formData, type, createdAt: new Date() })
                 });
-
-                const result = await response.json();
-
                 if (response.ok) {
-                    // Marcar como sincronizado en la base de datos local para el historial
+                    const result = await response.json();
                     await db.acts.update(actId, {
+                        _id: result._id,
                         status: 'SINCRONIZADO',
                         updatedAt: new Date().toISOString()
                     });
-
-                    setToast({ message: '¡Acta sincronizada con éxito en el ticket de GLPI!', type: 'success' });
-                    setTimeout(() => onSave(), 2000);
-                } else {
-                    throw new Error(result.message || 'Error en la sincronización');
-                }
+                    toast.success('¡Sincronizado con éxito!');
+                    setTimeout(() => onSave(), 1500);
+                } else throw new Error('Error en sincronización');
             } else {
                 await markForSync(actId);
-                setToast({ message: 'Acta guardada localmente. Sincronización Pendiente.', type: 'warning' });
-                setTimeout(() => onSave(), 2000);
+                toast.warning('Guardado localmente (Offline)');
+                setTimeout(() => onSave(), 1500);
             }
         } catch (error) {
-            console.error('Error al sincronizar:', error);
             if (actId) await markForSync(actId);
-            setToast({ message: `Guardada localmente (Pendiente de Sync). Error: ${error.message}`, type: 'warning' });
-            setTimeout(() => onSave(), 3000);
+            toast.warning('Guardado local (Sync pendiente)');
+            setTimeout(() => onSave(), 2000);
         }
     };
 
     return (
-        <div className="space-y-8 pb-32 max-w-2xl mx-auto">
-            {/* Header Formulario */}
-            <div className="flex items-center justify-between sticky top-[73px] z-40 bg-white/80 dark:bg-[#020617]/80 backdrop-blur-md py-4 border-b border-slate-200 dark:border-white/5 mx-[-1rem] px-4 transition-colors">
+        <div className="space-y-6 pb-40 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700">
+            {/* Header Area */}
+            <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
                     <div className={cn(
-                        "p-3 rounded-2xl transition-all",
-                        type === 'PREVENTIVO' ? "bg-blue-500/10 text-blue-500" : type === 'ENTREGA' ? "bg-purple-500/10 text-purple-500" : "bg-orange-500/10 text-orange-500"
+                        "w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg",
+                        type === 'PREVENTIVO' ? "bg-emerald-500 shadow-emerald-500/20" : type === 'ENTREGA' ? "bg-primary-500 shadow-primary-500/20" : "bg-orange-500 shadow-orange-500/20"
                     )}>
-                        {type === 'ENTREGA' ? <Package size={24} /> : <ClipboardList size={24} />}
+                        {type === 'PREVENTIVO' ? <Wrench size={24} /> : type === 'ENTREGA' ? <Package size={24} /> : <Hammer size={24} />}
                     </div>
                     <div>
-                        <h2 className="text-lg font-black text-slate-900 dark:text-white leading-tight">
-                            {type === 'PREVENTIVO' ? 'Preventivo' : type === 'ENTREGA' ? 'Entrega de Activo' : 'Correctivo'}
-                        </h2>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Acta de Servicio Técnico</p>
+                        <h1 className="text-[26px] font-[800] text-text-primary leading-tight capitalize">
+                            {type.toLowerCase()}
+                        </h1>
+                        <p className="text-[14px] text-text-muted font-[500]">
+                            Acta de Servicio Técnico
+                        </p>
                     </div>
                 </div>
-                <div className="flex gap-2">
-                    <button onClick={handleSaveDraft} className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-xl shadow-lg flex items-center gap-2 transition-all active:scale-95 shadow-blue-500/20">
-                        <Save size={18} />
-                    </button>
-                </div>
+                <button
+                    onClick={handleSaveDraft}
+                    className="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-tertiary text-text-secondary rounded-[8px] text-[13px] font-[600] border border-color transition-all shadow-sm"
+                >
+                    <Save size={16} /> Guardar borrador
+                </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                {/* Info General */}
-                <section className="relative z-30 space-y-5 bg-white dark:bg-slate-900/40 p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-sm shadow-sm dark:shadow-none">
-                    <h3 className="text-xs font-black uppercase text-blue-500 tracking-[0.2em]">Información General</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="md:col-span-2">
-                            <CustomSelect
-                                label="Ticket GLPI #"
-                                placeholder="Buscar o ingresar número de ticket..."
-                                value={formData.glpi_ticket_id}
-                                onChange={handleTicketSelect}
-                                options={tickets}
-                                withSearch={true}
-                                icon={ClipboardList}
-                                loading={isSearchingTicket}
-                                error={errors.includes('glpi_ticket_id')}
-                            />
-                        </div>
-                        <div>
-                            <CustomSelect
-                                label="EMPRESA"
-                                placeholder="Seleccionar Entidad..."
-                                value={entities.find(e => e.entityName === formData.client_name)?.id || formData.client_name}
-                                onChange={(id) => {
-                                    const entity = entities.find(e => e.id === id);
-                                    setFormData(p => ({ ...p, client_name: entity ? entity.entityName : id }));
-                                }}
-                                options={entities}
-                                withSearch={true}
-                                icon={Building2}
-                                loading={isLoadingData}
-                                error={errors.includes('client_name')}
-                            />
-                        </div>
-                        <div>
-                            <CustomSelect
-                                label="Técnico Responsable"
-                                placeholder="Seleccionar Técnico..."
-                                value={technicians.find(t => t.fullName === formData.technical_name)?.id || formData.technical_name}
-                                onChange={(id) => {
-                                    const tech = technicians.find(t => t.id === id);
-                                    setFormData(p => ({ ...p, technical_name: tech ? tech.fullName : id }));
-                                }}
-                                options={technicians}
-                                withSearch={true}
-                                icon={User}
-                                loading={isLoadingData}
-                                error={errors.includes('technical_name')}
-                            />
-                        </div>
+            {/* General Information Section */}
+            <section className="bg-secondary rounded-[16px] p-8 shadow-sm border border-color">
+                <div className="flex items-center gap-3 mb-8 border-b border-color pb-4">
+                    <ClipboardList size={20} className="text-primary-500" />
+                    <h3 className="text-[13px] font-[800] text-primary-500 uppercase tracking-wider">
+                        Información General
+                    </h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+                    <div className="md:col-span-1">
+                        <CustomSelect label="Ticket GLPI #" placeholder="Buscar o ingresar número de ticket..." value={formData.glpi_ticket_id} onChange={handleTicketSelect} options={tickets} withSearch={true} icon={ClipboardList} loading={isSearchingTicket} error={errors.includes('glpi_ticket_id')} />
                     </div>
-                </section>
-
-                {/* Datos del Equipo */}
-                <section className="relative z-20 space-y-6 bg-white dark:bg-slate-900/40 p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-sm shadow-sm dark:shadow-none">
-                    <div className="flex items-center justify-between">
-                        <h3 className="text-xs font-black uppercase text-purple-500 tracking-[0.2em] flex items-center gap-2">
-                            <HardDrive size={16} /> Datos Técnicos del Activo
-                        </h3>
+                    <div className="md:col-span-1">
+                        <CustomSelect label="Empresa" placeholder="Seleccionar Entidad..." value={entities.find(e => e.entityName === formData.client_name)?.id || formData.client_name} onChange={(id) => setFormData(p => ({ ...p, client_name: entities.find(e => e.id === id)?.entityName || id }))} options={entities} withSearch={true} icon={Building2} error={errors.includes('client_name')} />
                     </div>
-
-                    {type === 'ENTREGA' && (
-                        <div className="space-y-3">
-                            <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.15em] ml-1">Tipo de Dispositivo</label>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-                                {DEVICE_TYPES.map((device) => (
-                                    <button
-                                        key={device.id}
-                                        type="button"
-                                        onClick={() => setFormData(prev => ({ ...prev, equipment_type: device.id }))}
-                                        className={cn(
-                                            "flex flex-col items-center justify-center p-3 rounded-2xl border transition-all gap-2",
-                                            formData.equipment_type === device.id
-                                                ? "bg-purple-500/10 border-purple-500/50 text-purple-600 dark:text-purple-400 shadow-lg shadow-purple-500/10"
-                                                : "bg-slate-50 dark:bg-slate-950/20 border-slate-200 dark:border-white/5 text-slate-400 hover:border-slate-300"
-                                        )}
-                                    >
-                                        <device.icon size={20} />
-                                        <span className="text-[9px] font-black uppercase tracking-tighter">{device.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">Número de Inventario / Etiqueta</label>
-                            <input name="inventory_number" onChange={handleInputChange} className={`w-full bg-slate-50 dark:bg-slate-950/50 border ${errors.includes('inventory_number') ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.1)]' : 'border-slate-200 dark:border-white/5'} rounded-2xl p-4 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500/50 outline-none transition-all placeholder:text-slate-300 dark:placeholder:text-slate-700`} placeholder="Ej: ACT-2024-001" />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">Modelo / Marca</label>
-                            <input name="equipment_model" onChange={handleInputChange} className={`w-full bg-slate-50 dark:bg-slate-950/50 border ${errors.includes('equipment_model') ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.1)]' : 'border-slate-200 dark:border-white/5'} rounded-2xl p-4 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500/50 outline-none transition-all`} />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">Serial / Service Tag</label>
-                            <input name="equipment_serial" onChange={handleInputChange} className={`w-full bg-slate-50 dark:bg-slate-950/50 border ${errors.includes('equipment_serial') ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.1)]' : 'border-slate-200 dark:border-white/5'} rounded-2xl p-4 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500/50 outline-none transition-all placeholder:text-slate-300 dark:placeholder:text-slate-700`} placeholder="S/N del equipo" />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">Hostname</label>
-                            <input name="equipment_hostname" onChange={handleInputChange} className={`w-full bg-slate-50 dark:bg-slate-950/50 border ${errors.includes('equipment_hostname') ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.1)]' : 'border-slate-200 dark:border-white/5'} rounded-2xl p-4 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500/50 outline-none transition-all`} />
-                        </div>
-
-                        {/* Campos de Hardware - Solo visibles para Computadores */}
-                        {formData.equipment_type === 'COMPUTADOR' && (
-                            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-5 p-5 bg-slate-50/50 dark:bg-slate-950/20 rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-inner animate-in fade-in zoom-in-95 duration-300">
-                                <div>
-                                    <CustomSelect
-                                        label="Seleccionar Procesador"
-                                        placeholder="--- Escoger ---"
-                                        value={formData.equipment_processor}
-                                        onChange={(val) => setFormData(p => ({ ...p, equipment_processor: val }))}
-                                        options={PROCESSOR_OPTIONS.map(opt => ({ id: opt, label: opt }))}
-                                        icon={Cpu}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-[0.2em]">Memoria RAM</label>
-                                    <div className="flex gap-2">
-                                        <div className="flex-1">
-                                            <CustomSelect
-                                                placeholder="--- Tamaño ---"
-                                                value={formData.equipment_ram}
-                                                onChange={(val) => setFormData(p => ({ ...p, equipment_ram: val }))}
-                                                options={RAM_OPTIONS.map(opt => ({ id: opt, label: opt }))}
-                                                icon={Layers}
-                                            />
-                                        </div>
-                                        {formData.equipment_ram === 'OTRO' && (
-                                            <div className="relative flex-1 animate-in zoom-in-95 duration-200">
-                                                <input
-                                                    type="number"
-                                                    name="equipment_ram_other"
-                                                    onChange={handleInputChange}
-                                                    value={formData.equipment_ram_other}
-                                                    placeholder="Ej: 48"
-                                                    className="w-full bg-white dark:bg-slate-900 border border-purple-500/30 rounded-2xl p-4 pr-10 text-sm font-bold text-slate-900 dark:text-white focus:ring-4 focus:ring-purple-500/10 outline-none transition-all"
-                                                />
-                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-purple-500 uppercase">GB</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-[0.2em]">Capacidad de Disco</label>
-                                    <div className="flex gap-2">
-                                        <div className="flex-1">
-                                            <CustomSelect
-                                                placeholder="--- Tamaño ---"
-                                                value={formData.equipment_disk}
-                                                onChange={(val) => setFormData(p => ({ ...p, equipment_disk: val }))}
-                                                options={DISK_OPTIONS.map(opt => ({ id: opt, label: opt }))}
-                                                icon={Database}
-                                            />
-                                        </div>
-                                        {formData.equipment_disk === 'OTRO' && (
-                                            <div className="relative flex-1 animate-in zoom-in-95 duration-200">
-                                                <input
-                                                    type="number"
-                                                    name="equipment_disk_other"
-                                                    onChange={handleInputChange}
-                                                    value={formData.equipment_disk_other}
-                                                    placeholder="Ej: 750"
-                                                    className="w-full bg-white dark:bg-slate-900 border border-purple-500/30 rounded-2xl p-4 pr-10 text-sm font-bold text-slate-900 dark:text-white focus:ring-4 focus:ring-purple-500/10 outline-none transition-all"
-                                                />
-                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-purple-500 uppercase">GB</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-[0.2em]">Tipo de Disco</label>
-                                    <div className="flex bg-white dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-200 dark:border-white/10 gap-1 shadow-sm">
-                                        {DISK_TYPE_OPTIONS.map(type => (
-                                            <button
-                                                key={type}
-                                                onClick={() => setFormData(p => ({ ...p, equipment_disk_type: type }))}
-                                                className={`flex-1 py-2 text-[10px] font-black rounded-xl transition-all ${formData.equipment_disk_type === type
-                                                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40 transform active:scale-95'
-                                                    : 'text-slate-400 dark:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/5'
-                                                    }`}
-                                            >
-                                                {type}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="md:col-span-2">
-                            <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">Usuario / Dueño del Equipo</label>
-                            <input name="assigned_user" onChange={handleInputChange} className={`w-full bg-slate-50 dark:bg-slate-950/50 border ${errors.includes('assigned_user') ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.1)]' : 'border-slate-200 dark:border-white/5'} rounded-2xl p-4 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500/50 outline-none transition-all`} placeholder="Nombre de la persona que usa el equipo" />
-                        </div>
+                    <div className="md:col-span-1">
+                        <CustomSelect label="Técnico Responsable" placeholder="Seleccionar Técnico..." value={technicians.find(t => t.fullName === formData.technical_name)?.id || formData.technical_name} onChange={(id) => setFormData(p => ({ ...p, technical_name: technicians.find(t => t.id === id)?.fullName || id }))} options={technicians} withSearch={true} icon={User} error={errors.includes('technical_name')} />
                     </div>
-                </section>
-
-                {/* Checklist */}
-                <section className="relative z-10 space-y-5 bg-white dark:bg-slate-900/40 p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-sm shadow-sm dark:shadow-none">
-                    <div className="flex items-center justify-between px-2">
-                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
-                            Checklist de {type === 'PREVENTIVO' ? 'Mantenimiento' : type === 'ENTREGA' ? 'Entrega' : 'Servicio'}
-                        </h3>
-                        {(type === 'PREVENTIVO' || type === 'ENTREGA') && (
-                            <span className="text-[10px] font-bold bg-blue-500/10 text-blue-500 px-3 py-1 rounded-full">
-                                {Object.values(formData.checklist).filter(v => v).length} / {Object.keys(formData.checklist).length}
+                    <div className="md:col-span-1 relative">
+                        <label className="text-[12px] font-[600] text-text-primary block ml-1 mb-2 uppercase tracking-wide">Fecha de Realización</label>
+                        <button
+                            type="button"
+                            onClick={() => setShowDatePicker(true)}
+                            className={cn(
+                                "w-full flex items-center justify-between h-[44px] px-[16px] bg-primary rounded-[12px] border border-color text-[13px] outline-none transition-all shadow-sm",
+                                showDatePicker ? "border-primary-500 bg-secondary ring-4 ring-primary-500/10" : "hover:border-primary-500/40 hover:bg-tertiary",
+                                errors.includes('scheduled_date') ? "border-red-500" : ""
+                            )}
+                        >
+                            <span className={cn(formData.scheduled_date ? "text-text-primary font-[600]" : "text-text-muted")}>
+                                {formData.scheduled_date ? new Date(formData.scheduled_date).toLocaleString('es-ES', {
+                                    year: 'numeric', month: '2-digit', day: '2-digit',
+                                    hour: '2-digit', minute: '2-digit', hour12: true
+                                }) : "dd/mm/aaaa --:-- -----"}
                             </span>
+                            <Calendar size={16} className="text-text-muted" />
+                        </button>
+
+                        {showDatePicker && (
+                            <CustomDatePicker
+                                value={formData.scheduled_date}
+                                onChange={(val) => setFormData(p => ({ ...p, scheduled_date: val }))}
+                                onClose={() => setShowDatePicker(false)}
+                            />
                         )}
                     </div>
+                </div>
+            </section>
 
-                    {type === 'CORRECTIVO' ? (
-                        <div className="space-y-5">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">Diagnóstico</label>
-                                <textarea name="diagnostico" value={formData.checklist.diagnostico} onChange={(e) => handleChecklistChange('diagnostico', e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-950/50 border ${errors.includes('diagnostico') ? 'border-red-500/50' : 'border-slate-200 dark:border-white/5'} rounded-2xl p-4 text-sm text-slate-900 dark:text-white h-24 outline-none focus:ring-2 focus:ring-orange-500/50 transition-all resize-none`} />
+            {/* Technical Specifications Section */}
+            <section className="bg-secondary rounded-[16px] p-8 shadow-sm border border-color">
+                <div className="flex items-center gap-3 mb-8 border-b border-color pb-4">
+                    <Monitor size={20} className="text-primary-500" />
+                    <h3 className="text-[13px] font-[800] text-primary-500 uppercase tracking-wider">
+                        Datos Técnicos del Activo
+                    </h3>
+                </div>
+
+                {type === 'ENTREGA' && (
+                    <div className="flex gap-3 overflow-x-auto no-scrollbar pb-6 mb-6">
+                        {DEVICE_TYPES.map(d => (
+                            <button
+                                key={d.id}
+                                type="button"
+                                onClick={() => setFormData(p => ({ ...p, equipment_type: d.id }))}
+                                className={cn(
+                                    "flex flex-col items-center p-4 rounded-xl border transition-all gap-2 min-w-[100px] text-center",
+                                    formData.equipment_type === d.id
+                                        ? "bg-tertiary border-primary-500 text-primary-500 shadow-sm"
+                                        : "bg-tertiary border-color text-text-muted hover:border-primary-500"
+                                )}
+                            >
+                                <d.icon size={22} className={cn("transition-all", formData.equipment_type === d.id ? "text-primary-500" : "opacity-40")} />
+                                <span className="text-[10px] font-bold uppercase tracking-wider">{d.label}</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+                    <InputGroup label="Número de Inventario / Etiqueta" name="inventory_number" placeholder="Ej: ACT-2024-001" value={formData.inventory_number} onChange={handleInputChange} error={errors.includes('inventory_number')} />
+                    <InputGroup label="Modelo / Marca" name="equipment_model" placeholder="Ej: Dell OptiPlex 7090" value={formData.equipment_model} onChange={handleInputChange} error={errors.includes('equipment_model')} />
+                    <InputGroup label="Serial / Service Tag" name="equipment_serial" placeholder="Ej: ABC1234XY" value={formData.equipment_serial} onChange={handleInputChange} error={errors.includes('equipment_serial')} />
+                    <InputGroup label="Hostname" name="equipment_hostname" placeholder="Ej: PC-RECEPCION-01" value={formData.equipment_hostname} onChange={handleInputChange} error={errors.includes('equipment_hostname')} />
+
+                    {formData.equipment_type === 'COMPUTADOR' && (
+                        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-y-10 gap-x-12 p-8 bg-primary rounded-2xl border border-color mt-8">
+                            <CustomSelect label="Procesador" placeholder="Seleccionar CPU..." value={formData.equipment_processor} onChange={(v) => setFormData(p => ({ ...p, equipment_processor: v }))} options={PROCESSOR_OPTIONS.map(o => ({ id: o, label: o }))} icon={Cpu} />
+                            <div className="flex gap-4">
+                                <CustomSelect className="flex-1" label="RAM" placeholder="Seleccionar RAM..." value={formData.equipment_ram} onChange={(v) => setFormData(p => ({ ...p, equipment_ram: v }))} options={RAM_OPTIONS.map(o => ({ id: o, label: o }))} icon={Layers} />
+                                {formData.equipment_ram === 'OTRO' && <input name="equipment_ram_other" type="number" onChange={handleInputChange} value={formData.equipment_ram_other} className="w-24 h-[44px] mt-[32px] bg-secondary border border-color/60 rounded-[10px] px-3 text-[13px] outline-none focus:border-primary-500 text-text-primary shadow-sm" placeholder="GB" />}
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">Falla Reportada</label>
-                                <textarea name="falla_reportada" value={formData.checklist.falla_reportada} onChange={(e) => handleChecklistChange('falla_reportada', e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-950/50 border ${errors.includes('falla_reportada') ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.1)]' : 'border-slate-200 dark:border-white/5'} rounded-2xl p-4 text-sm text-slate-900 dark:text-white h-32 outline-none focus:ring-2 focus:ring-orange-500/50 transition-all resize-none`} />
+                            <div className="flex gap-4">
+                                <CustomSelect className="flex-1" label="Disco" placeholder="Capacidad Disco..." value={formData.equipment_disk} onChange={(v) => setFormData(p => ({ ...p, equipment_disk: v }))} options={DISK_OPTIONS.map(o => ({ id: o, label: o }))} icon={Database} />
+                                {formData.equipment_disk === 'OTRO' && <input name="equipment_disk_other" type="number" onChange={handleInputChange} value={formData.equipment_disk_other} className="w-24 h-[44px] mt-[32px] bg-secondary border border-color/60 rounded-[10px] px-3 text-[13px] outline-none focus:border-primary-500 text-text-primary shadow-sm" placeholder="GB" />}
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">Acción Realizada</label>
-                                <textarea name="accion_realizada" value={formData.checklist.accion_realizada} onChange={(e) => handleChecklistChange('accion_realizada', e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-950/50 border ${errors.includes('accion_realizada') ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.1)]' : 'border-slate-200 dark:border-white/5'} rounded-2xl p-4 text-sm text-slate-900 dark:text-white h-32 outline-none focus:ring-2 focus:ring-orange-500/50 transition-all resize-none`} />
+                            <div className="flex flex-col">
+                                <label className="text-[12px] font-[600] text-text-primary mb-2.5 ml-1 uppercase tracking-wide">Tecnología de Disco</label>
+                                <div className="flex bg-tertiary p-1 rounded-lg border border-color gap-1">
+                                    {DISK_TYPE_OPTIONS.map(t => (
+                                        <button
+                                            key={t}
+                                            type="button"
+                                            onClick={() => setFormData(p => ({ ...p, equipment_disk_type: t }))}
+                                            className={cn(
+                                                "flex-1 py-1.5 text-[10px] font-bold uppercase rounded-md transition-all",
+                                                formData.equipment_disk_type === t ? "bg-secondary text-primary-500 shadow-sm border border-color" : "text-text-muted hover:bg-secondary"
+                                            )}
+                                        >
+                                            {t}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">Repuestos Usados</label>
-                                <textarea name="repuestos_usados" value={formData.checklist.repuestos_usados} onChange={(e) => handleChecklistChange('repuestos_usados', e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-950/50 border ${errors.includes('repuestos_usados') ? 'border-red-500/50' : 'border-slate-200 dark:border-white/5'} rounded-2xl p-4 text-sm text-slate-900 dark:text-white h-24 outline-none focus:ring-2 focus:ring-orange-500/50 transition-all resize-none`} />
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {(type === 'PREVENTIVO' ? PREVENTIVE_CHECKLIST :
-                                DELIVERY_CHECKLISTS[formData.equipment_type] || GENERIC_CHECKLIST)
-                                .map((item) => (
-                                    <label
-                                        key={item.id}
-                                        className={cn(
-                                            "flex items-center gap-4 p-4 rounded-2xl border transition-all cursor-pointer group active:scale-[0.98]",
-                                            formData.checklist[item.id]
-                                                ? "bg-blue-500/5 border-blue-500/30 text-blue-600 dark:text-blue-400"
-                                                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-white/5 text-slate-500 hover:border-slate-300 dark:hover:border-white/10"
-                                        )}
-                                    >
-                                        <div className={cn(
-                                            "p-2 rounded-xl transition-all",
-                                            formData.checklist[item.id] ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-slate-100 dark:bg-white/5"
-                                        )}>
-                                            <item.icon size={18} />
-                                        </div>
-                                        <span className="flex-1 text-xs font-bold leading-tight">{item.label}</span>
-                                        <div className={cn(
-                                            "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
-                                            formData.checklist[item.id] ? "bg-blue-500 border-blue-500" : "border-slate-200 dark:border-white/10"
-                                        )}>
-                                            {formData.checklist[item.id] && <CheckCircle2 size={12} className="text-white" />}
-                                        </div>
-                                        <input
-                                            type="checkbox"
-                                            className="hidden"
-                                            checked={formData.checklist[item.id]}
-                                            onChange={(e) => handleChecklistChange(item.id, e.target.checked)}
-                                        />
-                                    </label>
-                                ))}
                         </div>
                     )}
-                </section>
+                    <div className="md:col-span-2">
+                        <InputGroup label="Usuario Final Responsable" name="assigned_user" placeholder="Nombre completo del destinatario" value={formData.assigned_user} onChange={handleInputChange} error={errors.includes('assigned_user')} />
+                    </div>
+                </div>
+            </section>
 
-                {/* Observaciones y Recomendaciones */}
-                <section className="space-y-5 bg-white dark:bg-slate-900/40 p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-sm shadow-sm dark:shadow-none">
-                    <h3 className="text-xs font-black uppercase text-blue-400 tracking-[0.2em]">Observaciones Finales</h3>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">Observaciones Generales</label>
-                            <textarea name="observations" onChange={handleInputChange} className={`w-full bg-slate-50 dark:bg-slate-950/50 border ${errors.includes('observations') ? 'border-red-500/50' : 'border-slate-200 dark:border-white/5'} rounded-2xl p-4 text-sm text-slate-900 dark:text-white h-24 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all resize-none`} />
+            {/* Checklist Section */}
+            {(type === 'PREVENTIVO' || type === 'ENTREGA') && (
+                <section className="bg-secondary rounded-[16px] p-8 shadow-sm border border-color">
+                    <div className="flex items-center justify-between border-b border-color pb-4 mb-8">
+                        <div className="flex items-center gap-3">
+                            <FileCheck size={20} className="text-primary-500" />
+                            <h3 className="text-[13px] font-[800] text-primary-500 uppercase tracking-wider">
+                                Protocolo de Verificación
+                            </h3>
                         </div>
-                        {type !== 'ENTREGA' && (
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">Recomendaciones del Técnico</label>
-                                <textarea name="recommendations" onChange={handleInputChange} className={`w-full bg-slate-50 dark:bg-slate-950/50 border ${errors.includes('recommendations') ? 'border-red-500/50' : 'border-slate-200 dark:border-white/5'} rounded-2xl p-4 text-sm text-slate-900 dark:text-white h-24 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all resize-none`} />
-                            </div>
-                        )}
+                        <span className="text-[11px] font-bold text-text-muted bg-tertiary px-3 py-1 rounded-full uppercase tabular-nums border border-color">
+                            {Object.values(formData.checklist).filter(v => typeof v === 'boolean' && v).length} / {(type === 'PREVENTIVO' ? PREVENTIVE_CHECKLIST : DELIVERY_CHECKLISTS[formData.equipment_type] || GENERIC_CHECKLIST).length} Completados
+                        </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {(type === 'PREVENTIVO' ? PREVENTIVE_CHECKLIST : DELIVERY_CHECKLISTS[formData.equipment_type] || GENERIC_CHECKLIST).map(item => (
+                            <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => handleChecklistChange(item.id, !formData.checklist[item.id])}
+                                className={cn(
+                                    "flex items-center gap-3 p-4 rounded-xl border transition-all text-left",
+                                    formData.checklist[item.id]
+                                        ? "bg-secondary border-emerald-500 shadow-sm shadow-emerald-500/5"
+                                        : "bg-tertiary border-color hover:border-primary-500"
+                                )}
+                            >
+                                <div className={cn(
+                                    "p-1.5 rounded-lg transition-all",
+                                    formData.checklist[item.id] ? "bg-emerald-500 text-white" : "bg-tertiary border border-color text-text-muted"
+                                )}>
+                                    <item.icon size={16} />
+                                </div>
+                                <span className={cn("flex-1 text-[11px] font-bold uppercase transition-colors", formData.checklist[item.id] ? "text-emerald-500" : "text-text-muted")}>
+                                    {item.label}
+                                </span>
+                                {formData.checklist[item.id] && <CheckCircle2 size={16} className="text-emerald-500" />}
+                            </button>
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {/* Corrective Details Section */}
+            {type === 'CORRECTIVO' && (
+                <section className="bg-secondary rounded-[16px] p-8 shadow-sm border border-color">
+                    <div className="flex items-center gap-3 mb-8 border-b border-color pb-4">
+                        <Hammer size={20} className="text-primary-500" />
+                        <h3 className="text-[13px] font-[800] text-primary-500 uppercase tracking-wider">
+                            Detalles de la Intervención
+                        </h3>
+                    </div>
+                    <div className="grid grid-cols-1 gap-6">
+                        <TextAreaGroup label="Diagnóstico Inicial" name="diagnostico" value={formData.checklist.diagnostico} onChange={(v) => handleChecklistChange('diagnostico', v)} error={errors.includes('diagnostico')} placeholder="¿Qué se encontró al recibir el equipo?" />
+                        <TextAreaGroup label="Falla Reportada" name="falla_reportada" value={formData.checklist.falla_reportada} onChange={(v) => handleChecklistChange('falla_reportada', v)} error={errors.includes('falla_reportada')} placeholder="Descripción del síntoma reportado..." />
+                        <TextAreaGroup label="Acción Realizada" name="accion_realizada" value={formData.checklist.accion_realizada} onChange={(v) => handleChecklistChange('accion_realizada', v)} error={errors.includes('accion_realizada')} placeholder="Detalle técnico de la reparación..." />
+                        <TextAreaGroup label="Repuestos Usados" name="repuestos_usados" value={formData.checklist.repuestos_usados} onChange={(v) => handleChecklistChange('repuestos_usados', v)} error={errors.includes('repuestos_usados')} placeholder="Lista de repuestos utilizados (o N/A)..." />
+                    </div>
+                </section>
+            )}
+
+            {/* Observations Section */}
+            <section className="bg-secondary rounded-[16px] p-8 shadow-sm border border-color">
+                <div className="grid grid-cols-1 gap-8">
+                    <TextAreaGroup label="Observaciones Finales" name="observations" value={formData.observations} onChange={(v) => setFormData(p => ({ ...p, observations: v }))} error={errors.includes('observations')} placeholder="Resumen final del estado del activo..." />
+                    {type !== 'ENTREGA' && <TextAreaGroup label="Recomendaciones Técnicas" name="recommendations" value={formData.recommendations} onChange={(v) => setFormData(p => ({ ...p, recommendations: v }))} error={errors.includes('recommendations')} placeholder="¿Qué debe tener en cuenta el cliente?" />}
+                </div>
+            </section>
+
+            {/* Evidence Area */}
+            <section className="bg-secondary rounded-[16px] p-8 shadow-sm border border-color">
+                <div className="flex items-center gap-3 mb-6">
+                    <Camera size={20} className="text-primary-500" />
+                    <h3 className="text-[13px] font-[800] text-primary-500 uppercase tracking-wider">
+                        Evidencia Fotográfica
+                    </h3>
+                </div>
+                <PhotoCapture onPhotosUpdate={(photos) => setFormData(p => ({ ...p, photos }))} />
+            </section>
+
+            {/* Signatures Area */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Cliente */}
+                <section className="bg-secondary rounded-[16px] p-8 shadow-sm border border-color">
+                    <div className="flex items-center gap-3 mb-6">
+                        <PenTool size={20} className="text-primary-500" />
+                        <h3 className="text-[13px] font-[800] text-primary-500 uppercase tracking-wider">
+                            Firma del Cliente
+                        </h3>
+                    </div>
+                    <div className={cn(
+                        "rounded-xl overflow-hidden border-2 border-dashed transition-all",
+                        errors.includes('signature_client') ? "border-red-500 bg-secondary" : "border-primary-500 bg-secondary"
+                    )}>
+                        <SignaturePad onSave={(sig) => setFormData(p => ({ ...p, signatures: { ...p.signatures, client: sig } }))} theme={theme} />
+                    </div>
+                    <div className="mt-4 text-center">
+                        <p className="text-[11px] text-text-muted font-[500]">Se guarda offline y sincroniza con red</p>
                     </div>
                 </section>
 
-                {/* Evidencias */}
-                <section className="bg-white dark:bg-slate-900/40 p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-sm shadow-sm dark:shadow-none">
-                    <PhotoCapture onPhotosUpdate={(photos) => setFormData(prev => ({ ...prev, photos }))} />
-                </section>
-
-                {/* Firmas */}
-                <section className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
-                    <div className={`bg-white dark:bg-slate-900/40 p-6 rounded-3xl border ${errors.includes('signature_technical') ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'border-slate-200 dark:border-white/5'} backdrop-blur-sm transition-all shadow-sm dark:shadow-none`}>
-                        <SignaturePad
-                            label="Firma del Técnico"
-                            onSave={(sig) => setFormData(prev => ({ ...prev, signatures: { ...prev.signatures, technical: sig } }))}
-                            theme={theme}
-                        />
+                {/* Técnico */}
+                <section className="bg-secondary rounded-[16px] p-8 shadow-sm border border-color">
+                    <div className="flex items-center gap-3 mb-6">
+                        <User size={20} className="text-primary-500" />
+                        <h3 className="text-[13px] font-[800] text-primary-500 uppercase tracking-wider">
+                            Firma del Técnico
+                        </h3>
                     </div>
-                    <div className={`bg-white dark:bg-slate-900/40 p-6 rounded-3xl border ${errors.includes('signature_client') ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'border-slate-200 dark:border-white/5'} backdrop-blur-sm transition-all shadow-sm dark:shadow-none`}>
-                        <SignaturePad
-                            label="Firma Conformidad Cliente"
-                            onSave={(sig) => setFormData(prev => ({ ...prev, signatures: { ...prev.signatures, client: sig } }))}
-                            theme={theme}
-                        />
+                    <div className={cn(
+                        "rounded-xl overflow-hidden border-2 border-dashed transition-all",
+                        errors.includes('signature_client') || errors.includes('signature_technical') ? "border-red-500 bg-secondary" : "border-primary-500 bg-secondary"
+                    )}>
+                        <SignaturePad onSave={(sig) => setFormData(p => ({ ...p, signatures: { ...p.signatures, technical: sig } }))} theme={theme} />
+                    </div>
+                    <div className="mt-4 text-center">
+                        <p className="text-[12px] font-bold text-text-primary">{formData.technical_name || 'Nombre del Técnico'}</p>
                     </div>
                 </section>
             </div>
 
-            {/* Floating Action Bar */}
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/60 dark:bg-slate-950/60 backdrop-blur-xl border-t border-slate-200 dark:border-white/5 flex gap-4 z-50 transition-colors">
-                <button onClick={onCancel} className="flex-1 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-2xl border border-slate-200 dark:border-white/5 transition-all">
+            {/* Acciones del Formulario (Integradas) */}
+            <div className="flex gap-[16px] mt-12 mb-20">
+                <button
+                    onClick={onCancel}
+                    className="flex-1 bg-tertiary text-text-secondary border border-color rounded-[14px] h-[52px] font-[600] text-[14px] hover:bg-secondary transition-all"
+                >
                     Cancelar
                 </button>
-                <button onClick={handleSaveDraft} className="flex-[2] bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-2xl shadow-xl shadow-blue-900/20 flex items-center justify-center gap-2 transition-all active:scale-95">
-                    <Save size={18} />
-                    <span>Finalizar Acta</span>
+                <button
+                    onClick={handleSaveDraft}
+                    className="flex-[3] bg-primary-500 text-white flex items-center justify-center gap-3 rounded-[14px] h-[52px] font-[700] text-[16px] shadow-lg hover:bg-primary-600 transition-all"
+                >
+                    <Save size={20} className="text-white" />
+                    Finalizar Acta
                 </button>
             </div>
 
-            {toast && (
-                <Toast
-                    message={toast.message}
-                    type={toast.type}
-                    onClose={() => setToast(null)}
-                />
-            )}
+            {/* toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} /> -- REMOVED */}
         </div>
     );
 };
+
+const InputGroup = ({ label, name, placeholder, onChange, error, type = "text", value }) => (
+    <div className="space-y-1.5 flex-1">
+        <label className="text-[12px] font-[600] text-text-primary block ml-1">{label}</label>
+        <input
+            name={name}
+            type={type}
+            value={value}
+            placeholder={placeholder}
+            onChange={onChange}
+            className={cn(
+                "h-[44px] rounded-[12px] border border-color px-[16px] text-[13px] bg-primary w-full outline-none transition-all text-text-primary shadow-sm",
+                "focus:border-primary-500 focus:bg-secondary",
+                error && "border-red-500 bg-secondary"
+            )}
+        />
+    </div>
+);
+
+const TextAreaGroup = ({ label, name, value, onChange, error, placeholder }) => (
+    <div className="space-y-1.5">
+        <label className="text-[12px] font-semibold text-text-primary block ml-1">{label}</label>
+        <div className="relative">
+            <textarea
+                name={name}
+                value={value}
+                placeholder={placeholder}
+                onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+                className={cn(
+                    "w-full bg-primary border rounded-xl py-4 px-4 text-[13px] font-medium outline-none transition-shadow min-h-[120px] resize-none placeholder:text-text-muted text-text-primary shadow-sm",
+                    error
+                        ? "border-red-500 ring-2 ring-red-500"
+                        : "border-color focus:border-primary-500 focus:ring-2 focus:ring-primary-500 focus:bg-secondary"
+                )}
+            />
+            {error && <AlertCircle size={16} className="absolute right-3 top-3 text-red-500 animate-pulse" />}
+        </div>
+    </div>
+);
 
 export default MaintenanceForm;

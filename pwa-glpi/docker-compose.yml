@@ -24,16 +24,22 @@ services:
       - jhamfstack
     environment:
       - PORT=5000
+      - NODE_ENV=production
       - MONGO_URI=mongodb://mongo:27017/ticketsign
-      - GLPI_API_URL=https://service.jhamf.com/apirest.php
-      - GLPI_APP_TOKEN=RVzlOUp4BmZIzHDQ4IQ6pz8ajxg85lXYbqhM9Ntj
-      - GLPI_USER_TOKEN=vy58wK7lqPjKPh01CtBrjE4xZfeNvXhYV4fKKEUz
-      - WHATSAPP_PHONE_ID=849555261580952
-      - WHATSAPP_WABA_ID=848382954344504
-      - WHATSAPP_TOKEN=EAAVX5xu2Jq4BQnDHUyZAYdJRFlsli5thLu6TxGIYyF2zvNklOLPJSszXlh0rgV8rgCtfMVCNj5fOJ9ZBvMfEba6k6jqfDKnErSMFccJrbfxy1G79wnMOjk3VC7TTgwG8O2dkVFimIvZAfv8ZCc9ErZAeycpeAjXW12KzHGnZB8urmm5SJoXwNm9MQUCq4SQgZDZD
-      - WHATSAPP_TEMPLATE_NAME=notificacion_tarea
-      - WHATSAPP_LANG=es_CO
-      - JWT_SECRET=677993ce631061a6ce22201bc7137bf4
+      - GLPI_API_URL=${GLPI_API_URL}
+      - GLPI_APP_TOKEN=${GLPI_APP_TOKEN}
+      - GLPI_USER_TOKEN=${GLPI_USER_TOKEN}
+      - WHATSAPP_PHONE_ID=${WHATSAPP_PHONE_ID}
+      - WHATSAPP_WABA_ID=${WHATSAPP_WABA_ID}
+      - WHATSAPP_TOKEN=${WHATSAPP_TOKEN}
+      - WHATSAPP_TEMPLATE_NAME=${WHATSAPP_TEMPLATE_NAME:-notificacion_tarea}
+      - WHATSAPP_LANG=${WHATSAPP_LANG:-es_CO}
+      - JWT_SECRET=${JWT_SECRET}
+      # SEGURIDAD [C-01]: OBLIGATORIO - clave AES-256 hex de 64 chars
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      # SEGURIDAD: Cuenta de emergencia (login sin GLPI configurado)
+      - ADMIN_USER=${ADMIN_USER}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     deploy:
       mode: replicated
       replicas: 1

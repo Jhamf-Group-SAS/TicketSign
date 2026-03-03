@@ -7,8 +7,50 @@ import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Almacén temporal para pruebas en local sin DB
-export const memoryTasks = [];
+async function notifyTechnicians(task, isUpdate = false, overrideNewTechs = null) {
+    if (!task.assigned_technicians || task.assigned_technicians.length === 0) return;
+
+    setImmediate(async () => {
+        try {
+            const techsToNotify = overrideNewTechs || task.assigned_technicians;
+            if (techsToNotify.length === 0) return;
+
+            console.log(`[WhatsApp] Procesando notificaciones para ${isUpdate ? 'actualización' : 'nueva'} tarea. Técnicos: ${techsToNotify.length}`);
+            const allTechs = await glpi.getEligibleTechnicians();
+
+            for (const techName of techsToNotify) {
+                const n = (techName || '').toLowerCase().trim();
+                const techData = allTechs.find(t =>
+                    (t.fullName || '').toLowerCase().trim() === n ||
+                    (t.name || '').toLowerCase().trim() === n ||
+                    (t.username || '').toLowerCase().trim() === n
+                );
+
+                if (techData && techData.mobile) {
+                    let phone = techData.mobile.replace(/\D/g, '');
+                    if (phone.length === 10) phone = '57' + phone;
+
+                    const dateObj = new Date(task.scheduled_at);
+                    const formattedDate = isNaN(dateObj.getTime()) ? 'Pendiente' : dateObj.toLocaleString('es-CO');
+
+                    const titlePrefix = isUpdate ? '🔁 ACTUALIZADA: ' : '';
+
+                    await whatsapp.sendTaskNotification(phone, {
+                        techName: techData.fullName || techData.name,
+                        title: titlePrefix + task.title,
+                        description: (task.description || 'Sin descripción adicional').substring(0, 500),
+                        date: formattedDate
+                    });
+                }
+            }
+        } catch (err) {
+            console.error('[WhatsApp] Error en helper notifyTechnicians:', err.message);
+        }
+    });
+}
+
+// [A-05] SEGURIDAD: memoryTasks es privado del módulo — solo para compatibilidad local sin DB
+const memoryTasks = [];
 
 // Middleware de autenticación para todas las rutas de tareas
 router.use(authenticateToken);
@@ -99,8 +141,7 @@ router.get('/', async (req, res) => {
     } catch (error) {
         console.error('[Tasks] Error in GET handler:', error);
         res.status(500).json({
-            message: 'Error interno del servidor al obtener tareas',
-            details: error.message
+            message: 'Error interno al obtener las tareas'
         });
     }
 });
@@ -139,45 +180,8 @@ router.post('/', async (req, res) => {
 
         // NOTIFICACIÓN WHATSAPP
         const shouldSend = req.body.sendWhatsApp !== false && req.body.sendWhatsApp !== 'false';
-        console.log(`[Tasks] Verificando envío de WhatsApp: Technicians: ${newTask.assigned_technicians?.length}, shouldSend: ${shouldSend}`);
-
-        if (shouldSend && newTask.assigned_technicians && newTask.assigned_technicians.length > 0) {
-            setImmediate(async () => {
-                try {
-                    console.log(`[WhatsApp] Obteniendo lista de técnicos desde GLPI...`);
-                    const allTechs = await glpi.getEligibleTechnicians();
-
-                    for (const techName of newTask.assigned_technicians) {
-                        const n = (techName || '').toLowerCase().trim();
-                        const techData = allTechs.find(t =>
-                            (t.fullName || '').toLowerCase().trim() === n ||
-                            (t.name || '').toLowerCase().trim() === n ||
-                            (t.username || '').toLowerCase().trim() === n
-                        );
-
-                        if (techData && techData.mobile) {
-                            let phone = techData.mobile.replace(/\D/g, '');
-                            if (phone.length === 10) phone = '57' + phone;
-
-                            const dateObj = new Date(newTask.scheduled_at);
-                            const formattedDate = isNaN(dateObj.getTime()) ? 'Pendiente' : dateObj.toLocaleString('es-CO');
-
-                            console.log(`[WhatsApp] Intentando enviar mensaje a ${techName} (${phone})`);
-                            const result = await whatsapp.sendTaskNotification(phone, {
-                                techName: techData.fullName || techData.name,
-                                title: newTask.title,
-                                description: (newTask.description || 'Sin descripción adicional').substring(0, 500),
-                                date: formattedDate
-                            });
-                            console.log(`[WhatsApp] Resultado del envío a ${techName}: ${result ? 'EXITOSO' : 'FALLIDO'}`);
-                        } else {
-                            console.warn(`[WhatsApp] Saltando a ${techName}: ${!techData ? 'No coincide en GLPI' : 'No tiene celular'}`);
-                        }
-                    }
-                } catch (err) {
-                    console.error('[WhatsApp] Error crítico en el flujo de notificación:', err.message);
-                }
-            });
+        if (shouldSend) {
+            notifyTechnicians(newTask);
         }
 
         res.status(201).json(newTask);
@@ -223,6 +227,11 @@ router.post('/sync', async (req, res) => {
                     updateData.createdBy = req.user.username;
                     task = new Task(updateData);
                     await task.save();
+
+                    // Notificar si se solicita
+                    if (updateData.sendWhatsApp) {
+                        notifyTechnicians(task);
+                    }
                 }
             } catch (err) {
                 console.warn(`[Sync] Error en DB para ${_id || 'nueva'}. Usando memoria: ${err.message}`);
@@ -327,35 +336,7 @@ router.patch('/:id', async (req, res) => {
         const trulyNewTechs = newTechs.filter(t => !oldTechs.includes(t));
 
         if (trulyNewTechs.length > 0) {
-            setImmediate(async () => {
-                try {
-                    console.log(`[WhatsApp] Notificando a ${trulyNewTechs.length} técnicos nuevos asignados.`);
-                    const technicians = await glpi.getEligibleTechnicians();
-                    for (const techName of trulyNewTechs) {
-                        const techData = technicians.find(t =>
-                            (t.fullName || '').toLowerCase().trim() === (techName || '').toLowerCase().trim() ||
-                            (t.name || '').toLowerCase().trim() === (techName || '').toLowerCase().trim()
-                        );
-                        if (techData && techData.mobile) {
-                            const dateObj = new Date(task ? task.scheduled_at : existingTask.scheduled_at);
-                            const formattedDate = isNaN(dateObj.getTime()) ? 'Pendiente' : dateObj.toLocaleString('es-CO', {
-                                timeZone: 'America/Bogota',
-                                day: '2-digit', month: '2-digit', year: 'numeric',
-                                hour: '2-digit', minute: '2-digit', hour12: true
-                            });
-
-                            await whatsapp.sendTaskNotification(techData.mobile, {
-                                techName: techData.fullName || techData.name,
-                                title: updates.title || (task ? task.title : existingTask.title),
-                                description: updates.description || (task ? task.description : existingTask.description) || 'Sin descripción adicional',
-                                date: formattedDate
-                            });
-                        }
-                    }
-                } catch (notifyErr) {
-                    console.warn('[WhatsApp] Error en notificación de actualización:', notifyErr.message);
-                }
-            });
+            notifyTechnicians(task || existingTask, true, trulyNewTechs);
         }
 
         res.json(task);
@@ -366,8 +347,7 @@ router.patch('/:id', async (req, res) => {
             body: req.body
         });
         res.status(400).json({
-            message: 'Error al actualizar la tarea',
-            details: error.message
+            message: 'Error al actualizar la tarea'
         });
     }
 });

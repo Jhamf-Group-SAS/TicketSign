@@ -24,7 +24,8 @@ router.get('/maintenance', async (req, res) => {
         res.json(acts);
     } catch (error) {
         console.error('Error obteniendo historial:', error);
-        res.status(500).json({ status: 'error', message: error.message });
+        // [M-05] No exponer detalles internos al cliente
+        res.status(500).json({ status: 'error', message: 'Error al obtener el historial de mantenimiento' });
     }
 });
 
@@ -36,7 +37,8 @@ router.post('/maintenance', async (req, res) => {
 
         // 1. Generar PDF
         const pdfBuffer = await generateMaintenancePDF(actData);
-        const hostname = actData.equipment_hostname || 'S-H';
+        // AUDIT-002: Sanitización de hostname para evitar path traversal en nombre de archivo
+        const hostname = (actData.equipment_hostname || 'S-H').replace(/[^a-zA-Z0-9_-]/g, '_');
         const fileName = `Acta_${hostname}_${Date.now()}.pdf`;
         const tempPath = path.join(process.cwd(), 'temp', fileName);
 
@@ -77,14 +79,10 @@ router.post('/maintenance', async (req, res) => {
 
     } catch (error) {
         console.error('Error en sincronización:', error);
-
-        // Extraer mensaje de error más específico si existe
-        const errorMessage = error.response?.data?.message || error.message || 'Error desconocido en la sincronización';
-
+        // [M-05] Mensaje genérico al cliente — detalles solo en logs del servidor
         res.status(500).json({
             status: 'error',
-            message: errorMessage,
-            details: error.response?.data || null
+            message: 'Error al sincronizar el acta con GLPI. Revise los logs del servidor.'
         });
     }
 });

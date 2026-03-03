@@ -1,0 +1,500 @@
+﻿import axios from 'axios';
+import FormData from 'form-data';
+import fs from 'fs';
+
+class GLPIConnector {
+    constructor() {
+        this.sessionToken = null;
+        this.userCache = new Map(); // id -> { fullName, name }
+        this.loginCache = new Map(); // login/name -> { fullName, id }
+    }
+
+    get config() {
+        return {
+            apiUrl: process.env.GLPI_API_URL,      // Debe ser https://service.jhamf.com/apirest.php
+            appToken: process.env.GLPI_APP_TOKEN,
+            userToken: process.env.GLPI_USER_TOKEN
+        };
+    }
+
+    /**
+     * Inicializa la sesiÃ³n en GLPI
+     */
+    async initSession() {
+        const { apiUrl, appToken, userToken } = this.config;
+        console.log(`[GLPI] Iniciando sesiÃ³n en: ${apiUrl}`);
+
+        if (!apiUrl) throw new Error('GLPI_API_URL no configurado');
+
+        try {
+            console.log(`[GLPI] Intentando conectar con App-Token: ${appToken ? 'OK' : 'MISSING'} y User-Token: ${userToken ? 'OK' : 'MISSING'}`);
+
+            const response = await axios.get(`${apiUrl}/initSession`, {
+                params: {
+                    get_full_session: true
+                },
+                headers: {
+                    'App-Token': appToken,
+                    'Authorization': `user_token ${userToken}`
+                }
+            });
+
+            this.sessionToken = response.data.session_token;
+            const currentProfile = response.data.session?.glpiprofiles?.name || 'Desconocido';
+            const activeProfileId = response.data.session.glpiactiveprofile?.id;
+            const activeProfileName = response.data.session.glpiactiveprofile?.name;
+
+            console.log(`[GLPI] SesiÃ³n establecida. ID SesiÃ³n: ${this.sessionToken?.substring(0, 10)}...`);
+            console.log(`[GLPI] Perfil Activo: ${activeProfileName} (ID: ${activeProfileId})`);
+
+            // Auto-switch profile logic
+            let profiles = response.data.session?.glpiprofiles || [];
+
+            // Si profiles no es un array (ej: un objeto si solo hay uno), convertirlo
+            if (!Array.isArray(profiles)) {
+                // Si es un objeto, lo ponemos en un array. Si es null/undefined, array vacÃ­o.
+                profiles = profiles ? [profiles] : [];
+            }
+
+            const currentProfileName = (activeProfileName || '').toLowerCase();
+            const allowedProfiles = ['especialistas', 'super-admin', 'admin'];
+
+            // Verificar si el perfil actual ya es de alto privilegio
+            const isAlreadyAllowed = allowedProfiles.some(p => currentProfileName.includes(p));
+
+            if (isAlreadyAllowed) {
+                console.log(`[GLPI] Perfil actual '${activeProfileName}' tiene privilegios suficientes. No se requiere cambio.`);
+            } else {
+                // Intentar encontrar un perfil de alto privilegio en la lista
+                const targetProfile = profiles.find(p =>
+                    p.name && allowedProfiles.some(hp => p.name.toLowerCase().includes(hp))
+                );
+
+                if (targetProfile && targetProfile.id !== activeProfileId) {
+                    console.log(`[GLPI] Cambiando a perfil con mayores privilegios: ${targetProfile.name} (ID: ${targetProfile.id})`);
+                    await axios.post(`${apiUrl}/changeActiveProfile`, {
+                        profiles_id: targetProfile.id
+                    }, {
+                        headers: {
+                            'App-Token': appToken,
+                            'Session-Token': this.sessionToken
+                        }
+                    });
+                    console.log('[GLPI] Perfil cambiado exitosamente.');
+                } else {
+                    console.log(`[GLPI] No se encontrÃ³ un perfil mejor. Operando con: ${activeProfileName}`);
+                }
+            }
+
+            return this.sessionToken;
+        } catch (error) {
+            console.error('[GLPI] Error FATAL en initSession:', error.response?.data || error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Cambia la entidad activa de la sesiÃ³n
+     */
+    async changeActiveEntity(entityId, recursive = true) {
+        if (!this.sessionToken) await this.initSession();
+        const { apiUrl, appToken } = this.config;
+
+        try {
+            console.log(`[GLPI] Cambiando a entidad ID: ${entityId} (recursive: ${recursive})`);
+            await axios.post(`${apiUrl}/changeActiveEntity`, {
+                entities_id: entityId,
+                is_recursive: recursive ? 1 : 0
+            }, {
+                headers: {
+                    'App-Token': appToken,
+                    'Session-Token': this.sessionToken
+                }
+            });
+            return true;
+        } catch (error) {
+            console.error(`[GLPI] Error al cambiar entidad a ${entityId}:`, error.response?.data || error.message);
+            return false;
+        }
+    }
+
+    /**
+     * Busca un activo (Computadora) por Numero de Inventario o Serial
+     */
+    async findComputer(query) {
+        if (!this.sessionToken) await this.initSession();
+        const { apiUrl, appToken } = this.config;
+
+        try {
+            const response = await axios.get(`${apiUrl}/Computer`, {
+                params: {
+                    searchText: query,
+                    is_deleted: 0
+                },
+                headers: {
+                    'App-Token': appToken,
+                    'Session-Token': this.sessionToken
+                }
+            });
+            return response.data[0] || null;
+        } catch (error) {
+            console.error('[GLPI] Error en findComputer:', error.message);
+            return null;
+        }
+    }
+
+    /**
+     * Sube un documento y lo asocia a un Ã­tem (Ticket o Project)
+     */
+    async uploadDocument(itemId, filePath, fileName, itemtype = 'Ticket') {
+        if (!this.sessionToken) await this.initSession();
+        const { apiUrl, appToken } = this.config;
+
+        try {
+            // 0. Detectar entidad del ticket y cambiar contexto
+            try {
+                const ticketRes = await axios.get(`${apiUrl}/Ticket/${itemId}`, {
+                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                });
+                const entityId = ticketRes.data.entities_id;
+                console.log(`[GLPI] Ticket #${itemId} pertenece a entidad: ${entityId}. Asegurando contexto...`);
+                await this.changeActiveEntity(entityId);
+            } catch (e) {
+                console.warn(`[GLPI] No se pudo verificar entidad del ticket #${itemId}, procediendo con entidad actual.`);
+            }
+
+            console.log(`[GLPI] Subiendo archivo a: ${apiUrl}/Document`);
+            const form = new FormData();
+            form.append('uploadManifest', JSON.stringify({
+                input: {
+                    name: `Consolidado - ${fileName}`,
+                    _filename: [fileName]
+                }
+            }));
+            form.append('filename', fs.createReadStream(filePath));
+
+            // 1. Subir documento
+            const response = await axios.post(`${apiUrl}/Document`, form, {
+                headers: {
+                    ...form.getHeaders(),
+                    'App-Token': appToken,
+                    'Session-Token': this.sessionToken
+                }
+            });
+
+            const docId = response.data.id;
+            console.log(`[GLPI] Documento creado (ID: ${docId}). Vinculando al ${itemtype} #${itemId}...`);
+
+            // 2. Asociar al Ãtem
+            await axios.post(`${apiUrl}/Document_Item`, {
+                input: {
+                    documents_id: docId,
+                    items_id: itemId,
+                    itemtype: itemtype
+                }
+            }, {
+                headers: {
+                    'App-Token': appToken,
+                    'Session-Token': this.sessionToken
+                }
+            });
+
+            return { id: docId, success: true };
+        } catch (error) {
+            console.error(`[GLPI] ERROR DETALLADO en uploadDocument:`, {
+                status: error.response?.status,
+                data: error.response?.data,
+                itemtype,
+                itemId,
+                url: this.config.apiUrl
+            });
+            const errorMessage = JSON.stringify(error.response?.data) || error.message;
+            throw new Error(`GLPI Upload Error: ${errorMessage}`);
+        }
+    }
+
+    /**
+     * Agrega un seguimiento al Ã­tem
+     */
+    async addFollowup(itemId, content, itemtype = 'Ticket') {
+        if (!this.sessionToken) await this.initSession();
+        const { apiUrl, appToken } = this.config;
+
+        // GLPI usa ITILFollowup para Tickets, pero para Projects podrÃ­a variar. 
+        // Si es Project, solemos usar un comentario o el Document_Item es suficiente.
+        // Mantenemos ITILFollowup solo para Tickets por ahora.
+        // Mantenemos ITILFollowup solo para Tickets por ahora.
+        if (itemtype !== 'Ticket') return;
+
+        try {
+            // Asegurar entidad correcta antes de seguimiento
+            try {
+                const ticketRes = await axios.get(`${apiUrl}/Ticket/${itemId}`, {
+                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                });
+                await this.changeActiveEntity(ticketRes.data.entities_id);
+            } catch (e) { }
+
+            await axios.post(`${apiUrl}/ITILFollowup`, {
+                input: {
+                    items_id: itemId,
+                    itemtype: itemtype,
+                    content: content,
+                    is_private: 0
+                }
+            }, {
+                headers: {
+                    'App-Token': appToken,
+                    'Session-Token': this.sessionToken
+                }
+            });
+            console.log(`[GLPI] Seguimiento aÃ±adido al ${itemtype} #${itemId}`);
+        } catch (error) {
+            console.error(`[GLPI] Error en addFollowup para ${itemtype}:`, error.response?.data || error.message);
+        }
+    }
+
+    /**
+     * Obtiene tÃ©cnicos elegibles basados en sus perfiles
+     */
+    async getEligibleTechnicians() {
+        if (!this.sessionToken) await this.initSession();
+        const { apiUrl, appToken } = this.config;
+
+        try {
+            console.log('[GLPI] Buscando tÃ©cnicos mediante Profile_User...');
+            const targetProfiles = ['Super-Admin', 'Especialistas', 'Admin-Mesa', 'Administrativo'];
+
+            // 1. Obtener todas las asociaciones de perfiles
+            // Expandimos dropdowns para tener los nombres de perfiles y usuarios
+            const response = await axios.get(`${apiUrl}/Profile_User`, {
+                params: {
+                    range: '0-1000',
+                    expand_dropdowns: true
+                },
+                headers: {
+                    'App-Token': appToken,
+                    'Session-Token': this.sessionToken
+                }
+            });
+
+            if (!Array.isArray(response.data)) {
+                // Si la respuesta no es un array directo, puede que estÃ© envuelta (v1 de la API antigua)
+                const data = Array.isArray(response.data) ? response.data : (response.data.data || []);
+                if (!Array.isArray(data)) {
+                    console.error('[GLPI] Error: /Profile_User no devolviÃ³ un array');
+                    return [];
+                }
+                response.data = data;
+            }
+
+            const eligibleUsersMap = new Map();
+
+            for (const entry of response.data) {
+                // Con expand_dropdowns=true, profiles_id suele traer el nombre del perfil
+                const profileLabel = (entry.profiles_id || '').toString();
+
+                // Intentar obtener el ID del usuario de forma robusta
+                let userId = entry.users_id_id;
+
+                // Si no hay users_id_id, intentar extraer del link "User"
+                if (!userId && entry.links) {
+                    const userLink = entry.links.find(l => l.rel === 'User');
+                    if (userLink) {
+                        const parts = userLink.href.split('/');
+                        const lastPart = parts[parts.length - 1];
+                        if (!isNaN(lastPart)) userId = parseInt(lastPart);
+                    }
+                }
+
+                // Fallback al "id" si es nÃºmero (en algunas versiones este es el user id si viene filtrado)
+                if (!userId && !isNaN(entry.id)) {
+                    userId = parseInt(entry.id);
+                }
+
+                if (!userId) continue;
+
+                // Validar contra perfiles objetivo (por nombre de perfil)
+                const matches = targetProfiles.some(tp =>
+                    profileLabel.toLowerCase().includes(tp.toLowerCase()) ||
+                    (entry.profiles_id_name && entry.profiles_id_name.toLowerCase().includes(tp.toLowerCase()))
+                );
+
+                if (matches) {
+                    if (!eligibleUsersMap.has(userId)) {
+                        eligibleUsersMap.set(userId, {
+                            id: userId,
+                            name: (entry.users_id || 'Usuario').toString(),
+                            fullName: (entry.users_id || 'Usuario').toString()
+                        });
+                    }
+                }
+            }
+
+            const eligibleUsers = Array.from(eligibleUsersMap.values());
+            console.log(`[GLPI] Identificados ${eligibleUsers.length} tÃ©cnicos por perfil. Obteniendo detalles adicionales (mÃ³vil)...`);
+
+            // Obtener detalles (especialmente el mÃ³vil) para cada tÃ©cnico encontrado
+            // Lo hacemos en batches para no saturar
+            const BATCH_SIZE = 10;
+            for (let i = 0; i < eligibleUsers.length; i += BATCH_SIZE) {
+                const batch = eligibleUsers.slice(i, i + BATCH_SIZE);
+                await Promise.all(batch.map(async (tech) => {
+                    try {
+                        const userRes = await axios.get(`${apiUrl}/User/${tech.id}`, {
+                            headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                        });
+                        const userData = userRes.data;
+
+                        // Construir nombre completo (Nombre Apellido)
+                        const fname = userData.firstname || '';
+                        const lname = userData.realname || '';
+                        tech.fullName = `${fname} ${lname}`.trim() || userData.name;
+                        tech.name = userData.name; // Username
+                        tech.username = userData.name;
+
+                        // GLPI suele guardar el mÃ³vil en mobile, phone, o phone2. Probamos mobile primero.
+                        tech.mobile = userData.mobile || userData.phone || '';
+                    } catch (err) {
+                        console.warn(`[GLPI] No se pudo obtener detalle para tÃ©cnico ${tech.id}`);
+                    }
+                }));
+            }
+
+            console.log(`[GLPI] BÃºsqueda finalizada. ${eligibleUsers.length} tÃ©cnicos listos.`);
+            return eligibleUsers;
+        } catch (error) {
+            console.error('[GLPI] Error en getEligibleTechnicians:', error.response?.data || error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Obtiene tickets (filtro bÃ¡sico)
+     */
+    /**
+     * Obtiene tickets (filtro bÃ¡sico)
+     */
+    async getTickets(criteria = {}) {
+        if (!this.sessionToken) await this.initSession();
+        const { apiUrl, appToken } = this.config;
+
+        try {
+            console.log(`[GLPI] Consultando tickets... Criteria:`, criteria);
+
+            const params = {
+                'range': criteria.range || '0-1000',
+                'sort': 'id',
+                'order': 'DESC',
+                'is_deleted': 0,
+                'status': (criteria.status === 'pending' || !criteria.status) ? undefined : criteria.status,
+                'expand_dropdowns': true
+            };
+
+            if (this.userCache.size < 10) {
+                await this.getUsers();
+            }
+
+            const response = await axios.get(`${apiUrl}/Ticket`, {
+                params,
+                headers: {
+                    'App-Token': appToken,
+                    'Session-Token': this.sessionToken
+                }
+            });
+
+            if (!Array.isArray(response.data)) {
+                console.warn('[GLPI] Respuesta no es un array:', response.data);
+                return [];
+            }
+
+            const getTechName = (val) => {
+                const getNameFromCache = (item) => {
+                    if (!item) return '';
+                    const idOrLogin = (typeof item === 'object') ? (item.id || item.name) : item;
+                    let cached = this.userCache.get(idOrLogin) || this.userCache.get(String(idOrLogin)) || this.userCache.get(Number(idOrLogin));
+                    if (!cached && typeof idOrLogin === 'string') cached = this.loginCache.get(idOrLogin.toLowerCase());
+                    if (cached && cached.fullName) return cached.fullName;
+                    if (typeof item === 'object') return item.fullName || item.completename || item.realname || item.name || '';
+                    return String(item);
+                };
+                if (Array.isArray(val) && val.length > 0) return val.map(getNameFromCache).join(', ');
+                const name = getNameFromCache(val);
+                return (name === '0' || name === 0) ? '' : name;
+            };
+
+            let tickets = response.data.map(t => {
+                const getId = (val) => (val && typeof val === 'object' && val.id) ? val.id : val;
+                const techId = getId(Array.isArray(t.users_id_technician) ? t.users_id_technician[0] : t.users_id_technician);
+                const reqId = getId(Array.isArray(t.users_id_recipient) ? t.users_id_recipient[0] : t.users_id_recipient);
+
+                return {
+                    id: t.id,
+                    title: t.name,
+                    date: t.date,
+                    date_mod: t.date_mod,
+                    status: typeof t.status === 'object' ? t.status.id : t.status,
+                    status_desc: typeof t.status === 'object' ? t.status.name : null,
+                    priority: t.priority,
+                    urgency: t.urgency,
+                    description: t.content
+                        ? t.content.replace(/<[^>]*>?/gm, '').substring(0, 150) + (t.content.length > 150 ? '...' : '')
+                        : 'Sin descripciÃ³n',
+
+                    entity: t.entities_id,
+                    category: t.itilcategories_id,
+                    requester: t.users_id_recipient,
+                    technician: t.users_id_technician,
+
+                    entity_name: typeof t.entities_id === 'string' ? t.entities_id : (t.entities_id?.name || 'N/A'),
+                    category_name: typeof t.itilcategories_id === 'string' ? t.itilcategories_id : (t.itilcategories_id?.name || ''),
+                    requester_name: getTechName(t.users_id_recipient) || 'N/A',
+                    technician_name: getTechName(t.users_id_technician) || '',
+                    technician_id_raw: techId,
+                    requester_id_raw: reqId
+                };
+            });
+
+            tickets.sort((a, b) => b.id - a.id);
+
+            try {
+                const ticketsToEnrich = tickets.slice(0, 50);
+                const BATCH_SIZE = 5;
+
+                for (let i = 0; i < ticketsToEnrich.length; i += BATCH_SIZE) {
+                    const batch = ticketsToEnrich.slice(i, i + BATCH_SIZE);
+
+                    await Promise.all(batch.map(async (t) => {
+                        let actors = [];
+                        let groupActors = [];
+
+                        try {
+                            const aRes = await axios.get(`${apiUrl}/Ticket/${t.id}/Ticket_User`, { headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken } });
+                            actors = Array.isArray(aRes.data) ? aRes.data : (aRes.data ? [aRes.data] : []);
+                        } catch (e) {
+                            try {
+                                const aResAlt = await axios.get(`${apiUrl}/Ticket_User`, {
+                                    params: { searchText: { tickets_id: t.id } },
+                                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                                });
+                                actors = Array.isArray(aResAlt.data) ? aResAlt.data : [];
+                            } catch (e2) { }
+                        }
+                        try {
+                            const gaRes = await axios.get(`${apiUrl}/Ticket/${t.id}/Ticket_Group`, { headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken } });
+                            groupActors = Array.isArray(gaRes.data) ? gaRes.data : (gaRes.data ? [gaRes.data] : []);
+                        } catch (e) {
+                            try {
+                                const gaResAlt = await axios.get(`${apiUrl}/Ticket_Group`, {
+                                    params: { searchText: { tickets_id: t.id } },
+                                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                                });
+                                groupActors = Array.isArray(gaResAlt.data) ? gaResAlt.data : [];
+                            } catch (e2) { }
+                        }
+
+                        const getActorType = (a) => {
+                            const type = a.type || a["4"] || a["8"];
+                            if (!type) return 0;
+                            return typeof type === 'object' ? (type.id || type) : type;
+                        };

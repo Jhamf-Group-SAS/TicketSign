@@ -1,6 +1,7 @@
 import express from 'express';
 import axios from 'axios';
 import jwt from 'jsonwebtoken';
+import configService from '../services/configService.js';
 
 const router = express.Router();
 
@@ -12,8 +13,33 @@ router.post('/login', async (req, res) => {
     }
 
     try {
-        const glpiUrl = process.env.GLPI_API_URL;
-        const appToken = process.env.GLPI_APP_TOKEN;
+        const glpiUrl = await configService.get('glpi_api_url');
+        const appToken = await configService.get('glpi_app_token');
+
+        // ESCENARIO: Acceso de emergencia si GLPI no está configurado
+        if (!glpiUrl || !appToken) {
+            const MASTER_USER = process.env.ADMIN_USER;
+            const MASTER_PASS = process.env.ADMIN_PASSWORD;
+
+            if (MASTER_USER && MASTER_PASS && username === MASTER_USER && password === MASTER_PASS) {
+                console.warn('[AUTH] Usando login maestro de emergencia (definido en ENV)');
+                const token = jwt.sign(
+                    { username, id: 'system-admin', displayName: 'Administrador del Sistema', profile: 'super-admin' },
+                    process.env.JWT_SECRET,
+                    { expiresIn: '1d' } // Sesión más corta para emergencia
+                );
+                return res.status(200).json({
+                    status: 'success',
+                    token,
+                    user: { id: 'system-admin', username, name: 'Administrador del Sistema', profile: 'super-admin' }
+                });
+            } else {
+                return res.status(503).json({
+                    status: 'error',
+                    message: 'El sistema no está configurado y no se definió una cuenta de administración de emergencia.'
+                });
+            }
+        }
 
         console.log(`Intentando autenticar en GLPI: ${glpiUrl}/initSession`);
 
@@ -54,11 +80,11 @@ router.post('/login', async (req, res) => {
                         username,
                         id: userId,
                         displayName: fullName,
-                        profile: activeProfile,
-                        glpi_session: sessionToken
+                        profile: activeProfile
+                        // AUDIT-004: glpi_session eliminado del token por seguridad
                     },
                     process.env.JWT_SECRET,
-                    { expiresIn: '30d' }
+                    { expiresIn: '8h' } // [A-02] SEGURIDAD: 8h máximo para sesiones de trabajo
                 );
 
                 return res.status(200).json({
@@ -72,11 +98,11 @@ router.post('/login', async (req, res) => {
                 const token = jwt.sign(
                     {
                         username,
-                        displayName: fullName,
-                        glpi_session: sessionToken
+                        displayName: fullName
+                        // AUDIT-004: glpi_session eliminado del token por seguridad
                     },
                     process.env.JWT_SECRET,
-                    { expiresIn: '30d' }
+                    { expiresIn: '8h' } // [A-02] SEGURIDAD: 8h máximo para sesiones de trabajo
                 );
 
                 return res.status(200).json({
@@ -88,37 +114,10 @@ router.post('/login', async (req, res) => {
         }
 
     } catch (error) {
-        // Fallback para usuarios de prueba SOLAMENTE si falla GLPI
-        if (username === 'admin' && password === 'admin123') {
-            const token = jwt.sign(
-                { username, displayName: 'Admin Prueba', profile: 'Super-Admin', is_test: true },
-                process.env.JWT_SECRET,
-                { expiresIn: '30d' }
-            );
-            return res.status(200).json({
-                status: 'success',
-                token,
-                user: { username, name: 'Admin Prueba', profile: 'Super-Admin' }
-            });
-        }
-
-        if (username === 'especialista' && password === 'esp123') {
-            const token = jwt.sign(
-                { username, displayName: 'Técnico Especialista', profile: 'Especialistas', is_test: true },
-                process.env.JWT_SECRET,
-                { expiresIn: '30d' }
-            );
-            return res.status(200).json({
-                status: 'success',
-                token,
-                user: { username, name: 'Técnico Especialista', profile: 'Especialistas' }
-            });
-        }
-
-        console.error('Error de Auth GLPI:', error.response?.data || error.message);
+        console.error('Error de Auth GLPI:', error.response?.status || error.message);
         return res.status(401).json({
             status: 'error',
-            message: 'Usuario o contraseña de GLPI incorrectos'
+            message: 'Usuario o contraseña incorrectos'
         });
     }
 });

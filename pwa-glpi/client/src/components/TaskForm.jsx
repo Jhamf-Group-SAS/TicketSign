@@ -1,51 +1,77 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { db } from '../store/db';
 import { SyncService } from '../services/SyncService';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-import { X, Save, User, ClipboardList, ChevronDown, Calendar as CalendarIcon, Hash, MapPin, Bell, Trash2, Search, Check, Lock, Globe } from 'lucide-react';
-import Toast from './Toast';
+import { cn } from '../utils/cn';
+import {
+    X,
+    Save,
+    User,
+    ClipboardList,
+    ChevronDown,
+    Calendar as CalendarIcon,
+    Hash,
+    MapPin,
+    Bell,
+    Trash2,
+    Search,
+    Check,
+    Lock,
+    Globe,
+    Loader2,
+    MessageSquare,
+    Clock
+} from 'lucide-react';
+import { toast } from './Toast';
 import CustomDatePicker from './CustomDatePicker';
 import CustomSelect from './CustomSelect';
+import NotificationService from '../services/NotificationService';
 
-const cn = (...inputs) => twMerge(clsx(inputs));
+const InputGroup = ({ label, name, value, placeholder, onChange, required, icon: Icon, type = "text", disabled }) => (
+    <div className="space-y-1.5 flex-1">
+        <label className="text-[12px] font-[600] text-text-primary block ml-1 uppercase tracking-wide">
+            {label} {required && <span className="text-red-500">*</span>}
+        </label>
+        <div className="relative">
+            {Icon && <Icon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />}
+            <input
+                type={type}
+                name={name}
+                value={value}
+                placeholder={placeholder}
+                onChange={onChange}
+                disabled={disabled}
+                className={cn(
+                    "h-[40px] w-full rounded-[8px] border border-color px-[12px] text-[13px] bg-tertiary outline-none transition-all text-text-primary placeholder:text-text-muted/40",
+                    "focus:border-primary-500 focus:bg-secondary shadow-sm",
+                    Icon && "pl-[36px]",
+                    disabled && "opacity-60 cursor-not-allowed bg-tertiary"
+                )}
+            />
+        </div>
+    </div>
+);
 
-const TaskForm = ({ onCancel, onSave, initialData }) => {
-    const isEditing = !!(initialData && initialData.id);
-    const [user, setUser] = useState(JSON.parse(localStorage.getItem('glpi_pro_user') || '{}'));
+const TaskForm = ({ onCancel, onClose, onSave, onSaved, initialData, task }) => {
+    // Handle prop inconsistencies
+    const finalInitialData = task || initialData;
+    const finalOnCancel = onCancel || onClose;
+    const finalOnSave = onSave || onSaved;
 
-    // Reglas de permisos
+    const isEditing = !!(finalInitialData && (finalInitialData.id || finalInitialData._id));
+    const [user] = useState(JSON.parse(localStorage.getItem('glpi_pro_user') || '{}'));
+
     const isAdmin = (user.profile || '').includes('Super-Admin') || (user.profile || '').includes('Admin-Mesa');
     const isSpecialist = ['Especialistas', 'Administrativo', 'Admin'].some(p => (user.profile || '').includes(p));
-
-    // ¿Puede editar campos? (Admin, o es el Creador)
-    const isCreator = initialData?.createdBy === user.username;
-    // canEditFull: Admin, o (Especialista creando nueva), o Creador
+    const isCreator = finalInitialData?.createdBy === user.username;
     const canEditFull = isAdmin || (!isEditing && isSpecialist) || isCreator;
 
-    // ¿Puede editar el estado? (Admin, Creador, o Asignado)
-    const canEditStatus = isAdmin || isSpecialist || isCreator;
-
-    // ¿Puede eliminar? (Admin o Creador)
-    const canDelete = isAdmin || isCreator;
-
     const [formData, setFormData] = useState({
-        title: '',
-        description: '',
-        type: 'CORRECTIVO',
-        priority: 'MEDIA',
-        status: 'PROGRAMADA',
-        scheduled_at: '',
-        reminder_at: '',
-        reminder_sent: false,
-        recurrence: 'NINGUNA',
-        start_date: '',
-        sendWhatsApp: true,
-        assigned_technicians: [],
-        glpi_ticket_id: '',
-        equipment_service: '',
-        isPrivate: false,
-        ...initialData
+        title: '', description: '', type: 'CORRECTIVO', priority: 'MEDIA',
+        status: 'PROGRAMADA', scheduled_at: '', reminder_at: '', reminder_sent: false,
+        recurrence: 'NINGUNA', start_date: '', end_date: '', sendWhatsApp: true,
+        assigned_technicians: [], glpi_ticket_id: '', equipment_service: '', isPrivate: false,
+        ...finalInitialData
     });
 
     const [techInput, setTechInput] = useState('');
@@ -53,18 +79,32 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
     const [filteredTechs, setFilteredTechs] = useState([]);
     const [isTechListOpen, setIsTechListOpen] = useState(false);
     const [loadingTechs, setLoadingTechs] = useState(false);
-
-    const [toast, setToast] = useState(null);
-    const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-    const [isReminderPickerOpen, setIsReminderPickerOpen] = useState(false);
-    const [openDropdown, setOpenDropdown] = useState(null); // 'type' | 'priority' | 'status' | 'recurrence' | null
+    // const [toast, setToast] = useState(null); // REMOVED
+    const [datePickerType, setDatePickerType] = useState(null); // 'scheduled' or 'reminder'
     const [isDeleting, setIsDeleting] = useState(false);
-
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const datePickerRef = useRef(null);
-    const reminderPickerRef = useRef(null);
-    const dropdownRef = useRef(null);
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        try {
+            await db.tasks.delete(formData.id || formData._id);
+            if (navigator.onLine && (formData.id || formData._id)) {
+                const url = `${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/tasks/${formData._id || formData.id}`;
+                await fetch(url, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}` }
+                });
+            }
+            toast.success('Tarea eliminada');
+            setTimeout(finalOnSave, 1000);
+        } catch (err) {
+            toast.error('Error al eliminar');
+            setIsDeleting(false);
+            setShowDeleteConfirm(false);
+        }
+    };
+
     const techSearchRef = useRef(null);
 
     useEffect(() => {
@@ -74,41 +114,22 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
                 const data = await SyncService.getTechnicians();
                 setTechs(data);
                 setFilteredTechs(data);
-            } catch (err) {
-                console.error('Error loading technicians:', err);
-            } finally {
-                setLoadingTechs(false);
-            }
+            } catch (err) { /* silent */ } finally { setLoadingTechs(false); }
         };
         loadTechs();
     }, []);
 
     useEffect(() => {
-        // Bloquear scroll del body
         document.body.style.overflow = 'hidden';
-
-        const handleClickOutside = (event) => {
-            if (datePickerRef.current && !datePickerRef.current.contains(event.target)) {
-                setIsDatePickerOpen(false);
-            }
-            if (reminderPickerRef.current && !reminderPickerRef.current.contains(event.target)) {
-                setIsReminderPickerOpen(false);
-            }
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setOpenDropdown(null);
-            }
-            if (techSearchRef.current && !techSearchRef.current.contains(event.target)) {
-                setIsTechListOpen(false);
-            }
+        const handleClickOutside = (e) => {
+            if (techSearchRef.current && !techSearchRef.current.contains(e.target)) setIsTechListOpen(false);
         };
         document.addEventListener('mousedown', handleClickOutside);
-
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
             document.body.style.overflow = 'unset';
         };
     }, []);
-
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -119,27 +140,16 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
         const query = e.target.value;
         setTechInput(query);
         setIsTechListOpen(true);
-        if (!query.trim()) {
-            setFilteredTechs(techs);
-        } else {
-            const lower = query.toLowerCase();
-            setFilteredTechs(techs.filter(t =>
-                t.fullName.toLowerCase().includes(lower) ||
-                t.name.toLowerCase().includes(lower)
-            ));
-        }
+        const lower = query.toLowerCase();
+        setFilteredTechs(techs.filter(t => (t.fullName || '').toLowerCase().includes(lower) || (t.name || '').toLowerCase().includes(lower)));
     };
 
     const toggleTechnician = (techName) => {
         setFormData(prev => {
             const isAssigned = prev.assigned_technicians.includes(techName);
-            const newTechs = isAssigned
-                ? prev.assigned_technicians.filter(t => t !== techName)
-                : [...prev.assigned_technicians, techName];
-
+            const newTechs = isAssigned ? prev.assigned_technicians.filter(t => t !== techName) : [...prev.assigned_technicians, techName];
             return {
-                ...prev,
-                assigned_technicians: newTechs,
+                ...prev, assigned_technicians: newTechs,
                 status: newTechs.length === 0 ? 'PROGRAMADA' : (prev.status === 'PROGRAMADA' ? 'ASIGNADA' : prev.status)
             };
         });
@@ -149,630 +159,438 @@ const TaskForm = ({ onCancel, onSave, initialData }) => {
 
     const handleSubmit = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
+        if (isSubmitting) return;
+        if (!formData.title) { toast.error('El título es obligatorio'); return; }
 
-        if (!formData.title) {
-            setToast({ message: 'El título es obligatorio', type: 'error' });
+        // Validación de fechas para recurrencia
+        if (formData.recurrence !== 'NINGUNA' && !formData.start_date) {
+            toast.error('La fecha de inicio es obligatoria');
             return;
         }
 
+        setIsSubmitting(true);
         try {
             const timestamp = new Date().toISOString();
+            const tasksToSave = [];
 
-            // Lógica de Recurrencia (Creación Múltiple)
-            if (!isEditing && formData.recurrence && formData.recurrence !== 'NINGUNA') {
-                if (!formData.start_date || !formData.scheduled_at) {
-                    setToast({ message: 'Debe indicar fecha inicio y fecha límite para la recurrencia', type: 'error' });
-                    return;
-                }
+            if (formData.recurrence === 'NINGUNA' || isEditing) {
+                // Tarea simple o edición: Solo una tarea
+                const task = { ...formData, updatedAt: timestamp };
+                if (!isEditing) { task.createdAt = timestamp; task.createdBy = user.username; }
+                tasksToSave.push(task);
+            } else {
+                // Generar instancias recurrentes
+                const maxInstances = 50;
+                let count = 0;
 
-                const startDate = new Date(formData.start_date);
-                const endDate = new Date(formData.scheduled_at);
-                endDate.setHours(23, 59, 59, 999); // Incluir el último día completo
+                // Normalizar fechas a medianoche para comparación inclusiva
+                let current = new Date(formData.start_date);
+                current.setHours(0, 0, 0, 0);
 
-                if (startDate > endDate) {
-                    setToast({ message: 'La fecha de inicio no puede ser posterior a la fecha límite', type: 'error' });
-                    return;
-                }
+                const end = new Date(formData.end_date || formData.start_date);
+                end.setHours(23, 59, 59, 999);
 
-                const taskDates = [];
-                let currentDate = new Date(startDate);
+                // Determinar la fuente de tiempo BASE para la recurrencia o tarea única
+                // Si es periódica, ignoramos scheduled_at y usamos start_date para la hora base
+                const baseTimeSource = (formData.recurrence !== 'NINGUNA') ? formData.start_date : (formData.scheduled_at || formData.start_date);
+                const originalBase = new Date(baseTimeSource || Date.now());
 
-                // Evitar bucles infinitos o demasiadas tareas (límite seguridad 365)
-                let safetyCounter = 0;
-                while (currentDate <= endDate && safetyCounter < 366) {
-                    taskDates.push(new Date(currentDate));
+                const baseHours = originalBase.getHours();
+                const baseMinutes = originalBase.getMinutes();
 
-                    if (formData.recurrence === 'DIARIA') {
-                        currentDate.setDate(currentDate.getDate() + 1);
-                    } else if (formData.recurrence === 'SEMANAL') {
-                        currentDate.setDate(currentDate.getDate() + 7);
-                    } else if (formData.recurrence === 'MENSUAL') {
-                        currentDate.setMonth(currentDate.getMonth() + 1);
-                    }
-                    safetyCounter++;
-                }
+                const originalReminder = formData.reminder_at ? new Date(formData.reminder_at) : null;
+                const reminderDiff = (originalReminder && !isNaN(originalReminder.getTime()))
+                    ? (originalReminder.getTime() - originalBase.getTime())
+                    : null;
 
-                if (taskDates.length === 0) {
-                    setToast({ message: 'El rango de fechas no generó ninguna tarea', type: 'error' });
-                    return;
-                }
+                while (current.getTime() <= end.getTime() && count < maxInstances) {
+                    const instanceDate = new Date(current);
 
-                let createdCount = 0;
-                const creationPromises = taskDates.map(async (date) => {
-                    // Calcular fecha de recordatorio ajustada a esta instancia
-                    let instanceReminder = '';
-                    if (formData.reminder_at) {
-                        const originalReminder = new Date(formData.reminder_at);
-                        const newReminder = new Date(date);
-                        newReminder.setHours(
-                            originalReminder.getHours(),
-                            originalReminder.getMinutes(),
-                            originalReminder.getSeconds()
-                        );
-                        instanceReminder = newReminder.toISOString();
+                    // Ajustar la hora de instancia según la base calculada arriba
+                    instanceDate.setHours(baseHours, baseMinutes, 0, 0);
+
+                    // Calcular recordatorio relativo
+                    let instanceReminder = null;
+                    if (reminderDiff !== null) {
+                        instanceReminder = new Date(instanceDate.getTime() + reminderDiff);
                     }
 
-                    const taskData = {
+                    tasksToSave.push({
                         ...formData,
-                        scheduled_at: date.toISOString(),
-                        reminder_at: instanceReminder, // Fecha ajustada
+                        scheduled_at: instanceDate.toISOString(),
+                        reminder_at: instanceReminder ? instanceReminder.toISOString() : null,
+                        updatedAt: timestamp,
                         createdAt: timestamp,
                         createdBy: user.username,
-                        updatedAt: timestamp,
-                        recurrence: formData.recurrence, // Marca como recurrente
-                        sendWhatsApp: formData.sendWhatsApp, // Flag para backend
-                        // Opcional: podrías agregar un groupId para relacionarlas futuro
-                    };
-                    delete taskData.start_date; // No se guarda en DB como campo
+                        recurrence: 'NINGUNA'
+                    });
 
-                    // 1. Crear localmente
-                    const newLocalId = await db.tasks.add(taskData);
-                    createdCount++;
+                    if (formData.recurrence === 'DIARIA') current.setDate(current.getDate() + 1);
+                    else if (formData.recurrence === 'SEMANAL') current.setDate(current.getDate() + 7);
+                    else if (formData.recurrence === 'MENSUAL') current.setMonth(current.getMonth() + 1);
+                    else break;
 
-                    // 2. Sync server si online
-                    if (navigator.onLine) {
-                        try {
-                            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
-                                },
-                                body: JSON.stringify(taskData)
-                            });
-                            if (response.ok) {
-                                const newTask = await response.json();
-                                if (newTask._id) {
-                                    await db.tasks.update(newLocalId, { _id: newTask._id });
-                                }
-                            }
-                        } catch (err) { console.warn('Sync error for task instance', err); }
-                    }
-                });
-
-                await Promise.all(creationPromises);
-                setToast({ message: `${createdCount} tareas periódicas creadas correctamente`, type: 'success' });
-
-            } else {
-                // Lógica Original (Tarea Única o Edición)
-                const finalData = {
-                    ...formData,
-                    updatedAt: timestamp
-                };
-                delete finalData.start_date; // Limpieza
-
-                if (!isEditing) {
-                    finalData.createdAt = timestamp;
-                    finalData.createdBy = user.username;
-                    // Si es creación simple sin recurrencia, scheduled_at es la fecha única
-                }
-
-                if (isEditing) {
-                    await db.tasks.update(formData.id, finalData);
-                    if (navigator.onLine) {
-                        await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks/${formData._id || formData.id}`, {
-                            method: 'PATCH',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
-                            },
-                            body: JSON.stringify(finalData)
-                        });
-                    }
-                    setToast({ message: 'Tarea actualizada correctamente', type: 'success' });
-                } else {
-                    // Creación Simple (Sin Recurrencia)
-                    const newLocalId = await db.tasks.add(finalData);
-
-                    if (navigator.onLine) {
-                        try {
-                            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
-                                },
-                                body: JSON.stringify(finalData)
-                            });
-
-                            if (response.ok) {
-                                const newTask = await response.json();
-                                if (newTask._id) {
-                                    await db.tasks.update(newLocalId, { _id: newTask._id });
-                                }
-                            }
-                        } catch (serverErr) {
-                            console.warn('Creada localmente, pendiente de sync con servidor:', serverErr);
-                        }
-                    }
-                    setToast({ message: 'Tarea creada correctamente', type: 'success' });
+                    count++;
+                    // Si solo se eligió una fecha (sin end_date real), romper tras la primera
+                    if (!formData.end_date) break;
                 }
             }
 
-            setTimeout(onSave, 1500);
-        } catch (error) {
-            console.error('Error al guardar tarea:', error);
-            setToast({ message: 'Error al guardar la tarea', type: 'error' });
+            if (navigator.onLine) {
+                // Intento de guardado en servidor (individual o batch via sync)
+                if (tasksToSave.length === 1) {
+                    const task = tasksToSave[0];
+                    const url = `${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/tasks${isEditing ? `/${formData._id || formData.id}` : ''}`;
+                    const response = await fetch(url, {
+                        method: isEditing ? 'PATCH' : 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}` },
+                        body: JSON.stringify(task)
+                    });
+                    if (response.ok) {
+                        const saved = await response.json();
+                        tasksToSave[0]._id = saved._id;
+                    }
+                } else {
+                    // Batch sync para recurrencias
+                    const url = `${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/tasks/sync`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}` },
+                        body: JSON.stringify({ tasks: tasksToSave })
+                    });
+                    if (response.ok) {
+                        const savedTasks = await response.json();
+                        // Actualizar IDs para IndexedDB
+                        savedTasks.forEach((s, i) => { if (tasksToSave[i]) tasksToSave[i]._id = s._id; });
+                    }
+                }
+            }
+
+            // Guardar en IndexedDB
+            for (const task of tasksToSave) {
+                if (isEditing && (task.id || task._id)) {
+                    const localId = task.id || (await db.tasks.get({ _id: task._id }))?.id;
+                    if (localId) await db.tasks.update(localId, task);
+                    else await db.tasks.put(task);
+                } else {
+                    await db.tasks.put(task);
+                }
+            }
+
+            // Notificación inmediata si soy el asignado (Solo para tareas individuales)
+            if (!isEditing && tasksToSave.length === 1) {
+                const task = tasksToSave[0];
+                const isAssignedToMe = (task.assigned_technicians || []).some(tech =>
+                    tech === user.username || tech === user.name || tech === user.displayName
+                );
+
+                // Solo notificar si el usuario desea recibir notificaciones (sendWhatsApp flag)
+                if (isAssignedToMe && task.sendWhatsApp !== false) {
+                    NotificationService.notify({
+                        title: 'Nueva Tarea Creada',
+                        message: task.title,
+                        type: 'TASK',
+                        task: task
+                    });
+                }
+            }
+
+            toast.success(isEditing ? 'Actualizada' : (tasksToSave.length > 1 ? `${tasksToSave.length} Tareas creadas` : 'Creada'));
+            setTimeout(finalOnSave, 1000);
+        } catch (err) {
+            console.error('[TaskForm] Submit error:', err);
+            toast.error('Error al guardar');
+            setIsSubmitting(false);
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 md:p-8 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-300">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2rem] md:rounded-3xl border border-slate-200 dark:border-white/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col max-h-[92vh] md:max-h-[82vh]">
-                <header className="p-5 md:p-6 border-b border-slate-100 dark:border-white/5 flex justify-between items-center bg-white/50 dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-10 shrink-0">
+    return createPortal(
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-primary animate-in fade-in duration-300">
+            <div className="bg-secondary rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-color">
+                <header className="px-6 py-5 border-b border-color flex justify-between items-center shrink-0">
                     <div>
-                        <h2 className="text-lg md:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                        <h2 className="text-[17px] font-[900] text-text-primary uppercase tracking-tight">
                             {isEditing ? 'Editar Tarea' : 'Nueva Tarea'}
                         </h2>
-                        <p className="text-[9px] md:text-[10px] font-medium text-slate-500 uppercase tracking-wider">Programación de servicios TI</p>
+                        <p className="text-[10px] font-[800] text-text-muted uppercase tracking-[2px] mt-0.5">Programación Técnica</p>
                     </div>
-                    <button onClick={onCancel} className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl transition-all active:scale-95 text-slate-500">
+                    <button onClick={finalOnCancel} className="p-2.5 hover:bg-tertiary rounded-2xl text-text-muted hover:text-primary-500 transition-all active:scale-90 border border-color">
                         <X size={20} />
                     </button>
                 </header>
 
-                <form id="task-form" onSubmit={handleSubmit} className="p-5 md:p-6 space-y-6 overflow-y-auto no-scrollbar flex-1">
-                    <div className="space-y-6">
-                        {/* Status selector (Solo en edición o siempre visible) */}
-                        {isEditing && (
-                            <div className="pb-4 border-b border-slate-100 dark:border-white/5">
-                                <CustomSelect
-                                    label="Estado del Flujo"
-                                    value={formData.status}
-                                    options={['PROGRAMADA', 'ASIGNADA', 'EN_EJECUCION', 'CANCELADA', 'COMPLETADA'].map(opt => ({ id: opt, label: opt }))}
-                                    onChange={(val) => setFormData(p => ({ ...p, status: val }))}
-                                    disabled={!canEditStatus}
-                                />
+                <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto no-scrollbar flex-1">
+                    {/* Visibility Selector */}
+                    <div className="flex items-center justify-between p-4 bg-tertiary rounded-2xl border border-color">
+                        <div className="flex items-center gap-3">
+                            <div className={cn("p-2 rounded-xl", formData.isPrivate ? "bg-orange-500/10 text-orange-500" : "bg-primary-500/10 text-primary-500")}>
+                                {formData.isPrivate ? <Lock size={16} /> : <Globe size={16} />}
                             </div>
-                        )}
-                        {/* Visibilidad (Pública / Privada) */}
-                        <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950/50 rounded-2xl border border-slate-200 dark:border-white/10">
-                            <div>
-                                <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-1">Visibilidad</label>
-                                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                    {formData.isPrivate ? 'Privada (Solo yo)' : 'Pública (Administradores y Asignados)'}
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setFormData(prev => ({ ...prev, isPrivate: !prev.isPrivate }))}
-                                disabled={!canEditFull}
-                                className={cn(
-                                    "relative w-32 h-10 rounded-xl p-1 transition-all flex items-center",
-                                    formData.isPrivate ? "bg-amber-500/10 border-amber-500/30" : "bg-blue-500/10 border-blue-500/30",
-                                    "border"
-                                )}
-                            >
-                                <div className={cn(
-                                    "absolute inset-y-1 w-1/2 rounded-lg transition-all flex items-center justify-center shadow-lg",
-                                    formData.isPrivate ? "right-1 bg-amber-500 text-white" : "left-1 bg-blue-500 text-white"
-                                )}>
-                                    {formData.isPrivate ? <Lock size={14} className="mr-1" /> : <Globe size={14} className="mr-1" />}
-                                    <span className="text-[10px] font-black uppercase">{formData.isPrivate ? 'Privada' : 'Pública'}</span>
-                                </div>
-                                <div className={cn("w-1/2 text-center text-[10px] font-black uppercase", !formData.isPrivate ? "" : "hidden")}>Pública</div>
-                                <div className={cn("w-1/2 text-center text-[10px] font-black uppercase ml-auto", formData.isPrivate ? "" : "hidden")}>Privada</div>
-                            </button>
+                            <span className="text-[12px] font-[800] text-text-primary uppercase tracking-wide">Visibilidad {formData.isPrivate ? 'Privada' : 'Pública'}</span>
                         </div>
+                        <button
+                            type="button"
+                            onClick={() => setFormData(p => ({ ...p, isPrivate: !p.isPrivate }))}
+                            className={cn("w-12 h-6 rounded-full p-1 transition-all relative", formData.isPrivate ? "bg-orange-500" : "bg-primary-500")}
+                        >
+                            <div className={cn("w-4 h-4 bg-tertiary rounded-full transition-all shadow-sm", formData.isPrivate ? "translate-x-6" : "translate-x-0")} />
+                        </button>
+                    </div>
 
-                        <div>
-                            <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">Título de la Tarea</label>
-                            <input
-                                name="title"
-                                value={formData.title}
-                                onChange={handleInputChange}
-                                disabled={!canEditFull}
-                                className={cn(
-                                    "w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 rounded-2xl p-4 text-sm outline-none transition-all font-bold placeholder:font-normal",
-                                    canEditFull ? "focus:ring-2 focus:ring-blue-500/20" : "opacity-60 cursor-not-allowed"
-                                )}
-                                placeholder="Ej: Mantenimiento Preventivo Servidores"
-                            />
-                        </div>
+                    <InputGroup label="Título" name="title" value={formData.title} onChange={handleInputChange} placeholder="Describa la labor..." required disabled={!canEditFull} />
 
-                        <div>
-                            <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">Descripción</label>
-                            <textarea
-                                name="description"
-                                value={formData.description}
-                                onChange={handleInputChange}
-                                disabled={!canEditFull}
-                                className={cn(
-                                    "w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 rounded-2xl p-4 text-sm outline-none transition-all h-24 resize-none",
-                                    canEditFull ? "focus:ring-2 focus:ring-blue-500/20" : "opacity-60 cursor-not-allowed font-bold"
-                                )}
-                                placeholder="Detalles de la labor a realizar..."
-                            />
-                        </div>
+                    <div className="space-y-1.5">
+                        <label className="text-[12px] font-[800] text-text-primary block ml-1 uppercase tracking-wide">Descripción</label>
+                        <textarea
+                            name="description"
+                            value={formData.description}
+                            onChange={handleInputChange}
+                            disabled={!canEditFull}
+                            className="w-full rounded-xl border border-color p-4 text-[13px] bg-tertiary outline-none transition-all focus:border-primary-500 min-h-[100px] font-medium text-text-primary placeholder:text-text-muted/40"
+                            placeholder="Detalles adicionales..."
+                        />
+                    </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                            <CustomSelect
-                                label="Tipo"
-                                value={formData.type}
-                                options={['PREVENTIVO', 'CORRECTIVO'].map(opt => ({ id: opt, label: opt }))}
-                                onChange={(val) => setFormData(p => ({ ...p, type: val }))}
-                                disabled={!canEditFull}
-                            />
-                            <CustomSelect
-                                label="Prioridad"
-                                value={formData.priority}
-                                options={['BAJA', 'MEDIA', 'ALTA'].map(opt => ({ id: opt, label: opt }))}
-                                onChange={(val) => setFormData(p => ({ ...p, priority: val }))}
-                                disabled={!canEditFull}
-                            />
-                        </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <CustomSelect label="Prioridad" value={formData.priority} options={[{ id: 'BAJA', label: 'Baja' }, { id: 'MEDIA', label: 'Media' }, { id: 'ALTA', label: 'Alta' }, { id: 'CRITICA', label: 'Crítica' }]} onChange={val => setFormData(p => ({ ...p, priority: val }))} />
+                        <CustomSelect
+                            label="Estado"
+                            value={formData.status}
+                            options={[
+                                { id: 'PROGRAMADA', label: 'PROGRAMADA' },
+                                { id: 'ASIGNADA', label: 'ASIGNADA' },
+                                { id: 'EN_EJECUCION', label: 'EJECUCIÓN' },
+                                { id: 'CANCELADA', label: 'CANCELADA' },
+                                { id: 'COMPLETADA', label: 'COMPLETADA' },
+                                { id: 'VENCIDA', label: 'VENCIDA' }
+                            ]}
+                            onChange={val => setFormData(p => ({ ...p, status: val }))}
+                        />
+                    </div>
 
-                        {/* Recurrencia */}
-                        <div>
-                            <CustomSelect
-                                label="Periodicidad"
-                                value={formData.recurrence || 'NINGUNA'}
-                                options={['NINGUNA', 'DIARIA', 'SEMANAL', 'MENSUAL'].map(opt => ({ id: opt, label: opt }))}
-                                onChange={(val) => setFormData(p => ({ ...p, recurrence: val }))}
-                                disabled={!canEditFull}
-                            />
-                        </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <CustomSelect label="Periodicidad" value={formData.recurrence} options={[{ id: 'NINGUNA', label: 'Ninguna' }, { id: 'DIARIA', label: 'Diaria' }, { id: 'SEMANAL', label: 'Semanal' }, { id: 'MENSUAL', label: 'Mensual' }]} onChange={val => setFormData(p => ({ ...p, recurrence: val }))} />
+                        <CustomSelect
+                            label="Tipo"
+                            value={formData.type}
+                            options={[
+                                { id: 'CORRECTIVO', label: 'Correctivo' },
+                                { id: 'PREVENTIVO', label: 'Preventivo' },
+                                { id: 'MEJORA', label: 'Mejora' }
+                            ]}
+                            onChange={val => setFormData(p => ({ ...p, type: val }))}
+                        />
+                    </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                            <div>
-                                <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">Ticket GLPI (Opcional)</label>
-                                <div className="relative">
-                                    <Hash size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                    <input
-                                        name="glpi_ticket_id"
-                                        value={formData.glpi_ticket_id}
-                                        onChange={handleInputChange}
-                                        disabled={!canEditFull}
-                                        className={cn(
-                                            "w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 pl-10 text-sm outline-none transition-all font-bold",
-                                            canEditFull ? "focus:ring-2 focus:ring-blue-500/20" : "opacity-60 cursor-not-allowed"
-                                        )}
-                                        placeholder="ID Ticket"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Lógica de Fechas según Recurrencia */}
-                            {formData.recurrence !== 'NINGUNA' ? (
-                                <>
-                                    <div className="relative">
-                                        <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">Desde (Inicio)</label>
-                                        <div
-                                            onClick={() => canEditFull && setOpenDropdown('start_date_picker')}
-                                            className={cn(
-                                                "w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 pl-10 text-xs outline-none transition-all font-bold relative",
-                                                canEditFull ? "cursor-pointer focus:ring-2 focus:ring-blue-500/20" : "opacity-60 cursor-not-allowed"
-                                            )}
-                                        >
-                                            <CalendarIcon size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            {formData.start_date ? new Date(formData.start_date).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : 'Seleccionar...'}
-                                        </div>
-                                        {openDropdown === 'start_date_picker' && (
-                                            <div className="absolute top-full left-0 z-50 mt-2 w-full">
-                                                <CustomDatePicker
-                                                    value={formData.start_date}
-                                                    onChange={(date) => { setFormData(prev => ({ ...prev, start_date: date })); setOpenDropdown(null); }}
-                                                    onClose={() => setOpenDropdown(null)}
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="relative" ref={datePickerRef}>
-                                        <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">Hasta (Límite)</label>
-                                        <div
-                                            onClick={() => canEditFull && setIsDatePickerOpen(!isDatePickerOpen)}
-                                            className={cn(
-                                                "w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 pl-10 text-xs outline-none transition-all font-bold relative",
-                                                canEditFull ? "cursor-pointer focus:ring-2 focus:ring-blue-500/20" : "opacity-60 cursor-not-allowed"
-                                            )}
-                                        >
-                                            <CalendarIcon size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            {formData.scheduled_at ? new Date(formData.scheduled_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : 'Seleccionar...'}
-                                        </div>
-                                        {isDatePickerOpen && (
-                                            <CustomDatePicker
-                                                value={formData.scheduled_at}
-                                                onChange={(date) => setFormData(prev => ({ ...prev, scheduled_at: date }))}
-                                                onClose={() => setIsDatePickerOpen(false)}
-                                            />
-                                        )}
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="relative" ref={datePickerRef}>
-                                    <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">Fecha Programada</label>
-                                    <div
-                                        onClick={() => canEditFull && setIsDatePickerOpen(!isDatePickerOpen)}
-                                        className={cn(
-                                            "w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 pl-10 text-xs outline-none transition-all font-bold relative",
-                                            canEditFull ? "cursor-pointer focus:ring-2 focus:ring-blue-500/20" : "opacity-60 cursor-not-allowed"
-                                        )}
-                                    >
-                                        <CalendarIcon size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                        {formData.scheduled_at ? new Date(formData.scheduled_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : 'Seleccionar...'}
-                                    </div>
-
-                                    {isDatePickerOpen && (
-                                        <CustomDatePicker
-                                            value={formData.scheduled_at}
-                                            onChange={(date) => setFormData(prev => ({ ...prev, scheduled_at: date }))}
-                                            onClose={() => setIsDatePickerOpen(false)}
-                                        />
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Control de Notificaciones WhatsApp para Recurrencia */}
-                        {formData.recurrence !== 'NINGUNA' && (
-                            <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/10 rounded-2xl border border-green-200 dark:border-green-900/20">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center text-green-600 dark:text-green-400">
-                                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase tracking-widest text-green-700 dark:text-green-400">Notificar por WhatsApp</label>
-                                        <p className="text-[10px] text-slate-500 font-medium">Enviar mensaje a técnicos por cada tarea generada</p>
-                                    </div>
-                                </div>
+                    {/* Fechas según Periodicidad */}
+                    <div className="grid grid-cols-2 gap-4">
+                        {formData.recurrence === 'NINGUNA' ? (
+                            <div className="space-y-1.5 flex-[2]">
+                                <label className="text-[12px] font-[800] text-text-primary block ml-1 uppercase tracking-wide">Fecha Programada</label>
                                 <button
                                     type="button"
-                                    onClick={() => setFormData(prev => ({ ...prev, sendWhatsApp: !prev.sendWhatsApp }))}
-                                    className={cn(
-                                        "w-10 h-6 rounded-full p-1 transition-all duration-300",
-                                        formData.sendWhatsApp ? "bg-green-500" : "bg-slate-200 dark:bg-slate-700"
-                                    )}
+                                    onClick={() => canEditFull && setDatePickerType('scheduled')}
+                                    className="h-11 w-full bg-tertiary border border-color rounded-xl px-4 flex items-center justify-between text-[13px] hover:border-primary-500 transition-all text-text-primary"
                                 >
-                                    <div className={cn(
-                                        "w-4 h-4 bg-white rounded-full transition-transform duration-300 shadow-sm",
-                                        formData.sendWhatsApp ? "translate-x-4" : "translate-x-0"
-                                    )} />
-                                </button>
-                            </div>
-                        )}
-
-
-
-                        <div className="p-4 bg-blue-500/5 dark:bg-blue-500/10 rounded-2xl border border-blue-500/20">
-                            <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-2">
-                                    <Bell size={16} className="text-blue-500" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Recordatorio Personalizado</span>
-                                </div>
-                                <button
-                                    type="button"
-                                    disabled={!canEditFull}
-                                    onClick={() => setFormData(prev => ({ ...prev, reminder_at: prev.reminder_at ? '' : new Date().toISOString() }))}
-                                    className={cn(
-                                        "w-10 h-6 rounded-full p-1 transition-all duration-300",
-                                        formData.reminder_at ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-800",
-                                        !canEditFull && "opacity-40 cursor-not-allowed"
-                                    )}
-                                >
-                                    <div className={cn(
-                                        "w-4 h-4 bg-white rounded-full transition-transform duration-300",
-                                        formData.reminder_at ? "translate-x-4" : "translate-x-0"
-                                    )} />
-                                </button>
-                            </div>
-
-                            {formData.reminder_at && (
-                                <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                                    <div className="relative" ref={reminderPickerRef}>
-                                        <div
-                                            onClick={() => canEditFull && setIsReminderPickerOpen(!isReminderPickerOpen)}
-                                            className={cn(
-                                                "w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl p-3 pl-10 text-[11px] outline-none transition-all font-bold relative",
-                                                canEditFull ? "cursor-pointer focus:ring-2 focus:ring-blue-500/20" : "opacity-60 cursor-not-allowed"
-                                            )}
-                                        >
-                                            <CalendarIcon size={12} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            {new Date(formData.reminder_at).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}
-                                        </div>
-
-                                        {isReminderPickerOpen && (
-                                            <div className="absolute top-full left-0 mt-2 z-[80] w-full">
-                                                <CustomDatePicker
-                                                    value={formData.reminder_at}
-                                                    onChange={(date) => {
-                                                        setFormData(prev => ({ ...prev, reminder_at: date, reminder_sent: false }));
-                                                    }}
-                                                    onClose={() => setIsReminderPickerOpen(false)}
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p className="text-[9px] text-slate-500 font-bold italic">* Recibirás una alerta en el aplicativo a esta hora.</p>
-                                </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">Técnicos Asignados</label>
-                            <div className="relative" ref={techSearchRef}>
-                                <div className="relative flex items-center mb-3">
-                                    <Search size={16} className="absolute left-4 text-slate-400" />
-                                    <input
-                                        value={techInput}
-                                        onChange={handleTechSearch}
-                                        onFocus={() => canEditFull && setIsTechListOpen(true)}
-                                        disabled={!canEditFull}
-                                        className={cn(
-                                            "flex-1 bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 pl-11 text-sm outline-none transition-all font-bold placeholder:font-normal",
-                                            canEditFull ? "focus:ring-2 focus:ring-blue-500/20" : "opacity-60 cursor-not-allowed"
-                                        )}
-                                        placeholder="Buscar técnico de GLPI..."
-                                    />
-                                    {loadingTechs && <div className="absolute right-4 w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>}
-                                </div>
-
-                                {isTechListOpen && canEditFull && (
-                                    <div className="absolute top-full left-0 w-full z-[70] bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl p-2 max-h-60 overflow-y-auto mt-2 animate-in slide-in-from-top-2 no-scrollbar custom-scrollbar shadow-blue-500/5">
-                                        {filteredTechs.length === 0 ? (
-                                            <div className="p-4 text-center text-slate-500 text-xs font-bold">No se encontraron técnicos</div>
-                                        ) : (
-                                            filteredTechs.map(t => (
-                                                <div
-                                                    key={t.id}
-                                                    onClick={() => toggleTechnician(t.fullName)}
-                                                    className={cn(
-                                                        "px-4 py-3 rounded-xl text-sm font-bold cursor-pointer transition-all mb-1 last:mb-0 flex justify-between items-center group",
-                                                        formData.assigned_technicians.includes(t.fullName)
-                                                            ? "bg-blue-600 text-white shadow-lg shadow-blue-500/40"
-                                                            : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5"
-                                                    )}
-                                                >
-                                                    <div className="flex flex-col">
-                                                        <span>{t.fullName}</span>
-                                                    </div>
-                                                    {formData.assigned_technicians.includes(t.fullName) && <Check size={16} />}
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="flex flex-wrap gap-2 min-h-4">
-                                {formData.assigned_technicians.map(tech => (
-                                    <span key={tech} className="bg-blue-500/10 text-blue-500 text-[9px] font-black px-3 py-2 rounded-lg border border-blue-500/20 flex items-center gap-2 animate-in zoom-in-95 duration-200">
-                                        {tech}
-                                        {canEditFull && (
-                                            <button type="button" onClick={() => toggleTechnician(tech)} className="hover:text-red-500 transition-colors">
-                                                <X size={12} />
-                                            </button>
-                                        )}
+                                    <span className={cn("font-bold", formData.scheduled_at ? "text-text-primary" : "text-text-muted/60")}>
+                                        {formData.scheduled_at ? new Date(formData.scheduled_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: true }) : 'Seleccionar...'}
                                     </span>
-                                ))}
+                                    <CalendarIcon size={14} className="text-text-muted" />
+                                </button>
                             </div>
-                        </div>
+                        ) : (
+                            <>
+                                <div className="space-y-1.5">
+                                    <label className="text-[12px] font-[800] text-text-primary block ml-1 uppercase tracking-wide">Fecha Inicio</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => canEditFull && setDatePickerType('start')}
+                                        className="h-11 w-full bg-tertiary border border-color rounded-xl px-4 flex items-center justify-between text-[13px] hover:border-primary-500 transition-all text-text-primary"
+                                    >
+                                        <span className={cn("font-bold", formData.start_date ? "text-text-primary" : "text-text-muted/60")}>
+                                            {formData.start_date ? new Date(formData.start_date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: true }) : 'Desde...'}
+                                        </span>
+                                        <CalendarIcon size={14} className="text-text-muted" />
+                                    </button>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[12px] font-[800] text-text-primary block ml-1 uppercase tracking-wide">Fecha Fin</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => canEditFull && setDatePickerType('end')}
+                                        className="h-11 w-full bg-tertiary border border-color rounded-xl px-4 flex items-center justify-between text-[13px] hover:border-primary-500 transition-all text-text-primary"
+                                    >
+                                        <span className={cn("font-bold", formData.end_date ? "text-text-primary" : "text-text-muted/60")}>
+                                            {formData.end_date ? new Date(formData.end_date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: true }) : 'Hasta...'}
+                                        </span>
+                                        <CalendarIcon size={14} className="text-text-muted" />
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
 
-                        <div>
-                            <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2">Equipo o Servicio</label>
-                            <div className="relative">
-                                <MapPin size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                <input
-                                    name="equipment_service"
-                                    value={formData.equipment_service}
-                                    onChange={handleInputChange}
-                                    disabled={!canEditFull}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <InputGroup label="Ticket GLPI" icon={Hash} name="glpi_ticket_id" value={formData.glpi_ticket_id} onChange={handleInputChange} placeholder="Opcional" />
+
+                        {/* Conditional WhatsApp option */}
+                        {formData.recurrence !== 'NINGUNA' && (
+                            <div className="flex items-center justify-between p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 h-11 self-end">
+                                <div className="flex items-center gap-2">
+                                    <MessageSquare size={14} className="text-emerald-500" />
+                                    <span className="text-[10px] font-[700] text-emerald-500 uppercase tracking-tight">WhatsApp</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData(p => ({ ...p, sendWhatsApp: !p.sendWhatsApp }))}
                                     className={cn(
-                                        "w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 pl-10 text-sm outline-none transition-all font-bold",
-                                        canEditFull ? "focus:ring-2 focus:ring-blue-500/20" : "opacity-60 cursor-not-allowed"
+                                        "w-[38px] h-[20px] rounded-full relative transition-all duration-300",
+                                        formData.sendWhatsApp ? "bg-emerald-500" : "bg-tertiary"
                                     )}
-                                    placeholder="Ej: Rack comunicaciones piso 2"
-                                />
+                                >
+                                    <div className={cn(
+                                        "absolute top-[2px] w-[16px] h-[16px] bg-secondary rounded-full transition-all duration-300 shadow-sm",
+                                        formData.sendWhatsApp ? "left-[20px]" : "left-[2px]"
+                                    )} />
+                                </button>
                             </div>
+                        )}
+                    </div>
+
+                    {/* Recordatorio (Siempre Visible) */}
+                    <div className="space-y-1.5">
+                        <label className="text-[12px] font-[800] text-text-primary block ml-1 uppercase tracking-wide">Recordatorio</label>
+                        <button
+                            type="button"
+                            onClick={() => setDatePickerType('reminder')}
+                            className="h-11 w-full bg-tertiary border border-color rounded-xl px-4 flex items-center justify-between text-[13px] hover:border-primary-500 transition-all text-text-primary"
+                        >
+                            <div className="flex items-center gap-3">
+                                <Bell size={16} className={cn(formData.reminder_at ? "text-orange-500" : "text-text-muted")} />
+                                <span className={cn("font-bold", formData.reminder_at ? "text-text-primary" : "text-text-muted/60")}>
+                                    {formData.reminder_at ? new Date(formData.reminder_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short', hour12: true }) : 'Configurar alerta automática...'}
+                                </span>
+                            </div>
+                            <ChevronDown size={14} className="text-text-muted" />
+                        </button>
+                    </div>
+
+                    {/* Technicians Selection */}
+                    <div className="space-y-4 pt-4 border-t border-color">
+                        <div className="flex items-center justify-between text-[12px] font-[800] text-text-primary uppercase tracking-wide">
+                            <label>Técnicos Asignados</label>
+                            <span className="bg-primary-500/10 text-primary-500 px-2 py-0.5 rounded-lg text-[10px]">{formData.assigned_technicians.length}</span>
+                        </div>
+                        <div className="relative" ref={techSearchRef}>
+                            <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
+                            <input
+                                value={techInput}
+                                onChange={handleTechSearch}
+                                onFocus={() => canEditFull && setIsTechListOpen(true)}
+                                className="w-full h-11 pl-10 bg-tertiary border border-color rounded-xl text-[13px] outline-none focus:border-primary-500 transition-all text-text-primary"
+                                placeholder="Escribe para buscar..."
+                            />
+                            {isTechListOpen && filteredTechs.length > 0 && (
+                                <div className="absolute top-full left-0 w-full mt-2 bg-secondary border border-color rounded-2xl shadow-2xl z-50 max-h-48 overflow-y-auto p-1.5 animate-in slide-in-from-top-2">
+                                    {filteredTechs.map(t => (
+                                        <div
+                                            key={t.id}
+                                            onClick={() => toggleTechnician(t.fullName)}
+                                            className={cn(
+                                                "p-3 rounded-xl text-[13px] font-bold cursor-pointer flex justify-between items-center group transition-colors",
+                                                formData.assigned_technicians.includes(t.fullName) ? "bg-primary-500/10 text-primary-500" : "hover:bg-tertiary text-text-primary"
+                                            )}
+                                        >
+                                            {t.fullName}
+                                            {formData.assigned_technicians.includes(t.fullName) && <Check size={14} />}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {formData.assigned_technicians.map(tech => (
+                                <span key={tech} className="bg-tertiary text-text-secondary text-[11px] font-[800] px-3 py-1.5 rounded-xl border border-color flex items-center gap-2 group hover:border-primary-500/30 transition-all">
+                                    {tech}
+                                    <button type="button" onClick={() => toggleTechnician(tech)} className="hover:text-red-500 transition-colors"><X size={12} /></button>
+                                </span>
+                            ))}
                         </div>
                     </div>
                 </form>
 
-                <footer className="p-5 md:p-6 bg-slate-50 dark:bg-slate-950/30 border-t border-slate-100 dark:border-white/5 flex flex-col sm:flex-row gap-3">
-                    <div className="flex gap-3 flex-1">
-                        {isEditing && canDelete && (
-                            <button
-                                type="button"
-                                onClick={() => setShowDeleteConfirm(true)}
-                                className="p-4 rounded-2xl border-2 border-red-500/20 text-red-500 hover:bg-red-500/10 transition-all active:scale-95"
-                            >
-                                <Trash2 size={20} />
-                            </button>
-                        )}
+                <footer className="px-8 py-6 bg-tertiary border-t border-color flex gap-4">
+                    {isEditing && canEditFull && (
                         <button
                             type="button"
-                            onClick={onCancel}
-                            className="flex-1 px-6 py-4 rounded-2xl border-2 border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-95"
+                            onClick={() => setShowDeleteConfirm(true)}
+                            className="w-12 h-12 flex items-center justify-center shrink-0 bg-secondary border border-red-500/30 text-red-500 rounded-2xl hover:bg-red-500/10 transition-all"
                         >
-                            Cancelar
-                        </button>
-                    </div>
-                    {(isEditing ? canEditStatus : canEditStatus) && (
-                        <button
-                            type="button"
-                            onClick={handleSubmit}
-                            className="flex-[2] flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-blue-500/20 transition-all active:scale-95"
-                        >
-                            <Save size={18} />
-                            {isEditing ? 'Actualizar' : 'Crear Tarea'}
+                            <Trash2 size={18} />
                         </button>
                     )}
+                    <button
+                        type="button"
+                        onClick={finalOnCancel}
+                        disabled={isSubmitting}
+                        className="flex-[1] h-12 bg-secondary border border-color text-text-muted font-bold text-[12px] rounded-2xl uppercase tracking-widest hover:bg-tertiary transition-all disabled:opacity-50"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting}
+                        className="flex-[2.5] h-12 bg-primary-500 text-white font-[900] text-[13px] rounded-2xl uppercase tracking-widest shadow-xl shadow-primary-500/20 hover:shadow-primary-500/30 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70 disabled:active:scale-100"
+                    >
+                        {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : (isEditing ? 'Actualizar Tarea' : 'Crear Tarea')}
+                    </button>
                 </footer>
             </div>
 
-            {/* Modal de confirmación de eliminación con estilo Premium */}
+            {/* Date Pickers */}
+            {datePickerType && (
+                <CustomDatePicker
+                    value={
+                        datePickerType === 'scheduled' ? formData.scheduled_at :
+                            datePickerType === 'start' ? formData.start_date :
+                                datePickerType === 'end' ? formData.end_date :
+                                    formData.reminder_at
+                    }
+                    onChange={(val) => {
+                        const fieldMap = {
+                            scheduled: 'scheduled_at',
+                            start: 'start_date',
+                            end: 'end_date',
+                            reminder: 'reminder_at'
+                        };
+                        setFormData(p => ({ ...p, [fieldMap[datePickerType]]: val }));
+                        setDatePickerType(null);
+                    }}
+                    onClose={() => setDatePickerType(null)}
+                />
+            )}
+
+            {/* toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} /> -- REMOVED */}
+
             {showDeleteConfirm && (
-                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2rem] border border-slate-200 dark:border-white/10 shadow-2xl p-6 animate-in zoom-in-95 duration-200">
-                        <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 mb-4 mx-auto">
+                <div className="fixed inset-0 z-[3000] bg-primary flex items-center justify-center p-4">
+                    <div className="bg-secondary rounded-[24px] max-w-sm w-full p-6 text-center shadow-2xl border border-color">
+                        <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
                             <Trash2 size={24} />
                         </div>
-                        <h3 className="text-lg font-black text-center text-slate-900 dark:text-white mb-2">¿Eliminar Tarea?</h3>
-                        <p className="text-center text-slate-500 text-sm mb-6 font-medium">
-                            Esta acción no se puede deshacer. La tarea será eliminada permanentemente.
-                        </p>
+                        <h3 className="text-[18px] font-[800] text-text-primary mb-2">¿Eliminar Tarea?</h3>
+                        <p className="text-[13px] text-text-muted mb-6">Esta acción no se puede deshacer.</p>
                         <div className="flex gap-3">
-                            <button
-                                onClick={() => setShowDeleteConfirm(false)}
-                                disabled={isDeleting}
-                                className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-white/10 font-bold uppercase text-[10px] tracking-widest text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={async () => {
-                                    setIsDeleting(true);
-                                    try {
-                                        await db.tasks.delete(formData.id);
-                                        // Si estamos online, borrar del servidor
-                                        if (navigator.onLine) {
-                                            await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks/${formData._id || formData.id}`, {
-                                                method: 'DELETE',
-                                                headers: {
-                                                    'Content-Type': 'application/json',
-                                                    'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
-                                                }
-                                            });
-                                        }
-                                        setToast({ message: 'Tarea eliminada', type: 'success' });
-                                        setTimeout(onSave, 500); // Dar tiempo al toast
-                                    } catch (error) {
-                                        console.error(error);
-                                        setIsDeleting(false);
-                                        setToast({ message: 'Error eliminando', type: 'error' });
-                                    }
-                                }}
-                                disabled={isDeleting}
-                                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold uppercase text-[10px] tracking-widest hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all active:scale-95 flex justify-center items-center"
-                            >
-                                {isDeleting ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Eliminar'}
+                            <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-3 bg-tertiary text-text-muted rounded-xl text-[12px] font-[800] uppercase hover:bg-secondary border border-color transition-colors">Cancelar</button>
+                            <button onClick={handleDelete} disabled={isDeleting} className="flex-1 py-3 bg-red-500 text-white rounded-xl text-[12px] font-[800] uppercase flex items-center justify-center gap-2 hover:bg-red-600 transition-colors disabled:opacity-70 focus:outline-none shadow-lg shadow-red-500/20">
+                                {isDeleting ? <Loader2 size={16} className="animate-spin" /> : 'Sí, Eliminar'}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
-
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-        </div>
+        </div>,
+        document.body
     );
 };
 

@@ -16,7 +16,6 @@ const SignaturePad = ({ onSave, label, theme }) => {
         const canvas = canvasRef.current;
         const rect = canvas.getBoundingClientRect();
 
-        // Calcular escala entre píxeles de pantalla y píxeles del canvas
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
 
@@ -64,14 +63,14 @@ const SignaturePad = ({ onSave, label, theme }) => {
     };
 
     return (
-        <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-slate-400">{label}</label>
-            <div className="relative border-2 border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 overflow-hidden">
+        <div className="flex flex-col">
+            <label className="text-[12px] font-[600] text-text-muted block ml-1 mb-1.5 uppercase tracking-wide">{label}</label>
+            <div className="relative border-2 border-dashed border-color rounded-[12px] bg-tertiary overflow-hidden group hover:border-primary-500/40 transition-colors">
                 <canvas
                     ref={canvasRef}
-                    width={400}
-                    height={200}
-                    className="w-full h-48 touch-none cursor-crosshair"
+                    width={800}
+                    height={300}
+                    className="w-full h-48 touch-none cursor-crosshair opacity-90"
                     onMouseDown={startDrawing}
                     onMouseMove={draw}
                     onMouseUp={stopDrawing}
@@ -82,7 +81,7 @@ const SignaturePad = ({ onSave, label, theme }) => {
                 />
                 <button
                     onClick={clear}
-                    className="absolute top-2 right-2 text-xs bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded"
+                    className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-widest bg-secondary border border-color text-red-500 px-3 py-1.5 rounded-lg shadow-sm hover:bg-red-500/10 transition-all"
                 >
                     Limpiar
                 </button>

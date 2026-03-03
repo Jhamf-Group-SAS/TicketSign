@@ -1,12 +1,13 @@
 import axios from 'axios';
+import configService from './configService.js';
 
 class WhatsAppService {
-    config() {
+    async getConfig() {
         return {
-            phoneId: process.env.WHATSAPP_PHONE_ID,
-            token: process.env.WHATSAPP_TOKEN,
-            templateName: process.env.WHATSAPP_TEMPLATE_NAME || 'notificacion_tarea',
-            lang: process.env.WHATSAPP_LANG || 'es'
+            phoneId: await configService.get('whatsapp_phone_id'),
+            token: await configService.get('whatsapp_token'),
+            templateName: await configService.get('whatsapp_template_name', 'notificacion_tarea'),
+            lang: await configService.get('whatsapp_lang', 'es')
         };
     }
 
@@ -16,7 +17,7 @@ class WhatsAppService {
      * @param {Object} data - Datos de la tarea { techName, title, description, date }
      */
     async sendTaskNotification(to, data) {
-        const { phoneId, token, templateName, lang } = this.config();
+        const { phoneId, token, templateName, lang } = await this.getConfig();
 
         if (!to || !phoneId || !token) {
             console.error('[WhatsApp] Falta configuración crítica:', {

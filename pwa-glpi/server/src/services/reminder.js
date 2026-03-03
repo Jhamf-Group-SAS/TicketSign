@@ -2,12 +2,14 @@ import mongoose from 'mongoose';
 import glpi from './glpi.js';
 import whatsapp from './whatsapp.js';
 import Task from '../models/Task.js';
-import { memoryTasks } from '../routes/tasks.js';
+// [A-05] memoryTasks fue privatizado en tasks.js — en prod siempre se usa MongoDB
+const memoryTasks = [];
 
 class ReminderService {
     constructor() {
         this.intervalId = null;
         this.CHECK_INTERVAL = 60000; // Revisar cada minuto
+        this.isRunning = false;
     }
 
     start() {
@@ -26,17 +28,44 @@ class ReminderService {
     }
 
     async checkReminders() {
+        if (this.isRunning) return;
+        this.isRunning = true;
         try {
             const now = new Date();
             let allWithReminders = [];
 
             if (mongoose.connection.readyState === 1) {
-                // En producción con DB conectada, solo registramos si hay algo que hacer para no saturar logs
-                allWithReminders = await Task.find({ reminder_at: { $exists: true } });
+                // 1. MARCAR TAREAS VENCIDAS (automático)
+                // Aquellas que estén en estado inicial y ya pasaron su fecha programada
+                const result = await Task.updateMany(
+                    {
+                        status: { $in: ['PROGRAMADA', 'ASIGNADA'] },
+                        scheduled_at: { $lt: now }
+                    },
+                    { $set: { status: 'VENCIDA' } }
+                );
+                if (result.modifiedCount > 0) {
+                    console.log(`[ReminderService] Se marcaron ${result.modifiedCount} tareas como VENCIDAS.`);
+                }
+
+                allWithReminders = await Task.find({
+                    reminder_at: { $exists: true },
+                    status: { $nin: ['COMPLETADA', 'CANCELADA', 'VENCIDA'] }
+                });
             } else {
-                // En local o sin DB, el log es útil para saber que el modo memoria está activo
-                console.log(`\n--- [ReminderService] Escaneando Memoria Local (Modo sin DB) [${now.toLocaleTimeString()}] ---`);
-                allWithReminders = (memoryTasks || []).filter(t => t.reminder_at);
+                // Modo Memoria
+                (memoryTasks || []).forEach(t => {
+                    const sched = new Date(t.scheduled_at);
+                    if (['PROGRAMADA', 'ASIGNADA'].includes(t.status) && sched < now) {
+                        t.status = 'VENCIDA';
+                        console.log(`[ReminderService] Tarea Memoria "${t.title}" marcada como VENCIDA.`);
+                    }
+                });
+
+                allWithReminders = (memoryTasks || []).filter(t =>
+                    t.reminder_at &&
+                    !['COMPLETADA', 'CANCELADA', 'VENCIDA'].includes(t.status)
+                );
             }
 
             if (allWithReminders.length === 0) {
@@ -59,8 +88,8 @@ class ReminderService {
                 const notSent = task.reminder_sent !== true;
                 const currentStatus = (task.status || '').toUpperCase();
 
-                // Las notificaciones no se deben enviar si el estado es Completada o Cancelada
-                const activeStatus = !['COMPLETADA', 'CANCELADA'].includes(currentStatus);
+                // Las notificaciones no se deben enviar si el estado es Completada, Cancelada o Vencida
+                const activeStatus = !['COMPLETADA', 'CANCELADA', 'VENCIDA'].includes(currentStatus);
                 const hasTechs = task.assigned_technicians && task.assigned_technicians.length > 0;
 
                 if (isPast && !isExpired && notSent && activeStatus && hasTechs) {
@@ -85,6 +114,8 @@ class ReminderService {
 
         } catch (error) {
             console.error('[ReminderService] Error crítico:', error.message);
+        } finally {
+            this.isRunning = false;
         }
     }
 

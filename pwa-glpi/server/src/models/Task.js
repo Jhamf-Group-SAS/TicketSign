@@ -15,7 +15,7 @@ const taskSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['PROGRAMADA', 'ASIGNADA', 'EN_EJECUCION', 'CANCELADA', 'COMPLETADA'],
+        enum: ['PROGRAMADA', 'ASIGNADA', 'EN_EJECUCION', 'CANCELADA', 'COMPLETADA', 'VENCIDA'],
         default: 'PROGRAMADA'
     },
     scheduled_at: { type: Date },

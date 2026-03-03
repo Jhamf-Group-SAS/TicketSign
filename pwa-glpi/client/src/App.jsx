@@ -1,742 +1,514 @@
-import { useState, useEffect, useRef } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { clsx } from 'clsx'
-import { twMerge } from 'tailwind-merge'
-import { db } from './store/db'
-import MaintenanceForm from './components/MaintenanceForm'
-import MaintenancePreview from './components/MaintenancePreview'
-import ClientConsolidated from './components/ClientConsolidated'
-import Login from './components/Login'
-import HistoryList from './components/HistoryList'
-import TaskBoard from './components/TaskBoard'
-import DashboardSummary from './components/DashboardSummary'
-import Toast from './components/Toast'
-import TicketList from './components/TicketList'
-import TicketDetail from './components/TicketDetail'
-import AutomaticUpdateHandler from './components/AutomaticUpdateHandler'
-import { Plus, History, Wifi, WifiOff, Settings, Calendar, User, ClipboardList, LogOut, Users, FileText, Kanban, LayoutDashboard, Bell, Menu, X, MessageSquare, Package } from 'lucide-react'
-
-const cn = (...inputs) => twMerge(clsx(inputs));
+import React, { useState, useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from './store/db';
+import Sidebar from './components/Sidebar';
+import Topbar from './components/Topbar';
+import TicketList from './components/TicketList';
+import TicketDetail from './components/TicketDetail';
+import MaintenanceForm from './components/MaintenanceForm';
+import MaintenancePreview from './components/MaintenancePreview';
+import ClientConsolidated from './components/ClientConsolidated';
+import HistoryList from './components/HistoryList';
+import DashboardSummary from './components/DashboardSummary';
+import TaskBoard from './components/TaskBoard';
+import TaskList from './components/TaskList';
+import SyncManager from './components/SyncManager';
+import QuotationList from './components/QuotationList';
+import QuotationForm from './components/QuotationForm';
+import QuotationDetail from './components/QuotationDetail';
+import { GlobalSyncIndicator } from './components/SyncStatus';
+import { ToastContainer } from './components/Toast';
+import Login from './components/Login';
+import InDevelopment from './components/InDevelopment';
+import ConfigManager from './components/ConfigManager';
+import AutomaticUpdateHandler from './components/AutomaticUpdateHandler';
+import NotificationService from './services/NotificationService';
+import {
+    ClipboardList,
+    History,
+    ArrowRight,
+    LayoutDashboard,
+    Building2,
+    Cloud,
+    RefreshCw,
+    CheckCircle2,
+    Clock,
+    Calendar,
+    User,
+    ChevronRight,
+    Loader2,
+    Settings
+} from 'lucide-react';
+import { cn } from './utils/cn';
 
 function App() {
-    const [isOnline, setIsOnline] = useState(navigator.onLine)
-    const [isAuthenticated, setIsAuthenticated] = useState(false)
-    const [user, setUser] = useState(null)
-    const [view, setView] = useState('home') // home, form-preventive, form-corrective, form-delivery, preview, consolidated, tickets, ticket-detail
-    const [selectedAct, setSelectedAct] = useState(null)
-    const [selectedTicketId, setSelectedTicketId] = useState(null)
-    const [isMenuOpen, setIsMenuOpen] = useState(false)
-    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
-    const [theme, setTheme] = useState(localStorage.getItem('glpi_pro_theme') || 'dark')
-    const [notifications, setNotifications] = useState([])
-    const [unreadCount, setUnreadCount] = useState(0)
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-    const [notificationToast, setNotificationToast] = useState(null)
-
-    // Referencias para manejo de estado sin re-render
-    const processingRef = useRef(new Set());
-    const audioContextRef = useRef(null);
-
-    const playNotificationSound = async () => {
+    const [view, setView] = useState(() => localStorage.getItem('glpi_pro_view') || 'home');
+    const [selectedTicketId, setSelectedTicketId] = useState(() => localStorage.getItem('glpi_pro_ticket_id'));
+    const [selectedAct, setSelectedAct] = useState(() => {
         try {
-            if (!audioContextRef.current) {
-                audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            const ctx = audioContextRef.current;
-            if (ctx.state === 'suspended') await ctx.resume();
-
-            // Oscilador para el primer beep
-            const oscillator1 = ctx.createOscillator();
-            const gainNode1 = ctx.createGain();
-            oscillator1.connect(gainNode1);
-            gainNode1.connect(ctx.destination);
-
-            oscillator1.type = 'sawtooth';
-            oscillator1.frequency.setValueAtTime(900, ctx.currentTime);
-            gainNode1.gain.setValueAtTime(0.6, ctx.currentTime);
-            gainNode1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
-
-            oscillator1.start(ctx.currentTime);
-            oscillator1.stop(ctx.currentTime + 0.15);
-
-            // Oscilador para el segundo beep
-            const oscillator2 = ctx.createOscillator();
-            const gainNode2 = ctx.createGain();
-            oscillator2.connect(gainNode2);
-            gainNode2.connect(ctx.destination);
-
-            oscillator2.type = 'sawtooth';
-            oscillator2.frequency.setValueAtTime(1200, ctx.currentTime + 0.2);
-            gainNode2.gain.setValueAtTime(0.6, ctx.currentTime + 0.2);
-            gainNode2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
-
-            oscillator2.start(ctx.currentTime + 0.2);
-            oscillator2.stop(ctx.currentTime + 0.4);
+            return JSON.parse(localStorage.getItem('glpi_pro_act') || 'null');
+        } catch (e) { return null; }
+    });
+    const [selectedQuotationId, setSelectedQuotationId] = useState(() => localStorage.getItem('glpi_pro_quotation_id'));
+    const [user, setUser] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem('glpi_pro_user') || 'null');
         } catch (e) {
-            console.error("Error reproduciendo sonido:", e);
+            return null;
+        }
+    });
+
+    // Persistencia de navegación
+    useEffect(() => {
+        localStorage.setItem('glpi_pro_view', view);
+        if (selectedTicketId) localStorage.setItem('glpi_pro_ticket_id', selectedTicketId);
+        else localStorage.removeItem('glpi_pro_ticket_id');
+
+        if (selectedQuotationId) localStorage.setItem('glpi_pro_quotation_id', selectedQuotationId);
+        else localStorage.removeItem('glpi_pro_quotation_id');
+
+        if (selectedAct) localStorage.setItem('glpi_pro_act', JSON.stringify(selectedAct));
+        else localStorage.removeItem('glpi_pro_act');
+    }, [view, selectedTicketId, selectedQuotationId, selectedAct]);
+    const [isOnline, setIsOnline] = useState(window.navigator.onLine);
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+    const [theme, setTheme] = useState(() => localStorage.getItem('glpi_pro_theme') || 'light');
+
+    useEffect(() => {
+        const root = window.document.documentElement;
+        if (theme === 'dark') {
+            root.classList.add('dark');
+        } else {
+            root.classList.remove('dark');
+        }
+        localStorage.setItem('glpi_pro_theme', theme);
+    }, [theme]);
+    const [notificationToast, setNotificationToast] = useState(null);
+    const [isConfigured, setIsConfigured] = useState(true);
+    const [showSetupNotice, setShowSetupNotice] = useState(false);
+
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+
+    const checkConfig = async () => {
+        const tokenToken = localStorage.getItem('glpi_pro_token');
+        if (!tokenToken || tokenToken === 'undefined') return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/config`, {
+                headers: { 'Authorization': `Bearer ${tokenToken}` }
+            });
+            if (res.status === 401) {
+                handleLogout();
+                return;
+            }
+            if (res.status === 403) return; // No tiene permiso para ver config, ignorar
+            if (res.ok) {
+                const data = await res.json();
+                const hasGLPI = !!(data.glpi_api_url && data.glpi_app_token);
+                setIsConfigured(hasGLPI);
+                if (!hasGLPI && view !== 'config') setShowSetupNotice(true);
+                else setShowSetupNotice(false);
+
+                if (hasGLPI && navigator.onLine) {
+                    SyncService.syncGLPICache(); // Precarga silenciosa
+                }
+            }
+        } catch (err) {
+            // error checking config
         }
     };
 
-    // Global Reminder Watcher Mejorado y Anti-Duplicados
     useEffect(() => {
-        const checkReminders = async () => {
-            if (!user) return;
-            const now = new Date().getTime();
+        if (user) checkConfig();
+    }, [user, API_BASE_URL]);
 
-            // Buscar tareas con recordatorio configurado que no estén completadas
-            const tasksWithReminders = await db.tasks
-                .where('reminder_at')
-                .notEqual('')
-                .and(t => {
-                    // Verificación de fecha válida
-                    if (!t.reminder_at || t.status === 'COMPLETADA' || t.status === 'CANCELADA') return false;
+    // Sync state
+    const pendingActs = useLiveQuery(() => db.acts.filter(a => a.status === 'PENDIENTE_SINCRONIZACION').toArray()) || [];
 
-                    // Verificación de asignación
-                    const isCreator = t.createdBy === user.username;
-                    const isAssigned = (t.assigned_technicians || []).some(tech =>
-                        tech === user.name || tech === user.username || tech === user.displayName
-                    );
+    const consolidatedStats = useLiveQuery(async () => {
+        const dbActs = await db.acts.toArray();
+        const empresas = new Set(dbActs.map(a => a.client_name).filter(Boolean)).size;
+        const preventivas = dbActs.filter(a => a.type === 'PREVENTIVO').length;
+        const correctivas = dbActs.filter(a => a.type === 'CORRECTIVO').length;
+        const entregas = dbActs.filter(a => a.type === 'ENTREGA').length;
+        return { empresas, preventivas, correctivas, entregas };
+    }, []) || { empresas: 0, preventivas: 0, correctivas: 0, entregas: 0 };
 
-                    return isCreator || isAssigned;
-                })
-                .toArray();
+    const recentActs = useLiveQuery(async () => {
+        const acts = await db.acts.orderBy('createdAt').reverse().toArray();
+        // Filtrar duplicados por glpi_ticket_id (quedarnos con el más reciente)
+        const seen = new Set();
+        return acts.filter(act => {
+            if (!act.glpi_ticket_id) return true;
+            if (seen.has(act.glpi_ticket_id)) return false;
+            seen.add(act.glpi_ticket_id);
+            return true;
+        }).slice(0, 3);
+    }) || [];
 
-            for (const task of tasksWithReminders) {
-                // Verificar si ya se mostró notificación LOCALMENTE para esta tarea
-                try {
-                    // Usamos la clave primaria directamente (task.id)
-                    const alreadyNotified = await db.notification_log.get(task.id);
-                    if (alreadyNotified) continue;
-                } catch (e) {
-                    console.warn('Error checking notification log', e);
-                }
+    const isSyncing = false; // Mocking sync state for now
 
-                if (processingRef.current.has(task.id)) continue;
+    // Notificaciones
+    const notificationsList = useLiveQuery(() => db.notifications.orderBy('createdAt').reverse().limit(20).toArray()) || [];
+    const unreadCount = useLiveQuery(() => db.notifications.where('read').equals(0).count()) || 0;
 
-                const reminderTime = new Date(task.reminder_at).getTime();
-                const windowStart = now - (30 * 60 * 1000); // 30 minutos de ventana hacia atrás
-
-                // Si ya pasó la hora del recordatorio pero no hace más de 30 min (para evitar flood de tareas viejas)
-                if (reminderTime <= now && reminderTime > windowStart) {
-                    processingRef.current.add(task.id);
-
-                    try {
-                        playNotificationSound();
-
-                        // 1. Mostrar Popup Visual en la App (Toast)
-                        setNotificationToast({
-                            message: `🔔 RECORDATORIO: ${task.title}`,
-                            type: 'warning',
-                            duration: 10000
-                        });
-
-                        const newNotification = {
-                            id: Date.now() + Math.random(),
-                            title: 'Recordatorio',
-                            message: `Es hora de: ${task.title}`,
-                            time: 'Ahora',
-                            type: 'warning',
-                            task_id: task.id
-                        };
-
-                        setIsNotificationsOpen(false); // No abrir automáticamente, solo sumar al counter
-                        setUnreadCount(prev => prev + 1);
-                        setNotifications(prev => {
-                            const exists = prev.some(n => n.task_id === task.id && n.time === 'Ahora');
-                            if (exists) return prev;
-                            return [newNotification, ...prev];
-                        });
-
-                        // 2. Notificación del Sistema (OS / Mobile Lock Screen)
-                        if ('Notification' in window && Notification.permission === 'granted') {
-                            try {
-                                if ('serviceWorker' in navigator) {
-                                    navigator.serviceWorker.ready.then(registration => {
-                                        registration.showNotification('⏰ Recordatorio de Tarea', {
-                                            body: `Es hora de: ${task.title}`,
-                                            icon: '/logo.png',
-                                            badge: '/logo.png',
-                                            vibrate: [200, 100, 200],
-                                            tag: `task-${task.id}`,
-                                            requireInteraction: true,
-                                            data: { taskId: task.id }
-                                        });
-                                    });
-                                } else {
-                                    const notification = new Notification('⏰ Recordatorio de Tarea', {
-                                        body: `Es hora de: ${task.title}`,
-                                        icon: '/logo.png',
-                                        tag: `task-${task.id}`
-                                    });
-                                    notification.onclick = () => {
-                                        window.focus();
-                                        setView('kanban');
-                                    };
-                                }
-                            } catch (e) {
-                                console.error("Error lanzando notificación nativa:", e);
-                            }
-                        }
-
-                        // Marcar como notificado LOCALMENTE
-                        await db.notification_log.add({ task_id: task.id, sent_at: now });
-                    } catch (err) {
-                        console.error("Error procesando recordatorio:", err);
-                    }
-
-                    setTimeout(() => {
-                        if (processingRef.current) processingRef.current.delete(task.id);
-                    }, 5000);
-                }
-            }
-        };
-
-        const interval = setInterval(checkReminders, 5000);
-        checkReminders(); // Check immediately on mount
-
-        return () => clearInterval(interval);
+    useEffect(() => {
+        if (user) {
+            NotificationService.start();
+        }
+        return () => NotificationService.stop();
     }, [user]);
-    const notificationsRef = useRef(null);
-    const userMenuRef = useRef(null);
 
+    const handleMarkAllRead = async () => {
+        await db.notifications.where('read').equals(0).modify({ read: 1 });
+    };
+
+    const handleDeleteNotification = async (id) => {
+        await db.notifications.delete(id);
+    };
+
+    const handleClearAllNotifications = async () => {
+        await db.notifications.clear();
+    };
     useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
-                setIsNotificationsOpen(false);
-            }
-            if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
-                setIsMenuOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-
-
-    // Reactive query for recent acts
-    const pendingActs = useLiveQuery(() => db.acts.orderBy('createdAt').reverse().limit(10).toArray()) || []
-
-    useEffect(() => {
-        // Apply theme
-        if (theme === 'dark') {
-            document.documentElement.classList.add('dark')
-        } else {
-            document.documentElement.classList.remove('dark')
-        }
-        localStorage.setItem('glpi_pro_theme', theme)
-
-        const savedToken = localStorage.getItem('glpi_pro_token')
-        const savedUser = localStorage.getItem('glpi_pro_user')
-        if (savedToken && savedUser) {
-            setIsAuthenticated(true)
-            setUser(JSON.parse(savedUser))
-            // Inicializar servicio de sincronización si hay sesión
-            import('./services/SyncService').then(({ SyncService }) => {
-                SyncService.init();
-            }).catch(console.error);
-        }
-
-        const handleOnline = () => setIsOnline(true)
-        const handleOffline = () => setIsOnline(false)
-        window.addEventListener('online', handleOnline)
-        window.addEventListener('offline', handleOffline)
-
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
         return () => {
-            window.removeEventListener('online', handleOnline)
-            window.removeEventListener('offline', handleOffline)
-        }
-    }, [theme])
-
-    // Inicializar audio y permisos en la primera interacción
-    useEffect(() => {
-        const initAudioAndPermissions = () => {
-            // Audio Context
-            if (!audioContextRef.current) {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                if (AudioContext) {
-                    audioContextRef.current = new AudioContext();
-                }
-            }
-
-            if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-                audioContextRef.current.resume().then(() => {
-                    console.log('AudioContext resumed successfully');
-                }).catch(e => console.error('AudioContext resume failed', e));
-            }
-
-            // Notification Permissions - Force request
-            if ('Notification' in window) {
-                if (Notification.permission === 'default' || Notification.permission === 'denied') {
-                    Notification.requestPermission().then(permission => {
-                        console.log('Notification permission:', permission);
-                    });
-                }
-            }
-        };
-
-        // Listeners para iniciar audio en cualquier interacción
-        const events = ['click', 'touchstart', 'touchend', 'keydown'];
-        events.forEach(event => window.addEventListener(event, initAudioAndPermissions));
-
-        return () => {
-            events.forEach(event => window.removeEventListener(event, initAudioAndPermissions));
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
         };
     }, []);
 
+    const handleLogout = () => {
+        localStorage.removeItem('glpi_pro_token');
+        localStorage.removeItem('glpi_pro_user');
+        setUser(null);
+        setView('login');
+    };
 
+    const handleNavClick = (newView) => {
+        setView(newView);
+        setIsMobileSidebarOpen(false);
+    };
 
-    const renderHome = () => (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* New Dashboard Summary Section */}
-            <DashboardSummary onNavigate={handleNavClick} />
-
-            {/* Consolidated Reports Quick Link */}
-            <div className="bg-white dark:bg-slate-900/40 p-6 rounded-[2.5rem] border border-slate-200 dark:border-white/5 backdrop-blur-md flex items-center justify-between group cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all active:scale-95 shadow-sm dark:shadow-xl" onClick={() => handleNavClick('consolidated')}>
-                <div className="flex items-center gap-4">
-                    <div className="bg-purple-500/10 p-4 rounded-3xl text-purple-500 group-hover:scale-110 transition-transform">
-                        <Users size={28} />
-                    </div>
-                    <div>
-                        <h4 className="font-bold text-slate-900 dark:text-white leading-tight">Consolidados por Empresa</h4>
-                        <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">Resumen maestro corporativo.</p>
-                    </div>
-                </div>
-                <div className="bg-slate-50 dark:bg-white/5 p-2 rounded-full text-slate-300 dark:text-slate-600 group-hover:text-purple-500 transition-colors">
-                    <History size={20} className="rotate-180" />
-                </div>
-            </div>
-
-            {/* Recent List */}
-            <section>
-                <div className="flex justify-between items-center mb-4 px-2">
-                    <h3 className="font-black text-xs uppercase tracking-[0.2em] text-blue-500 flex items-center gap-2 transition-colors">
-                        <History size={14} />
-                        Actividad Reciente
-                    </h3>
-                    <button onClick={() => handleNavClick('history')} className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-blue-500 transition-all">Ver todo</button>
-                </div>
-
-                <div className="space-y-3">
-                    {pendingActs.length > 0 ? pendingActs.map(act => (
-                        <div
-                            key={act.id}
-                            onClick={() => {
-                                setSelectedAct(act)
-                                handleNavClick('preview')
-                            }}
-                            className="bg-white/40 dark:bg-slate-900/10 backdrop-blur-sm p-5 rounded-[2rem] border border-slate-200 dark:border-white/5 hover:bg-white dark:hover:bg-slate-900/40 transition-all group cursor-pointer active:scale-[0.99] shadow-sm"
-                        >
-                            <div className="flex justify-between items-start mb-3">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2.5 rounded-xl ${act.type === 'PREVENTIVO' ? 'bg-blue-500/10 text-blue-500' : act.type === 'ENTREGA' ? 'bg-purple-500/10 text-purple-500' : 'bg-orange-500/10 text-orange-500'}`}>
-                                        {act.type === 'ENTREGA' ? <Package size={20} /> : <ClipboardList size={20} />}
-                                    </div>
-                                    <div>
-                                        <h4 className="font-black text-sm text-slate-900 dark:text-white">Ticket #{act.glpi_ticket_id || '---'}</h4>
-                                        <p className="text-[11px] text-slate-500 font-bold flex items-center gap-2">
-                                            {act.client_name || 'Sin cliente'}
-                                            <span className="text-[9px] text-blue-400 font-black bg-blue-500/10 px-2.5 py-0.5 rounded-lg border border-blue-500/20">
-                                                {act.inventory_number || 'S/E'}
-                                            </span>
-                                        </p>
-                                    </div>
-                                </div>
-                                <span className={`text-[9px] px-3 py-1 rounded-full font-black uppercase tracking-widest border ${act.status === 'BORRADOR'
-                                    ? 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-950 dark:text-slate-500 dark:border-white/5'
-                                    : act.status === 'PENDIENTE_SINCRONIZACION'
-                                        ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
-                                        : 'bg-green-500/10 text-green-600 border-green-500/20'
-                                    }`}>
-                                    {act.status}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-white/5 mt-1">
-                                <div className="flex gap-5">
-                                    <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                                        <Calendar size={12} className="text-blue-500" /> {new Date(act.createdAt).toLocaleDateString()}
-                                    </span>
-                                    <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                                        <User size={12} className="text-blue-500" /> {act.technical_name || 'Técnico'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    )) : (
-                        <div className="p-12 text-center bg-slate-900/20 border-2 border-dashed border-slate-800/50 rounded-3xl">
-                            <ClipboardList className="mx-auto text-slate-700 mb-2" size={40} />
-                            <p className="text-slate-500 text-sm">No hay registros aún.</p>
-                            <p className="text-slate-700 text-[11px] mt-1">Realiza un servicio desde el menú superior.</p>
-                        </div>
-                    )}
-                </div>
-            </section>
-        </div>
-    )
-
-    if (!isAuthenticated) {
-        return <Login onLoginSuccess={async (u) => {
-            setIsAuthenticated(true)
-            setUser(u)
-            // Disparar sincronización inicial inmediatamente después del login e inicializar
-            const { SyncService } = await import('./services/SyncService');
-            SyncService.init(); // init() ya llama a pullRemoteChanges internally
-        }} />
+    if (!user) {
+        return <Login onLogin={(u) => { setUser(u); setView('home'); }} />;
     }
 
-    const navItems = [
-        { id: 'home', label: 'Inicio', icon: LayoutDashboard },
-        { id: 'form-preventive', label: 'Preventivo', icon: ClipboardList, color: 'text-blue-500', bg: 'hover:bg-blue-500/10' },
-        { id: 'form-corrective', label: 'Correctivo', icon: Plus, color: 'text-orange-500', bg: 'hover:bg-orange-500/10' },
-        { id: 'form-delivery', label: 'Entrega', icon: Package, color: 'text-purple-500', bg: 'hover:bg-purple-500/10' },
-        { id: 'kanban', label: 'Tareas', icon: Kanban, color: 'text-indigo-500', bg: 'hover:bg-indigo-500/10' },
-        { id: 'tickets', label: 'Soporte GLPI', icon: MessageSquare, color: 'text-cyan-500', bg: 'hover:bg-cyan-500/10', comingSoon: true },
-        { id: 'history', label: 'Historial', icon: History, color: 'text-purple-500', bg: 'hover:bg-purple-500/10' },
-    ];
-
-    const handleNavClick = (itemOrId) => {
-        const item = typeof itemOrId === 'string'
-            ? navItems.find(i => i.id === itemOrId)
-            : itemOrId;
-
-        if (item?.comingSoon) {
-            setNotificationToast({
-                message: "Módulo en desarrollo: Próximamente",
-                type: "warning"
-            });
-            return;
-        }
-        setView(item?.id || itemOrId);
-        setIsSidebarOpen(false);
-    };
-
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-300">
+        <div className="min-h-screen bg-primary transition-colors duration-300">
             <AutomaticUpdateHandler />
-            {/* Dynamic Background elements */}
-            <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full"></div>
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full"></div>
+
+            {/* Sidebar - Desktop */}
+            <div className="hidden lg:block">
+                <Sidebar
+                    activeView={view}
+                    onViewChange={handleNavClick}
+                    user={user}
+                    onLogout={handleLogout}
+                    isCollapsed={isSidebarCollapsed}
+                    onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                />
             </div>
 
-            {/* Sidebar / Drawer for Mobile Navigation */}
-            {isSidebarOpen && (
-                <div className="fixed inset-0 z-[60] sm:hidden">
-                    {/* Backdrop */}
-                    <div
-                        className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm animate-in fade-in transition-all"
-                        onClick={() => setIsSidebarOpen(false)}
+            {/* Mobile Sidebar */}
+            {isMobileSidebarOpen && (
+                <div className="fixed inset-0 z-[150] lg:hidden">
+                    <div className="absolute inset-0 bg-[#1e293b]/60 backdrop-blur-sm" onClick={() => setIsMobileSidebarOpen(false)} />
+                    <Sidebar
+                        activeView={view}
+                        onViewChange={handleNavClick}
+                        user={user}
+                        onLogout={handleLogout}
                     />
-
-                    {/* Sidebar Content */}
-                    <div className="absolute top-0 left-0 bottom-0 w-[280px] bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-white/10 shadow-2xl animate-in slide-in-from-left duration-300">
-                        <div className="p-6 flex flex-col h-full uppercase tracking-tighter">
-                            <div className="flex items-center justify-between mb-8">
-                                <div className="bg-[#0f172a] p-2 rounded-xl border border-white/10">
-                                    <img src="/logo-white.png" className="h-8 w-auto" alt="jhamf" />
-                                </div>
-                                <button
-                                    onClick={() => setIsSidebarOpen(false)}
-                                    className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all"
-                                >
-                                    <X size={24} />
-                                </button>
-                            </div>
-
-                            <div className="flex-1 space-y-2">
-                                <p className="text-[10px] font-black text-slate-400 mb-4 px-2 tracking-[0.2em]">Navegación</p>
-                                {navItems.map(item => (
-                                    <button
-                                        key={item.id}
-                                        onClick={() => handleNavClick(item)}
-                                        className={cn(
-                                            "w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all group active:scale-[0.98] relative overflow-hidden",
-                                            view === item.id
-                                                ? "bg-blue-500/10 text-blue-500 border border-blue-500/20"
-                                                : "text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5",
-                                            item.comingSoon && "opacity-80"
-                                        )}
-                                    >
-                                        <item.icon size={20} className={cn(
-                                            view === item.id ? "text-blue-500" : item.color
-                                        )} />
-                                        <span className="text-xs font-black uppercase tracking-widest">{item.label}</span>
-                                        {item.comingSoon && (
-                                            <span className="ml-auto text-[8px] font-black bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-md border border-blue-500/20 uppercase tracking-widest">
-                                                Próximamente
-                                            </span>
-                                        )}
-                                    </button>
-                                ))}
-                            </div>
-
-                            <div className="mt-auto pt-6 border-t border-slate-100 dark:border-white/5">
-                                <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-white/5 rounded-2xl">
-                                    <div className="bg-blue-500/20 p-2 rounded-lg text-blue-500">
-                                        <User size={18} />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-[10px] font-black text-slate-400 leading-none mb-1">Técnico</p>
-                                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{user?.name || user?.username}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
-            )
-            }
+            )}
 
-
-            <nav className="p-3 sm:p-4 bg-white/40 dark:bg-slate-950/40 backdrop-blur-xl sticky top-0 z-50 border-b border-slate-200 dark:border-white/5 flex justify-between items-center shadow-sm dark:shadow-2xl">
-                <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-                    {/* Hamburger Button for Mobile */}
-                    <button
-                        onClick={() => setIsSidebarOpen(true)}
-                        className="p-2 sm:hidden text-slate-500 hover:text-blue-500 hover:bg-blue-500/5 rounded-xl transition-all active:scale-90"
-                    >
-                        <Menu size={24} />
-                    </button>
-
-                    <div
-                        className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-all active:scale-[0.98]"
-                        onClick={() => setView('home')}
-                    >
-                        <div className="bg-[#0f172a] p-1.5 rounded-xl shadow-lg border border-slate-200 dark:border-white/10 group-hover:shadow-blue-500/10 transition-all">
-                            <img src="/logo-white.png" className="h-6 sm:h-8 w-auto object-contain" alt="jhamf" />
-                        </div>
-                    </div>
+            {/* Main Content Area */}
+            <div className={cn(
+                "flex flex-col min-w-0 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]",
+                isSidebarCollapsed ? "lg:ml-[68px]" : "lg:ml-[238px]"
+            )}>
+                <div className={cn(
+                    "fixed top-0 right-0 left-0 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] z-[100]",
+                    isSidebarCollapsed ? "lg:left-[68px]" : "lg:left-[238px]"
+                )}>
+                    <Topbar
+                        view={view}
+                        user={user}
+                        isOnline={isOnline}
+                        syncStatus={isSyncing ? 'syncing' : (pendingActs.length > 0 ? 'pending' : 'synced')}
+                        theme={theme}
+                        onThemeToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                        onLogout={handleLogout}
+                        unreadCount={unreadCount}
+                        notifications={notificationsList}
+                        onMarkAllRead={handleMarkAllRead}
+                        onDeleteNotification={handleDeleteNotification}
+                        onClearAllNotifications={handleClearAllNotifications}
+                        onOpenSidebar={() => setIsMobileSidebarOpen(true)}
+                    />
                 </div>
 
-                <div className="hidden sm:flex flex-1 justify-center px-4">
-                    <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-white/5 p-1 rounded-[1.2rem] border border-slate-200/50 dark:border-white/5 overflow-x-auto no-scrollbar max-w-full">
-                        {navItems.map(item => (
+                <main className="flex-1 p-[16px] md:p-[26px] mt-[62px] min-h-[calc(100vh-62px)]">
+                    {showSetupNotice && (
+                        <div className="mb-8 p-6 bg-amber-500/20 border border-amber-500/30 rounded-2xl flex items-center justify-between animate-in slide-in-from-top-4 duration-500 shadow-sm shadow-amber-500/5">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center text-white shadow-inner">
+                                    <Clock size={24} className="animate-pulse" />
+                                </div>
+                                <div>
+                                    <h3 className="text-[15px] font-[800] text-amber-600 dark:text-amber-500">Configuración Requerida</h3>
+                                    <p className="text-[13px] font-[500] text-amber-700/80 dark:text-amber-400/80 mt-0.5">Para comenzar a operar, es necesario completar la integración con GLPI y otros servicios.</p>
+                                </div>
+                            </div>
                             <button
-                                key={item.id}
-                                onClick={() => handleNavClick(item)}
-                                className={cn(
-                                    "flex items-center gap-2 px-3 sm:px-4 py-2 rounded-2xl transition-all active:scale-95 group/nav shrink-0 relative",
-                                    view === item.id
-                                        ? "bg-white dark:bg-white/10 shadow-sm text-blue-500"
-                                        : `text-slate-500 hover:text-slate-900 dark:hover:text-white ${item.bg}`,
-                                    item.comingSoon && "opacity-70"
-                                )}
+                                onClick={() => setView('config')}
+                                className="px-5 h-11 bg-amber-600 text-white text-[13px] font-[700] rounded-xl hover:bg-amber-700 transition-all active:scale-95 shadow-lg shadow-amber-600/20"
                             >
-                                <item.icon size={16} className={cn(
-                                    "transition-transform group-hover/nav:scale-110",
-                                    view === item.id ? "text-blue-500" : item.color
-                                )} />
-                                <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">{item.label}</span>
-                                {item.comingSoon && (
-                                    <div className="absolute -top-1 -right-1 bg-blue-500 w-2 h-2 rounded-full border border-white dark:border-slate-950 animate-pulse"></div>
-                                )}
+                                Configurar Ahora
                             </button>
-                        ))}
-                    </div>
-                </div>
+                        </div>
+                    )}
 
-                <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="relative" ref={notificationsRef}>
-                        <button
-                            onClick={() => {
-                                setIsNotificationsOpen(!isNotificationsOpen);
-                                if (!isNotificationsOpen) setUnreadCount(0);
-                            }}
-                            className="relative p-2 text-slate-500 hover:text-blue-500 hover:bg-blue-500/5 rounded-xl transition-all active:scale-90 group"
-                        >
-                            <Bell size={20} />
-                            {unreadCount > 0 && (
-                                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-950 shadow-sm animate-in zoom-in px-1">
-                                    {unreadCount}
-                                </span>
-                            )}
-                        </button>
+                    {view === 'home' && (
+                        <div className="space-y-8 animate-in fade-in duration-500 w-full px-4">
+                            <DashboardSummary onNavigate={handleNavClick} />
 
-                        {isNotificationsOpen && (
-                            <div className="absolute right-0 top-full pt-2 w-[280px] xs:w-80 z-20">
-                                <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
-                                    <div className="p-4 border-b border-slate-100 dark:border-white/5 flex justify-between items-center bg-slate-50/50 dark:bg-white/5">
-                                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500">Notificaciones</h4>
-                                        <span className="text-[9px] font-bold bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-lg">{notifications.length} Nuevas</span>
+                            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
+                                {/* Left Side: Recent Activity */}
+                                <div className="xl:col-span-2 space-y-4">
+                                    <div className="flex justify-between items-center mb-1 px-1">
+                                        <h4 className="text-[14px] font-[800] text-text-primary">
+                                            Actividad Reciente
+                                        </h4>
+                                        <button
+                                            onClick={() => handleNavClick('history')}
+                                            className="text-[12px] font-[600] text-primary-500 flex items-center gap-1 hover:underline"
+                                        >
+                                            Ver todo <ArrowRight size={14} />
+                                        </button>
                                     </div>
-                                    <div className="max-h-[350px] overflow-y-auto no-scrollbar">
-                                        {notifications.length > 0 ? (
-                                            notifications.map(n => (
-                                                <div key={n.id} className="p-4 border-b border-slate-100 dark:border-white/5 last:border-0 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer group">
-                                                    <div className="flex justify-between items-start mb-1">
-                                                        <span className={cn(
-                                                            "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md",
-                                                            n.type === 'warning' ? "bg-amber-500/10 text-amber-600" :
-                                                                n.type === 'success' ? "bg-green-500/10 text-green-600" :
-                                                                    "bg-blue-500/10 text-blue-600"
-                                                        )}>
-                                                            {n.title}
-                                                        </span>
-                                                        <span className="text-[9px] text-slate-400 font-bold">{n.time}</span>
-                                                    </div>
-                                                    <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium leading-relaxed group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{n.message}</p>
+
+                                    <div className="space-y-3">
+                                        {recentActs.length > 0 ? recentActs.map(act => (
+                                            <RecentActCard key={act.id} act={act} onClick={() => { setSelectedAct(act); setView('preview'); }} />
+                                        )) : (
+                                            <div className="p-8 bg-secondary border border-color rounded-[12px] flex items-center shadow-sm relative overflow-hidden h-[120px]">
+                                                <div className="w-[4px] absolute left-0 top-3 bottom-3 bg-primary-500 rounded-r-lg" />
+                                                <div className="flex-1 ml-4">
+                                                    <p className="text-text-primary text-[13.5px] font-[800]">No hay actividades registradas aún</p>
+                                                    <p className="text-text-muted text-[12px] font-[500] mt-0.5">Las actas sincronizadas aparecerán aquí automáticamente.</p>
+                                                    <span className="inline-block mt-3 px-3 py-1 bg-tertiary text-text-muted text-[10px] font-[700] rounded-full uppercase tracking-wide">Sin datos</span>
                                                 </div>
-                                            ))
-                                        ) : (
-                                            <div className="p-10 text-center">
-                                                <Bell className="mx-auto text-slate-300 dark:text-slate-800 mb-2" size={32} />
-                                                <p className="text-slate-400 text-xs font-bold">Sin alertas nuevas</p>
                                             </div>
                                         )}
                                     </div>
-                                    <div className="p-3 bg-slate-50/50 dark:bg-white/5 border-t border-slate-100 dark:border-white/5">
-                                        <button className="w-full py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-500 transition-colors">Ver todas las alertas</button>
+                                </div>
+
+                                {/* Right Side: Widgets */}
+                                <div className="space-y-6">
+                                    {/* Consolidated Companies Widget */}
+                                    <div className="bg-secondary rounded-[12px] border border-color shadow-sm overflow-hidden text-text-primary">
+                                        <div className="p-4 border-b border-color bg-tertiary flex items-center gap-2">
+                                            <Building2 size={16} className="text-primary-500" />
+                                            <h4 className="text-[12px] font-[800] text-text-primary">Consolidado Empresas</h4>
+                                        </div>
+                                        <div className="divide-y divide-color">
+                                            <div className="p-4 flex justify-between items-center group hover:bg-tertiary transition-colors">
+                                                <span className="text-[12px] text-text-secondary font-[500]">Empresas atendidas</span>
+                                                <span className="text-[13px] font-[700] text-text-primary">{consolidatedStats.empresas}</span>
+                                            </div>
+                                            <div className="p-4 flex justify-between items-center group hover:bg-tertiary transition-colors">
+                                                <span className="text-[12px] text-text-secondary font-[500]">Actas Preventivas</span>
+                                                <span className="text-[13px] font-[700] text-text-primary">{consolidatedStats.preventivas}</span>
+                                            </div>
+                                            <div className="p-4 flex justify-between items-center group hover:bg-tertiary transition-colors">
+                                                <span className="text-[12px] text-text-secondary font-[500]">Actas Correctivas</span>
+                                                <span className="text-[13px] font-[700] text-text-primary">{consolidatedStats.correctivas}</span>
+                                            </div>
+                                            <div className="p-4 flex justify-between items-center group hover:bg-tertiary transition-colors">
+                                                <span className="text-[12px] text-text-secondary font-[500]">Entregas</span>
+                                                <span className="text-[13px] font-[700] text-text-primary">{consolidatedStats.entregas}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Sync Status Widget */}
+                                    <div className="bg-secondary rounded-[12px] border border-color shadow-sm overflow-hidden text-text-primary">
+                                        <div className="p-4 border-b border-color bg-tertiary flex items-center gap-2">
+                                            <Cloud size={16} className="text-primary-500" />
+                                            <h4 className="text-[12px] font-[800] text-text-primary">Estado de Sincronización</h4>
+                                        </div>
+                                        <div className="p-5 space-y-4">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[12px] text-text-secondary font-[500]">Última sincronización</span>
+                                                <span className="text-[12px] font-[600] text-text-primary">Hace 5 min</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[12px] text-text-secondary font-[500]">Registros pendientes</span>
+                                                <span className="text-[12px] font-[700] text-orange-500">{pendingActs.length}</span>
+                                            </div>
+                                            <div className="pt-2 border-t border-color flex justify-between items-center">
+                                                <span className="text-[12px] text-text-secondary font-[500]">Conexión GLPI</span>
+                                                <span className="flex items-center gap-1 text-[12px] font-[700] text-emerald-500">
+                                                    <CheckCircle2 size={12} /> Activa
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
 
-                    <div className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-colors ${isOnline ? 'bg-green-500/10 text-green-500 ring-1 ring-green-500/20' : 'bg-red-500/10 text-red-500 ring-1 ring-red-500/20'
-                        }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`}></span>
-                        <span className="hidden xs:inline">{isOnline ? 'En Línea' : 'Sin Red'}</span>
-                    </div>
-
-                    <div className="relative" ref={userMenuRef}>
-                        <button
-                            onClick={() => setIsMenuOpen(!isMenuOpen)}
-                            className="flex items-center gap-2 md:gap-3 px-2 md:px-3 py-1.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-2xl border border-slate-200 dark:border-white/5 transition-all active:scale-95"
-                        >
-                            <div className="bg-blue-500/10 p-2 rounded-xl text-blue-500">
-                                <User size={18} />
-                            </div>
-                            <div className="text-left hidden xs:block lg:hidden xl:block">
-                                <p className="text-[9px] uppercase font-black text-slate-400 dark:text-slate-500 leading-none mb-1">Técnico</p>
-                                <p className="text-xs font-bold text-slate-900 dark:text-white leading-none truncate max-w-[80px]">{user?.name || user?.username || 'Usuario'}</p>
-                            </div>
-                        </button>
-
-                        {isMenuOpen && (
-                            <div className="absolute right-0 top-full pt-2 w-48 z-20">
-                                <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl backdrop-blur-3xl animate-in fade-in zoom-in-95 duration-200 p-1">
-                                    <div className="p-3 border-b border-slate-100 dark:border-white/5 xs:hidden">
-                                        <p className="text-[9px] uppercase font-black text-slate-400 dark:text-slate-500 mb-1">Técnico</p>
-                                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{user?.name || user?.username}</p>
-                                    </div>
-
-                                    <button
-                                        onClick={() => {
-                                            setView('history')
-                                            setIsMenuOpen(false)
-                                        }}
-                                        className="w-full flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl transition-colors text-left"
-                                    >
-                                        <History size={16} />
-                                        <span className="text-xs font-bold uppercase tracking-wider">Historial</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => {
-                                            setTheme(theme === 'dark' ? 'light' : 'dark')
-                                            setIsMenuOpen(false)
-                                        }}
-                                        className="w-full flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl transition-colors text-left"
-                                    >
-                                        {theme === 'dark' ? <Plus size={16} className="rotate-45" /> : <History size={16} />}
-                                        <span className="text-xs font-bold uppercase tracking-wider">{theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => {
-                                            localStorage.removeItem('glpi_pro_token')
-                                            localStorage.removeItem('glpi_pro_user')
-                                            setIsAuthenticated(false)
-                                            setIsMenuOpen(false)
-                                        }}
-                                        className="w-full flex items-center gap-3 px-4 py-3 text-red-500 dark:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors text-left"
-                                    >
-                                        <LogOut size={16} />
-                                        <span className="text-xs font-bold uppercase tracking-wider">Cerrar Sesión</span>
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </nav>
-
-            {/* Main Content Area */}
-            <main className="flex-1 relative z-10 p-4 pt-6 max-w-4xl mx-auto w-full">
-                {view === 'home' && renderHome()}
-
-                {(view === 'form-preventive' || view === 'form-corrective' || view === 'form-delivery') && (
-                    <div className="animate-in fade-in zoom-in-95 duration-300">
+                    {(view === 'form-preventive' || view === 'form-corrective' || view === 'form-delivery') && (
                         <MaintenanceForm
                             type={view === 'form-preventive' ? 'PREVENTIVO' : view === 'form-delivery' ? 'ENTREGA' : 'CORRECTIVO'}
                             onCancel={() => setView('home')}
                             onSave={() => setView('home')}
                             theme={theme}
                         />
-                    </div>
-                )}
+                    )}
 
-                {view === 'preview' && selectedAct && (
-                    <MaintenancePreview
-                        act={selectedAct}
-                        onBack={() => setView('home')}
-                        theme={theme}
-                    />
-                )}
+                    {view === 'preview' && selectedAct && (
+                        <MaintenancePreview act={selectedAct} onBack={() => setView('home')} theme={theme} />
+                    )}
 
-                {view === 'consolidated' && (
-                    <ClientConsolidated
-                        onBack={() => setView('home')}
-                    />
-                )}
+                    {view === 'consolidated' && <ClientConsolidated onBack={() => setView('home')} />}
+                    {view === 'kanban' && <TaskBoard onBack={() => setView('home')} />}
+                    {view === 'task-list' && <TaskList onBack={() => setView('home')} />}
+                    {view === 'history' && (
+                        <HistoryList
+                            onSelectAct={(act) => {
+                                if (act.isQuotation) {
+                                    setSelectedQuotationId(act.id);
+                                    setView('quotation-detail');
+                                } else {
+                                    setSelectedAct(act);
+                                    setView('preview');
+                                }
+                            }}
+                            onBack={() => setView('home')}
+                        />
+                    )}
+                    {view === 'tickets' && (
+                        <InDevelopment title="Soporte GLPI" onBack={() => setView('home')} />
+                    )}
+                    {view === 'ticket-detail' && selectedTicketId && (
+                        <TicketDetail ticketId={selectedTicketId} onBack={() => setView('tickets')} />
+                    )}
+                    {view === 'quotations' && (
+                        <QuotationList user={user} onNew={() => setView('quotation-form')} onSelect={(id) => { setSelectedQuotationId(id); setView('quotation-detail'); }} />
+                    )}
+                    {view === 'quotation-form' && (
+                        <QuotationForm user={user} onBack={() => setView('quotations')} onCreated={(id) => { setSelectedQuotationId(id); setView('quotation-detail'); }} />
+                    )}
+                    {view === 'quotation-detail' && selectedQuotationId && (
+                        <QuotationDetail quotationId={selectedQuotationId} user={user} onBack={() => setView('quotations')} />
+                    )}
+                    {view === 'sync' && <SyncManager onBack={() => setView('home')} />}
+                    {view === 'config' && (
+                        ['Super-Admin', 'Admin-Mesa'].some(r => user?.profile?.includes(r)) ? (
+                            <ConfigManager onBack={() => setView('home')} onLogout={handleLogout} />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center p-12 bg-secondary border border-color rounded-2xl animate-in fade-in duration-500">
+                                <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 mb-6">
+                                    <Settings size={32} />
+                                </div>
+                                <h3 className="text-[16px] font-[800] text-text-primary uppercase tracking-tight">Acceso Restringido</h3>
+                                <p className="text-[13px] text-text-muted font-[500] mt-2 text-center max-w-[300px]">Solo los administradores autorizados tienen acceso a la configuración del sistema.</p>
+                                <button
+                                    onClick={() => setView('home')}
+                                    className="mt-8 px-8 h-12 bg-primary-500 text-white text-[12px] font-[700] uppercase tracking-widest rounded-xl hover:bg-primary-600 transition-all active:scale-95 shadow-lg shadow-primary-500/20"
+                                >
+                                    Volver al Inicio
+                                </button>
+                            </div>
+                        )
+                    )}
+                </main>
+            </div>
 
-                {view === 'kanban' && (
-                    <TaskBoard
-                        onBack={() => setView('home')}
-                    />
-                )}
-
-                {view === 'history' && (
-                    <HistoryList
-                        onSelectAct={(act) => {
-                            setSelectedAct(act)
-                            setView('preview')
-                        }}
-                        onBack={() => setView('home')}
-                    />
-                )}
-
-                {view === 'tickets' && (
-                    <TicketList
-                        user={user}
-                        onSelectTicket={(id) => {
-                            setSelectedTicketId(id);
-                            setView('ticket-detail');
-                        }}
-                        onBack={() => setView('home')}
-                    />
-                )}
-
-                {view === 'ticket-detail' && selectedTicketId && (
-                    <TicketDetail
-                        ticketId={selectedTicketId}
-                        onBack={() => setView('tickets')}
-                    />
-                )}
-            </main>
-
-            {/* Status Bar / Mobile Indicator */}
-            <div className="md:hidden h-20"></div>
-
-            {notificationToast && (
-                <Toast
-                    message={notificationToast.message}
-                    type={notificationToast.type}
-                    onClose={() => setNotificationToast(null)}
-                />
-            )}
-        </div >
-    )
+            <ToastContainer />
+        </div>
+    );
 }
 
-export default App
+const RecentActCard = ({ act, onClick }) => {
+    let accentColor = 'bg-[#94a3b8]'; // Bajo
+    let iconBg = 'bg-[#94a3b8]/10';
+    let iconColor = 'text-[#94a3b8]';
+
+    if (act.type === 'CORRECTIVO') {
+        accentColor = 'bg-[#f97316]';
+        iconBg = 'bg-[#f97316]/10';
+        iconColor = 'text-[#f97316]';
+    } else if (act.type === 'PREVENTIVO') {
+        accentColor = 'bg-[#22c55e]';
+        iconBg = 'bg-[#22c55e]/10';
+        iconColor = 'text-[#22c55e]';
+    } else if (act.type === 'ENTREGA') {
+        accentColor = 'bg-[#8b5cf6]';
+        iconBg = 'bg-[#8b5cf6]/10';
+        iconColor = 'text-[#8b5cf6]';
+    }
+
+    const statusStyles = {
+        'PENDIENTE_SINCRONIZACION': 'bg-orange-500/10 text-orange-500 border-orange-500/30',
+        'BORRADOR': 'bg-amber-500/10 text-amber-500 border-amber-500/30',
+        'SINCRONIZADO': 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+    };
+
+    return (
+        <div
+            onClick={onClick}
+            className="bg-secondary rounded-[20px] p-[20px] shadow-sm lg:hover:shadow-md flex items-center gap-[20px] border border-color transition-all cursor-pointer group relative overflow-hidden"
+        >
+            <div className={cn("w-[4px] absolute left-0 top-3 bottom-3 rounded-r-full", accentColor)} />
+
+            <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform", iconBg)}>
+                <ClipboardList size={22} className={iconColor} />
+            </div>
+
+            <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h4 className="text-[14px] font-[800] text-text-primary truncate uppercase">
+                                Ticket #{act.glpi_ticket_id || '---'}
+                            </h4>
+                            <span className={cn(
+                                "px-[8px] py-[2px] rounded-full text-[9px] font-[800] border uppercase tracking-wider",
+                                statusStyles[act.status] || 'bg-tertiary text-text-muted border-color'
+                            )}>
+                                {act.status === 'PENDIENTE_SINCRONIZACION' ? 'PENDIENTE' : act.status}
+                            </span>
+                        </div>
+                        <p className="text-[12px] text-text-secondary font-[600] mt-1 uppercase tracking-wide opacity-80">
+                            {act.client_name || 'Consumidor Final'}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex gap-5 mt-4">
+                    <span className="flex items-center gap-1.5 text-[11px] text-text-muted font-[700] uppercase tracking-wider">
+                        <Calendar size={13} className="text-primary-500" />
+                        {new Date(act.createdAt).toLocaleDateString()}
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[11px] text-text-muted font-[700] uppercase tracking-wider truncate">
+                        <User size={13} className="text-primary-500" />
+                        {act.technical_name || 'Técnico'}
+                    </span>
+                </div>
+            </div>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-tertiary group-hover:bg-primary-500/10 transition-colors">
+                <ChevronRight size={18} className="text-text-muted group-hover:text-primary-500 transition-colors" />
+            </div>
+        </div>
+    );
+};
+
+export default App;

@@ -45,11 +45,11 @@ const AutomaticUpdateHandler = () => {
         },
         onNeedRefresh() {
             // New version found, reloading to apply changes
-            console.log('[PWA] Nueva versión detectada. Recargando para actualizar...');
+            // PWA update detect
             updateServiceWorker(true);
         },
         onOfflineReady() {
-            console.log('[PWA] Aplicación lista para trabajar sin conexión.');
+            // PWA offline ready
         },
     });
 

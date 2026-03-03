@@ -5,8 +5,12 @@ const { Parser } = pkg;
 import glpi from '../services/glpi.js';
 import fs from 'fs/promises';
 import path from 'path';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// [C-03] SEGURIDAD: Todas las rutas de reportes requieren autenticación
+router.use(authenticateToken);
 
 router.post('/consolidated', async (req, res) => {
     const { client_name, acts, projectId } = req.body;
@@ -38,7 +42,8 @@ router.post('/consolidated', async (req, res) => {
 
     } catch (error) {
         console.error('Error en reporte consolidado:', error);
-        res.status(500).json({ status: 'error', message: error.message });
+        // [M-05] SEGURIDAD: No exponer detalles internos del error al cliente
+        res.status(500).json({ status: 'error', message: 'Error al generar el reporte consolidado' });
     }
 });
 
@@ -70,12 +75,17 @@ router.post('/export-csv', async (req, res) => {
         const json2csvParser = new Parser({ fields, delimiter: ';' }); // Usamos punto y coma para que Excel lo abra directo según región
         const csv = json2csvParser.parse(acts);
 
+        const safeName = (client_name || 'Reporte').replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, '_');
         res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename=Consolidado_${client_name.replace(/\s+/g, '_')}.csv`);
+        res.setHeader('Content-Disposition', `attachment; filename="${safeName}.csv"`);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         res.send(csv);
     } catch (error) {
         console.error('Error exportando CSV:', error);
-        res.status(500).json({ status: 'error', message: error.message });
+        // [M-05] SEGURIDAD: No exponer detalles internos del error al cliente
+        res.status(500).json({ status: 'error', message: 'Error al exportar el CSV' });
     }
 });
 
@@ -83,11 +93,17 @@ router.post('/export-consolidated', async (req, res) => {
     const { client_name, acts } = req.body;
     try {
         const pdfBuffer = await generateConsolidatedPDF(client_name, acts);
+        const safeName = (client_name || 'Consolidado').replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, '_');
         res.contentType('application/pdf');
-        res.send(pdfBuffer);
+        res.setHeader('Content-Disposition', `attachment; filename="Consolidado_${safeName}.pdf"`);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.send(Buffer.from(pdfBuffer));
     } catch (error) {
         console.error('Error exportando consolidado:', error);
-        res.status(500).json({ status: 'error', message: error.message });
+        // [M-05] SEGURIDAD: No exponer detalles internos del error al cliente
+        res.status(500).json({ status: 'error', message: 'Error al generar el PDF consolidado' });
     }
 });
 
@@ -95,11 +111,18 @@ router.post('/individual', async (req, res) => {
     const actData = req.body;
     try {
         const pdfBuffer = await generateMaintenancePDF(actData);
+        const hostname = actData.equipment_hostname || 'S-H';
+        const safeName = hostname.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, '_');
         res.contentType('application/pdf');
-        res.send(pdfBuffer);
+        res.setHeader('Content-Disposition', `attachment; filename="Acta_${safeName}.pdf"`);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.send(Buffer.from(pdfBuffer));
     } catch (error) {
         console.error('Error generando PDF individual:', error);
-        res.status(500).json({ status: 'error', message: error.message });
+        // [M-05] SEGURIDAD: No exponer detalles internos del error al cliente
+        res.status(500).json({ status: 'error', message: 'Error al generar el PDF' });
     }
 });
 
