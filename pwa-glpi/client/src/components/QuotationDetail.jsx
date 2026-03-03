@@ -380,7 +380,7 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
                                         })}
                                         className="aspect-square bg-tertiary rounded-lg overflow-hidden border border-color hover:border-primary-500 transition-colors relative group outline-none"
                                     >
-                                        <img src={`${API_BASE.replace('/api', '')}/${img.url.replace(/\\/g, '/')}`} className="w-full h-full object-cover outline-none" alt="" />
+                                        <img src={getPreviewUrl(img.url)} className="w-full h-full object-cover outline-none" alt="" />
                                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                             <Eye className="text-white" size={24} />
                                         </div>

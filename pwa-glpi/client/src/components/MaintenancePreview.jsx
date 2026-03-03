@@ -302,6 +302,22 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
                     </div>
                 </section>
 
+                {/* Evidencias Fotográficas */}
+                {act.photos && act.photos.length > 0 && (
+                    <section className="bg-secondary p-6 rounded-2xl border border-color space-y-4 shadow-sm">
+                        <h3 className="text-[10px] font-bold uppercase text-blue-500 tracking-[0.2em] flex items-center gap-2">
+                            <ImageIcon size={14} /> Evidencias Fotográficas ({act.photos.length})
+                        </h3>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {act.photos.map((photo, i) => (
+                                <div key={i} className="aspect-square bg-tertiary rounded-xl border border-color overflow-hidden flex items-center justify-center p-1 relative group">
+                                    <img src={photo.data} alt={`Evidencia ${i + 1}`} className="w-full h-full object-cover rounded-lg" />
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
                 {/* Firmas */}
                 <section className="grid grid-cols-2 gap-4">
                     <div className="bg-secondary p-5 rounded-2xl border border-color shadow-sm space-y-3">
