@@ -13,6 +13,21 @@ const Login = ({ onLogin }) => {
 
     useEffect(() => {
         const loadBranding = async () => {
+            try {
+                // Prioridad 1: Backend
+                const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/config/public`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.loginImage) {
+                        setCustomLogo(data.loginImage);
+                        // Sincronizar local (fallback)
+                        await db.settings.put({ key: 'loginImage', value: data.loginImage });
+                        return;
+                    }
+                }
+            } catch (e) { }
+
+            // Prioridad 2: Local (en caso de estar offline temporalmente)
             const setting = await db.settings.get('loginImage');
             if (setting?.value) setCustomLogo(setting.value);
         };

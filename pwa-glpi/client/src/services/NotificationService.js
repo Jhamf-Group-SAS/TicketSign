@@ -13,18 +13,34 @@ class NotificationService {
     async start() {
         if (this.reminderInterval) return;
 
-        // Cargar audio personalizado si existe
+        // Cargar audio personalizado
         try {
+            // Prioridad 1: Backend
+            const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/config/public`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.notificationSound) {
+                    this.audio.src = data.notificationSound;
+                    // Actualizar cache
+                    db.settings.put({ key: 'notificationSound', value: data.notificationSound }).catch(() => { });
+                    console.log('[NotificationService] Iniciando monitoreo sistema...');
+                    this.reminderInterval = setInterval(() => this.checkReminders(), 20000);
+                    this.checkReminders();
+                    return;
+                }
+            }
+        } catch (e) { }
+
+        try {
+            // Prioridad 2: Local Cache (fallback)
             const customSound = await db.settings.get('notificationSound');
             if (customSound?.value) {
                 this.audio.src = customSound.value;
             } else {
-                // Audio por defecto si no hay uno subido por el usuario
                 this.audio.src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
             }
         } catch (e) {
             console.warn('[NotificationService] Error cargando settings de audio:', e);
-            // Fallback robusto al default
             this.audio.src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
         }
 

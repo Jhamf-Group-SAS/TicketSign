@@ -420,7 +420,14 @@ router.get('/view/:filename', authenticateToken, async (req, res) => {
         }
 
         res.setHeader('Content-Type', mimetype);
-        res.setHeader('Content-Disposition', 'inline');
+        if (req.query.download === '1') {
+            const downloadName = req.query.name || safeFilename;
+            // Configura como archivo adjunto forzando la descarga nativa con nombre correcto
+            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadName)}"`);
+        } else {
+            res.setHeader('Content-Disposition', 'inline');
+        }
+
         res.sendFile(filePath);
     } catch (error) {
         res.status(404).json({ message: 'Archivo no encontrado' });

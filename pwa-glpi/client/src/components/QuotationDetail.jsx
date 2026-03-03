@@ -93,6 +93,13 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
         return `${API_BASE}/quotations/view/${filename}?token=${token}`;
     };
 
+    const getDownloadUrl = (url, originalName) => {
+        if (!url) return '';
+        const filename = (url || '').split(/[\\/]/).pop();
+        const token = localStorage.getItem('glpi_pro_token');
+        return `${API_BASE}/quotations/view/${filename}?download=1&name=${encodeURIComponent(originalName || filename)}&token=${token}`;
+    };
+
     const changeStatus = async (newStatus, extra = {}) => {
         setActionLoading(true);
         try {
@@ -331,7 +338,7 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
                                                 url: getPreviewUrl(q.file_url),
                                                 type: q.file_type?.includes('pdf') || q.file_name?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image',
                                                 name: q.file_name,
-                                                downloadUrl: `${API_BASE.replace('/api', '')}/${q.file_url?.replace(/\\/g, '/')}`
+                                                downloadUrl: getDownloadUrl(q.file_url, q.file_name)
                                             })}
                                             className="p-2 text-text-muted hover:text-primary-500 hover:bg-primary-500/10 rounded-lg transition-colors"
                                             title="Ver documento"
@@ -339,7 +346,7 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
                                             <Eye size={18} />
                                         </button>
                                         <a
-                                            href={`${API_BASE.replace('/api', '')}/${q.file_url?.replace(/\\/g, '/')}`}
+                                            href={getDownloadUrl(q.file_url, q.file_name)}
                                             target="_blank" rel="noreferrer" download={q.file_name}
                                             className="p-2 text-text-muted hover:text-primary-500 hover:bg-primary-500/10 rounded-lg transition-colors"
                                             title="Descargar documento"
@@ -376,7 +383,7 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
                                             url: getPreviewUrl(img.url),
                                             type: 'image',
                                             name: img.name || `Evidencia ${i + 1}`,
-                                            downloadUrl: `${API_BASE.replace('/api', '')}/${img.url.replace(/\\/g, '/')}`
+                                            downloadUrl: getDownloadUrl(img.url, img.name || `Evidencia ${i + 1}`)
                                         })}
                                         className="aspect-square bg-tertiary rounded-lg overflow-hidden border border-color hover:border-primary-500 transition-colors relative group outline-none"
                                     >

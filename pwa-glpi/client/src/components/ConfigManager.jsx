@@ -70,6 +70,12 @@ const ConfigManager = ({ onBack, onLogout }) => {
                 if (res.ok) {
                     const data = await res.json();
                     setConfig(prev => ({ ...prev, ...data }));
+
+                    // Extraer settings visuales de la DB global para que no se borren con el caché local
+                    setUiSettings({
+                        loginImage: data.loginImage || '',
+                        notificationSound: data.notificationSound || ''
+                    });
                 }
             } catch (error) {
                 // error fetching config
@@ -78,15 +84,6 @@ const ConfigManager = ({ onBack, onLogout }) => {
             }
         };
         fetchConfig();
-
-        // Load UI Settings from local DB
-        const loadUISettings = async () => {
-            const settings = await db.settings.toArray();
-            const uiMap = {};
-            settings.forEach(s => uiMap[s.key] = s.value);
-            setUiSettings(prev => ({ ...prev, ...uiMap }));
-        };
-        loadUISettings();
     }, [API_BASE_URL, token, onLogout]);
 
     const handleLogoUpload = (e) => {
@@ -113,7 +110,7 @@ const ConfigManager = ({ onBack, onLogout }) => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify(config)
+                body: JSON.stringify({ ...config, ...uiSettings })
             });
             if (res.status === 401 || res.status === 403) {
                 if (onLogout) onLogout();
@@ -121,7 +118,8 @@ const ConfigManager = ({ onBack, onLogout }) => {
             }
             if (res.ok) {
                 setSaved(true);
-                // Save UI settings to local DB
+
+                // Mantenemos una copia local opcional en Dexie para caché (como fallback offline)
                 await db.settings.put({ key: 'loginImage', value: uiSettings.loginImage });
                 await db.settings.put({ key: 'notificationSound', value: uiSettings.notificationSound });
 

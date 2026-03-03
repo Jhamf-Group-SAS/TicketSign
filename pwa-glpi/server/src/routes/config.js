@@ -37,6 +37,19 @@ router.get('/', authenticateToken, authorizeRoles('Super-Admin', 'Admin-Mesa'), 
     }
 });
 
+// Obtener configuraciones públicas sin auth
+router.get('/public', async (req, res) => {
+    try {
+        const keys = ['loginImage', 'theme', 'pdfLogo'];
+        const configs = await Configuration.find({ key: { $in: keys } });
+        const configMap = {};
+        configs.forEach(c => configMap[c.key] = c.value);
+        res.json(configMap);
+    } catch (error) {
+        res.json({});
+    }
+});
+
 // Guardar/Actualizar configuraciones
 router.post('/', authenticateToken, authorizeRoles('Super-Admin', 'Admin-Mesa'), async (req, res) => {
     const updates = req.body; // { key: value, ... }
@@ -51,7 +64,9 @@ router.post('/', authenticateToken, authorizeRoles('Super-Admin', 'Admin-Mesa'),
             // Validaciones básicas
             if (typeof key !== 'string' || key.length > 100) continue;
             if (value && typeof value === 'string' && value.length > 5000) {
-                return res.status(400).json({ message: `Valor demasiado largo para la clave: ${key}` });
+                if (!['loginImage', 'notificationSound', 'pdfLogo'].includes(key)) {
+                    return res.status(400).json({ message: `Valor demasiado largo para la clave: ${key}` });
+                }
             }
             // Si es un campo sensible
             if (SENSITIVE_KEYS.includes(key)) {

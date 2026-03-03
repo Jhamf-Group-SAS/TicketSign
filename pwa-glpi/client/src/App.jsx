@@ -75,6 +75,26 @@ function App() {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [theme, setTheme] = useState(() => localStorage.getItem('glpi_pro_theme') || 'light');
 
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+
+    useEffect(() => {
+        // Cargar preferencias globales en caso de limpieza de historial/caché
+        const loadGlobalBranding = async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/config/public`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.theme && !localStorage.getItem('glpi_pro_theme')) {
+                        setTheme(data.theme);
+                    }
+                }
+            } catch (e) { }
+        };
+        if (!localStorage.getItem('glpi_pro_theme')) {
+            loadGlobalBranding();
+        }
+    }, [API_BASE_URL]);
+
     useEffect(() => {
         const root = window.document.documentElement;
         if (theme === 'dark') {
@@ -83,12 +103,21 @@ function App() {
             root.classList.remove('dark');
         }
         localStorage.setItem('glpi_pro_theme', theme);
-    }, [theme]);
+
+        // Guardar el tema como configuración global silenciosamente (Solo para administradores, los demás ignoran el 403)
+        const token = localStorage.getItem('glpi_pro_token');
+        if (token && user) {
+            fetch(`${API_BASE_URL}/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ theme })
+            }).catch(() => { });
+        }
+    }, [theme, API_BASE_URL, user]);
     const [notificationToast, setNotificationToast] = useState(null);
     const [isConfigured, setIsConfigured] = useState(true);
     const [showSetupNotice, setShowSetupNotice] = useState(false);
 
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
     const checkConfig = async () => {
         const tokenToken = localStorage.getItem('glpi_pro_token');
