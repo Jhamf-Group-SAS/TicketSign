@@ -24,14 +24,14 @@ router.post('/login', async (req, res) => {
             if (MASTER_USER && MASTER_PASS && username === MASTER_USER && password === MASTER_PASS) {
                 console.warn('[AUTH] Usando login maestro de emergencia (definido en ENV)');
                 const token = jwt.sign(
-                    { username, id: 'system-admin', displayName: 'Administrador del Sistema', profile: 'super-admin' },
+                    { username, id: 'system-admin', displayName: 'Administrador del Sistema', profile: 'Super-Admin' },
                     process.env.JWT_SECRET,
                     { expiresIn: '1d' } // Sesión más corta para emergencia
                 );
                 return res.status(200).json({
                     status: 'success',
                     token,
-                    user: { id: 'system-admin', username, name: 'Administrador del Sistema', profile: 'super-admin' }
+                    user: { id: 'system-admin', username, name: 'Administrador del Sistema', profile: 'Super-Admin' }
                 });
             } else {
                 return res.status(503).json({
