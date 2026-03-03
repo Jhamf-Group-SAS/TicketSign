@@ -89,8 +89,11 @@ app.use(helmet({
         directives: {
             ...helmet.contentSecurityPolicy.getDefaultDirectives(),
             "frame-ancestors": ["'self'", ...allowedOrigins],
-            "img-src": ["'self'", "data:", "blob:", "*"],
+            "img-src": ["'self'", "data:", "blob:", "*", "https:"],
             "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
+            "media-src": ["'self'", "https://assets.mixkit.co", "https:", "*"]
         }
     }
 }));
