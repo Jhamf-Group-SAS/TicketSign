@@ -422,8 +422,7 @@ router.get('/view/:filename', authenticateToken, async (req, res) => {
         res.setHeader('Content-Type', mimetype);
         if (req.query.download === '1') {
             const downloadName = req.query.name || safeFilename;
-            // Configura como archivo adjunto forzando la descarga nativa con nombre correcto
-            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadName)}"`);
+            res.setHeader('Content-Disposition', `attachment; filename="${downloadName.replace(/"/g, '')}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`);
         } else {
             res.setHeader('Content-Disposition', 'inline');
         }

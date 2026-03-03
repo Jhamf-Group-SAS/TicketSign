@@ -8,7 +8,7 @@ import TicketDetail from './components/TicketDetail';
 import MaintenanceForm from './components/MaintenanceForm';
 import MaintenancePreview from './components/MaintenancePreview';
 import ClientConsolidated from './components/ClientConsolidated';
-import HistoryList from './components/HistoryList';
+import HistoricalActs from './components/HistoricalActs';
 import DashboardSummary from './components/DashboardSummary';
 import TaskBoard from './components/TaskBoard';
 import TaskList from './components/TaskList';
@@ -410,8 +410,8 @@ function App() {
                     {view === 'kanban' && <TaskBoard onBack={() => setView('home')} />}
                     {view === 'task-list' && <TaskList onBack={() => setView('home')} />}
                     {view === 'history' && (
-                        <HistoryList
-                            onSelectAct={(act) => {
+                        <HistoricalActs
+                            onViewAct={(act) => {
                                 if (act.isQuotation) {
                                     setSelectedQuotationId(act.id);
                                     setView('quotation-detail');

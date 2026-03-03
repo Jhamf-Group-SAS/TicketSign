@@ -173,24 +173,17 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
     const handleDownloadPDF = async () => {
         try {
             setActionLoading(true);
-            const res = await fetch(`${API_BASE}/quotations/${quotationId}/pdf`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (!res.ok) throw new Error('Error al generar PDF');
-            const data = await res.blob();
-            const blob = new Blob([data], { type: 'application/pdf' });
-            const url = window.URL.createObjectURL(blob);
+            const token = localStorage.getItem('glpi_pro_token');
+            const url = `${API_BASE}/quotations/${quotationId}/pdf?token=${token}`;
             const a = document.createElement('a');
             a.style.display = 'none';
             a.href = url;
-            a.download = `Cotizacion_${q.quotation_number || q._id}.pdf`;
             document.body.appendChild(a);
             a.click();
 
             setTimeout(() => {
                 document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            }, 30000); // 30s timeout para prevenir bug de nombres de archivo UUID (PWA)
+            }, 1000);
         } catch (e) {
             setError(e.message);
         } finally {
