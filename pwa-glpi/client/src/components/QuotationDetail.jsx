@@ -347,7 +347,6 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
                                         </button>
                                         <a
                                             href={getDownloadUrl(q.file_url, q.file_name)}
-                                            target="_blank" rel="noreferrer" download={q.file_name}
                                             className="p-2 text-text-muted hover:text-primary-500 hover:bg-primary-500/10 rounded-lg transition-colors"
                                             title="Descargar documento"
                                         >
@@ -584,8 +583,6 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
                             <div className="flex items-center gap-4">
                                 <a
                                     href={previewFile.downloadUrl}
-                                    download={previewFile.name}
-                                    target="_blank" rel="noreferrer"
                                     className="flex shrink-0 items-center justify-center gap-2 text-white bg-primary-500 hover:bg-primary-600 px-8 py-3 rounded-2xl text-[13px] font-[900] uppercase transition-all hover:scale-105 active:scale-95 shadow-xl shadow-primary-500/40 border border-primary-400/30"
                                 >
                                     <Download size={20} /> Descargar Original
