@@ -4,6 +4,7 @@ import { ChevronLeft, Users, FileText, Send, Search, Building2, Package, CheckCi
 import { toast } from './Toast';
 import CustomDatePicker from './CustomDatePicker';
 import { cn } from '../utils/cn';
+import { downloadBlob } from '../utils/download';
 
 const ClientConsolidated = ({ onBack }) => {
     const [clients, setClients] = useState([]);
@@ -63,22 +64,8 @@ const ClientConsolidated = ({ onBack }) => {
 
             if (response.ok) {
                 const data = await response.blob();
-                const blob = new Blob([data], { type: 'application/pdf' });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
                 const safeName = (selectedClient || 'Consolidado').replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, '_');
-                a.download = `Consolidado_${safeName}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                }, 30000); // 30s timeout para evitar bug UUID
-
-
+                await downloadBlob(data, `Consolidado_${safeName}.pdf`);
                 toast.success('PDF exportado con éxito');
             } else {
                 toast.error('Error al exportar PDF');
@@ -109,21 +96,8 @@ const ClientConsolidated = ({ onBack }) => {
                 const data = await response.blob();
                 // Usamos un tipo específico para asegurar que Excel lo reconozca
                 const blob = new Blob([data], { type: 'text/csv;charset=utf-8;' });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
                 const safeName = (selectedClient || 'Reporte').replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, '_');
-                a.download = `Consolidado_${safeName}.csv`;
-                document.body.appendChild(a);
-                a.click();
-
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                }, 30000); // 30s timeout para evitar bug UUID
-
-
+                await downloadBlob(blob, `Consolidado_${safeName}.csv`);
                 toast.success('Excel (CSV) exportado con éxito');
             } else {
                 toast.error('Error al exportar CSV');

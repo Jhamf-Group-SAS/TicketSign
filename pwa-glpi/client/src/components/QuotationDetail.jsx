@@ -3,9 +3,12 @@ import { createPortal } from 'react-dom';
 import {
     ArrowLeft, FileText, CheckCircle, XCircle, ShoppingCart,
     Eye, Clock, Loader2, MessageSquare, Send, AlertTriangle,
-    User, Calendar, DollarSign, Tag, Hash, ChevronRight, Download, Building, ChevronDown, Settings2, Trash2, Camera, X, Plus, Upload
+    User, Calendar, DollarSign, Tag, Hash, ChevronRight, Download, Building, ChevronDown, Settings2, Trash2, Camera, X, Plus, Upload, UploadCloud, AlertCircle, Activity
 } from 'lucide-react';
+import { toast } from './Toast';
 import { cn } from '../utils/cn';
+import { downloadBlob } from '../utils/download';
+import NotificationService from '../services/NotificationService';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
@@ -174,20 +177,28 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
         try {
             setActionLoading(true);
             const token = localStorage.getItem('glpi_pro_token');
-            const url = `${API_BASE}/quotations/${quotationId}/pdf?token=${token}`;
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            document.body.appendChild(a);
-            a.click();
-
-            setTimeout(() => {
-                document.body.removeChild(a);
-            }, 1000);
+            const res = await fetch(`${API_BASE}/quotations/${quotationId}/pdf?token=${token}`);
+            if (!res.ok) throw new Error('Error al generar PDF');
+            const blob = await res.blob();
+            await downloadBlob(blob, `Cotizacion_${q.quotation_number || q._id}.pdf`);
         } catch (e) {
             setError(e.message);
+            toast.error('Error al descargar PDF: ' + e.message);
         } finally {
             setActionLoading(false);
+        }
+    };
+
+    const handleDownloadObject = async (url, originalName) => {
+        try {
+            const token = localStorage.getItem('glpi_pro_token');
+            const filename = (url || '').split(/[\\/]/).pop();
+            const res = await fetch(`${API_BASE}/quotations/view/${filename}?token=${token}`);
+            if (!res.ok) throw new Error('Error al obtener archivo');
+            const blob = await res.blob();
+            await downloadBlob(blob, originalName || filename);
+        } catch (e) {
+            toast.error('Error al descargar: ' + e.message);
         }
     };
 
@@ -338,13 +349,13 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
                                         >
                                             <Eye size={18} />
                                         </button>
-                                        <a
-                                            href={getDownloadUrl(q.file_url, q.file_name)}
+                                        <button
+                                            onClick={() => handleDownloadObject(q.file_url, q.file_name)}
                                             className="p-2 text-text-muted hover:text-primary-500 hover:bg-primary-500/10 rounded-lg transition-colors"
                                             title="Descargar documento"
                                         >
                                             <Download size={18} />
-                                        </a>
+                                        </button>
                                     </div>
                                 </div>
                             ) : (
@@ -574,12 +585,12 @@ export default function QuotationDetail({ quotationId, user, onBack }) {
                         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-secondary border border-color px-8 py-5 rounded-[24px] flex flex-col md:flex-row items-center gap-6 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[20] w-[90%] md:w-auto">
                             <span className="text-text-primary text-[15px] font-[800] max-w-[200px] md:max-w-[500px] truncate text-center uppercase tracking-widest">{previewFile.name}</span>
                             <div className="flex items-center gap-4">
-                                <a
-                                    href={previewFile.downloadUrl}
+                                <button
+                                    onClick={() => handleDownloadObject(previewFile.url, previewFile.name)}
                                     className="flex shrink-0 items-center justify-center gap-2 text-white bg-primary-500 hover:bg-primary-600 px-8 py-3 rounded-2xl text-[13px] font-[900] uppercase transition-all hover:scale-105 active:scale-95 shadow-xl shadow-primary-500/40 border border-primary-400/30"
                                 >
-                                    <Download size={20} /> Descargar Original
-                                </a>
+                                    <Download size={20} /> <span className="hidden sm:inline">Descargar Original</span>
+                                </button>
                             </div>
                         </div>
                     </div>

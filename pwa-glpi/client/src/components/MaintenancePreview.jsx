@@ -3,6 +3,7 @@ import { Package, ClipboardList, User, Building2, Monitor, Calendar, Clock, Tag,
 import { useState } from 'react';
 import { toast } from './Toast';
 import { cn } from '../utils/cn';
+import { downloadBlob } from '../utils/download';
 
 const PREVENTIVE_CHECKLIST = [
     { id: 'limpieza_interna', label: 'Limpieza Interna', icon: Monitor },
@@ -119,21 +120,8 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
 
             if (response.ok) {
                 const data = await response.blob();
-                const blob = new Blob([data], { type: 'application/pdf' });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = `Acta_Ticket_${act.glpi_ticket_id || 'S-T'}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                }, 30000); // 30s timeout para prevenir bug de nombres de archivo UUID en PWA
-
-                toast.success('PDF generado con éxito');
+                await downloadBlob(data, `Acta_Ticket_${act.glpi_ticket_id || 'S-T'}.pdf`);
+                toast.success('PDF descargado con éxito');
             } else {
                 toast.error('Error al generar PDF');
             }
@@ -147,7 +135,7 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
     return (
         <div className="space-y-6 pb-32 max-w-3xl mx-auto animate-in fade-in duration-500">
             {/* Header Preview */}
-            <div className="flex items-center justify-between sticky top-0 z-40 bg-secondary py-4 border-b border-color mx-[-1rem] px-4">
+            <div className="flex items-center justify-between sticky top-0 z-40 bg-secondary py-4 px-6 border border-color rounded-2xl shadow-sm">
                 <div className="flex items-center gap-4">
                     <div className={cn(
                         "p-3 rounded-2xl text-white shadow-lg",
