@@ -84,12 +84,18 @@ function App() {
         '/front/maintenance-create': 'form-preventive'
     };
 
-    const getViewFromPath = (path) => {
+    const getViewFromPath = (path, params) => {
         if (path === '/') return 'home';
+        if (path === '/front/maintenance-create') {
+            const type = params.get('type');
+            if (type === 'CORRECTIVO') return 'form-corrective';
+            if (type === 'ENTREGA') return 'form-delivery';
+            return 'form-preventive';
+        }
         return PATH_TO_VIEW[path] || 'home';
     };
 
-    const [view, setView] = useState(() => getViewFromPath(location.pathname));
+    const [view, setView] = useState(() => getViewFromPath(location.pathname, searchParams));
     const [selectedTicketId, setSelectedTicketId] = useState(() => searchParams.get('id') || localStorage.getItem('glpi_pro_ticket_id'));
     const [selectedAct, setSelectedAct] = useState(null);
     const [selectedQuotationId, setSelectedQuotationId] = useState(() => searchParams.get('id') || localStorage.getItem('glpi_pro_quotation_id'));
@@ -139,7 +145,7 @@ function App() {
 
     // Manejar cambios en la URL (atrás/adelante)
     useEffect(() => {
-        const newView = getViewFromPath(location.pathname);
+        const newView = getViewFromPath(location.pathname, searchParams);
         if (newView !== view) {
             setView(newView);
             const id = searchParams.get('id');
@@ -496,6 +502,7 @@ function App() {
 
                     {(view === 'form-preventive' || view === 'form-corrective' || view === 'form-delivery') && (
                         <MaintenanceForm
+                            key={view}
                             type={view === 'form-preventive' ? 'PREVENTIVO' : view === 'form-delivery' ? 'ENTREGA' : 'CORRECTIVO'}
                             onCancel={() => setView('home')}
                             onSave={() => setView('home')}
