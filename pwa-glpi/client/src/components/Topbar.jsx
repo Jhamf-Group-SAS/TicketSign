@@ -230,7 +230,7 @@ const Topbar = ({
                     </button>
 
                     {isNotificationsOpen && (
-                        <div className="absolute right-0 top-full pt-4 w-96 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="absolute right-[-50px] sm:right-0 top-full pt-4 w-[calc(100vw-24px)] md:w-96 max-w-[360px] sm:max-w-none z-50 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div className="bg-secondary border border-color rounded-2xl shadow-2xl overflow-hidden">
                                 <div className="p-4 border-b border-color bg-tertiary flex justify-between items-center">
                                     <div className="flex items-center gap-2">

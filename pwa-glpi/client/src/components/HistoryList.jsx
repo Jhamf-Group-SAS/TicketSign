@@ -13,6 +13,7 @@ const HistoryList = ({ onSelectAct, onBack }) => {
     const [filterType, setFilterType] = useState('ALL');
     const [selectedDate, setSelectedDate] = useState('');
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [datePickerAnchor, setDatePickerAnchor] = useState(null);
 
     const filteredHistory = history.filter(act => {
         const matchesSearch =
@@ -74,7 +75,10 @@ const HistoryList = ({ onSelectAct, onBack }) => {
 
                 <div className="relative">
                     <button
-                        onClick={() => setShowDatePicker(true)}
+                        onClick={(e) => {
+                            setShowDatePicker(true);
+                            setDatePickerAnchor(e.currentTarget);
+                        }}
                         className={cn(
                             "w-full h-10 flex items-center justify-between px-3 bg-tertiary border rounded-lg transition-all",
                             selectedDate ? "border-primary-500 text-primary-500" : "border-color text-text-muted"
@@ -91,13 +95,18 @@ const HistoryList = ({ onSelectAct, onBack }) => {
 
                     {showDatePicker && (
                         <CustomDatePicker
+                            anchorEl={datePickerAnchor}
                             value={selectedDate ? new Date(selectedDate + 'T12:00:00') : new Date()}
                             hideTime={true}
                             onChange={(val) => {
                                 setSelectedDate(new Date(val).toISOString().split('T')[0]);
                                 setShowDatePicker(false);
+                                setDatePickerAnchor(null);
                             }}
-                            onClose={() => setShowDatePicker(false)}
+                            onClose={() => {
+                                setShowDatePicker(false);
+                                setDatePickerAnchor(null);
+                            }}
                         />
                     )}
                 </div>

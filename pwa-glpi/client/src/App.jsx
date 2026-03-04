@@ -74,7 +74,7 @@ function App() {
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [globalSearchQuery, setGlobalSearchQuery] = useState('');
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-    const [theme, setTheme] = useState(() => localStorage.getItem('glpi_pro_theme') || 'light');
+    const [theme, setTheme] = useState(() => localStorage.getItem('glpi_pro_theme') || null);
 
     const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
@@ -98,23 +98,17 @@ function App() {
 
     useEffect(() => {
         const root = window.document.documentElement;
-        if (theme === 'dark') {
+        const activeTheme = theme || 'light';
+        if (activeTheme === 'dark') {
             root.classList.add('dark');
         } else {
             root.classList.remove('dark');
         }
-        localStorage.setItem('glpi_pro_theme', theme);
 
-        // Guardar el tema como configuración global silenciosamente (Solo para administradores, los demás ignoran el 403)
-        const token = localStorage.getItem('glpi_pro_token');
-        if (token && user) {
-            fetch(`${API_BASE_URL}/config`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ theme })
-            }).catch(() => { });
+        if (theme) {
+            localStorage.setItem('glpi_pro_theme', theme);
         }
-    }, [theme, API_BASE_URL, user]);
+    }, [theme]);
     const [notificationToast, setNotificationToast] = useState(null);
     const [isConfigured, setIsConfigured] = useState(true);
     const [showSetupNotice, setShowSetupNotice] = useState(false);
@@ -271,7 +265,20 @@ function App() {
                         isOnline={isOnline}
                         syncStatus={isSyncing ? 'syncing' : (pendingActs.length > 0 ? 'pending' : 'synced')}
                         theme={theme}
-                        onThemeToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                        onThemeToggle={() => {
+                            const newTheme = (theme || 'light') === 'dark' ? 'light' : 'dark';
+                            setTheme(newTheme);
+
+                            // Guardar el tema configurado como global silenciosamente (Solo para administradores)
+                            const token = localStorage.getItem('glpi_pro_token');
+                            if (token && user) {
+                                fetch(`${API_BASE_URL}/config`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                    body: JSON.stringify({ theme: newTheme })
+                                }).catch(() => { });
+                            }
+                        }}
                         onLogout={handleLogout}
                         unreadCount={unreadCount}
                         notifications={notificationsList}

@@ -80,7 +80,8 @@ const TaskForm = ({ onCancel, onClose, onSave, onSaved, initialData, task }) => 
     const [isTechListOpen, setIsTechListOpen] = useState(false);
     const [loadingTechs, setLoadingTechs] = useState(false);
     // const [toast, setToast] = useState(null); // REMOVED
-    const [datePickerType, setDatePickerType] = useState(null); // 'scheduled' or 'reminder'
+    const [datePickerType, setDatePickerType] = useState(null); // 'scheduled', 'start', 'end', or 'reminder'
+    const [datePickerAnchor, setDatePickerAnchor] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -389,7 +390,12 @@ const TaskForm = ({ onCancel, onClose, onSave, onSaved, initialData, task }) => 
                                 <label className="text-[12px] font-[800] text-text-primary block ml-1 uppercase tracking-wide">Fecha Programada</label>
                                 <button
                                     type="button"
-                                    onClick={() => canEditFull && setDatePickerType('scheduled')}
+                                    onClick={(e) => {
+                                        if (canEditFull) {
+                                            setDatePickerType('scheduled');
+                                            setDatePickerAnchor(e.currentTarget);
+                                        }
+                                    }}
                                     className="h-11 w-full bg-tertiary border border-color rounded-xl px-4 flex items-center justify-between text-[13px] hover:border-primary-500 transition-all text-text-primary"
                                 >
                                     <span className={cn("font-bold", formData.scheduled_at ? "text-text-primary" : "text-text-muted/60")}>
@@ -404,7 +410,12 @@ const TaskForm = ({ onCancel, onClose, onSave, onSaved, initialData, task }) => 
                                     <label className="text-[12px] font-[800] text-text-primary block ml-1 uppercase tracking-wide">Fecha Inicio</label>
                                     <button
                                         type="button"
-                                        onClick={() => canEditFull && setDatePickerType('start')}
+                                        onClick={(e) => {
+                                            if (canEditFull) {
+                                                setDatePickerType('start');
+                                                setDatePickerAnchor(e.currentTarget);
+                                            }
+                                        }}
                                         className="h-11 w-full bg-tertiary border border-color rounded-xl px-4 flex items-center justify-between text-[13px] hover:border-primary-500 transition-all text-text-primary"
                                     >
                                         <span className={cn("font-bold", formData.start_date ? "text-text-primary" : "text-text-muted/60")}>
@@ -417,7 +428,12 @@ const TaskForm = ({ onCancel, onClose, onSave, onSaved, initialData, task }) => 
                                     <label className="text-[12px] font-[800] text-text-primary block ml-1 uppercase tracking-wide">Fecha Fin</label>
                                     <button
                                         type="button"
-                                        onClick={() => canEditFull && setDatePickerType('end')}
+                                        onClick={(e) => {
+                                            if (canEditFull) {
+                                                setDatePickerType('end');
+                                                setDatePickerAnchor(e.currentTarget);
+                                            }
+                                        }}
                                         className="h-11 w-full bg-tertiary border border-color rounded-xl px-4 flex items-center justify-between text-[13px] hover:border-primary-500 transition-all text-text-primary"
                                     >
                                         <span className={cn("font-bold", formData.end_date ? "text-text-primary" : "text-text-muted/60")}>
@@ -462,7 +478,10 @@ const TaskForm = ({ onCancel, onClose, onSave, onSaved, initialData, task }) => 
                         <label className="text-[12px] font-[800] text-text-primary block ml-1 uppercase tracking-wide">Recordatorio</label>
                         <button
                             type="button"
-                            onClick={() => setDatePickerType('reminder')}
+                            onClick={(e) => {
+                                setDatePickerType('reminder');
+                                setDatePickerAnchor(e.currentTarget);
+                            }}
                             className="h-11 w-full bg-tertiary border border-color rounded-xl px-4 flex items-center justify-between text-[13px] hover:border-primary-500 transition-all text-text-primary"
                         >
                             <div className="flex items-center gap-3">
@@ -550,6 +569,7 @@ const TaskForm = ({ onCancel, onClose, onSave, onSaved, initialData, task }) => 
             {/* Date Pickers */}
             {datePickerType && (
                 <CustomDatePicker
+                    anchorEl={datePickerAnchor}
                     value={
                         datePickerType === 'scheduled' ? formData.scheduled_at :
                             datePickerType === 'start' ? formData.start_date :
@@ -565,8 +585,12 @@ const TaskForm = ({ onCancel, onClose, onSave, onSaved, initialData, task }) => 
                         };
                         setFormData(p => ({ ...p, [fieldMap[datePickerType]]: val }));
                         setDatePickerType(null);
+                        setDatePickerAnchor(null);
                     }}
-                    onClose={() => setDatePickerType(null)}
+                    onClose={() => {
+                        setDatePickerType(null);
+                        setDatePickerAnchor(null);
+                    }}
                 />
             )}
 

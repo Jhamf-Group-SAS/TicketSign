@@ -40,7 +40,7 @@ router.get('/', authenticateToken, authorizeRoles('Super-Admin', 'Admin-Mesa'), 
 // Obtener configuraciones públicas sin auth
 router.get('/public', async (req, res) => {
     try {
-        const keys = ['loginImage', 'theme', 'pdfLogo'];
+        const keys = ['loginImage', 'theme', 'pdfLogo', 'notificationSound'];
         const configs = await Configuration.find({ key: { $in: keys } });
         const configMap = {};
         configs.forEach(c => configMap[c.key] = c.value);

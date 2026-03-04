@@ -5,7 +5,7 @@ class NotificationService {
     constructor() {
         this.pollInterval = null;
         this.reminderInterval = null;
-        this.audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        this.audio = new Audio('/Notificacion.mp3');
         this.lastCheckedReminders = 0;
         this.notifyingSet = new Set(); // Prevent race conditions
     }
@@ -37,11 +37,11 @@ class NotificationService {
             if (customSound?.value) {
                 this.audio.src = customSound.value;
             } else {
-                this.audio.src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+                this.audio.src = '/Notificacion.mp3';
             }
         } catch (e) {
             console.warn('[NotificationService] Error cargando settings de audio:', e);
-            this.audio.src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+            this.audio.src = '/Notificacion.mp3';
         }
 
         console.log('[NotificationService] Iniciando monitoreo sistema...');
@@ -197,8 +197,14 @@ class NotificationService {
         // Si el usuario desactivó notificaciones para esta tarea O se solicitó silencio (ej. sync tardío), salimos.
         if (!wantsNotifications || silent) return;
 
-        // 2. Ejecutar Sonido
+        // 2. Ejecutar Sonido (Dinamico)
         try {
+            const customSound = await db.settings.get('notificationSound');
+            if (customSound?.value) {
+                this.audio.src = customSound.value;
+            } else {
+                this.audio.src = '/Notificacion.mp3';
+            }
             this.audio.currentTime = 0;
             const playPromise = this.audio.play();
             if (playPromise !== undefined) {
@@ -217,8 +223,20 @@ class NotificationService {
             toast.info(title + ': ' + message);
         }
 
-        // 4. Notificación Nativa del Navegador - ELIMINADA por solicitud del usuario
-        // Se utilizan únicamente las notificaciones propias del sistema (Toasts + Registro interno)
+        // 4. Notificación Nativa del Navegador (Desactivada a petición para usar solo las propias)
+        /*
+        if ('Notification' in window) {
+            if (Notification.permission === 'granted') {
+                new Notification(title, { body: message });
+            } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        new Notification(title, { body: message });
+                    }
+                });
+            }
+        }
+        */
     }
 }
 

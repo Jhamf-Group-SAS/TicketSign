@@ -142,6 +142,7 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
     const [tickets, setTickets] = useState([]);
     const [isSearchingTicket, setIsSearchingTicket] = useState(false);
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [datePickerAnchor, setDatePickerAnchor] = useState(null);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -297,7 +298,10 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
                         <label className="text-[12px] font-[600] text-text-primary block ml-1 mb-2 uppercase tracking-wide">Fecha de Realización</label>
                         <button
                             type="button"
-                            onClick={() => setShowDatePicker(true)}
+                            onClick={(e) => {
+                                setShowDatePicker(true);
+                                setDatePickerAnchor(e.currentTarget);
+                            }}
                             className={cn(
                                 "w-full flex items-center justify-between h-[44px] px-[16px] bg-primary rounded-[12px] border border-color text-[13px] outline-none transition-all shadow-sm",
                                 showDatePicker ? "border-primary-500 bg-secondary ring-4 ring-primary-500/10" : "hover:border-primary-500/40 hover:bg-tertiary",
@@ -315,9 +319,17 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
 
                         {showDatePicker && (
                             <CustomDatePicker
+                                anchorEl={datePickerAnchor}
                                 value={formData.scheduled_date}
-                                onChange={(val) => setFormData(p => ({ ...p, scheduled_date: val }))}
-                                onClose={() => setShowDatePicker(false)}
+                                onChange={(val) => {
+                                    setFormData(p => ({ ...p, scheduled_date: val }));
+                                    setShowDatePicker(false);
+                                    setDatePickerAnchor(null);
+                                }}
+                                onClose={() => {
+                                    setShowDatePicker(false);
+                                    setDatePickerAnchor(null);
+                                }}
                             />
                         )}
                     </div>

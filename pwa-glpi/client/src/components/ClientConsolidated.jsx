@@ -18,6 +18,7 @@ const ClientConsolidated = ({ onBack }) => {
     const [filterType, setFilterType] = useState('ALL');
     const [selectedDate, setSelectedDate] = useState('');
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [datePickerAnchor, setDatePickerAnchor] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
 
     useEffect(() => {
@@ -310,7 +311,10 @@ const ClientConsolidated = ({ onBack }) => {
                             <div className="col-span-2 lg:col-span-1 bg-tertiary p-3 rounded-xl border border-color flex flex-col justify-center relative group/date">
                                 <label className="text-[9px] uppercase font-black text-text-muted mb-1.5 text-center tracking-[0.2em] opacity-60">Filtrar Fecha</label>
                                 <button
-                                    onClick={() => setShowDatePicker(true)}
+                                    onClick={(e) => {
+                                        setShowDatePicker(true);
+                                        setDatePickerAnchor(e.currentTarget);
+                                    }}
                                     className="w-full bg-secondary border border-color rounded-lg px-2.5 py-2 text-[10px] font-black text-text-primary flex items-center justify-between hover:bg-tertiary transition-all shadow-inner group-hover/date:border-primary-500/40"
                                 >
                                     <span className="truncate">{selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString() : 'Todas'}</span>
@@ -319,14 +323,19 @@ const ClientConsolidated = ({ onBack }) => {
 
                                 {showDatePicker && (
                                     <CustomDatePicker
+                                        anchorEl={datePickerAnchor}
                                         value={selectedDate ? new Date(selectedDate + 'T00:00:00') : new Date()}
                                         hideTime={true}
                                         onChange={(val) => {
                                             setSelectedDate(new Date(val).toISOString().split('T')[0]);
                                             setShowDatePicker(false);
                                             setCurrentPage(1);
+                                            setDatePickerAnchor(null);
                                         }}
-                                        onClose={() => setShowDatePicker(false)}
+                                        onClose={() => {
+                                            setShowDatePicker(false);
+                                            setDatePickerAnchor(null);
+                                        }}
                                     />
                                 )}
 
