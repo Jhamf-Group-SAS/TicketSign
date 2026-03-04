@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from './store/db';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
@@ -42,34 +43,112 @@ import {
 import { cn } from './utils/cn';
 
 function App() {
-    const [view, setView] = useState(() => localStorage.getItem('glpi_pro_view') || 'home');
-    const [selectedTicketId, setSelectedTicketId] = useState(() => localStorage.getItem('glpi_pro_ticket_id'));
-    const [selectedAct, setSelectedAct] = useState(() => {
-        try {
-            return JSON.parse(localStorage.getItem('glpi_pro_act') || 'null');
-        } catch (e) { return null; }
-    });
-    const [selectedQuotationId, setSelectedQuotationId] = useState(() => localStorage.getItem('glpi_pro_quotation_id'));
+    const location = useLocation();
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+
+    // Mapeo de vistas a rutas amigables (tipo GLPI pero sin .php)
+    const VIEW_TO_PATH = {
+        'home': '/front/dashboard',
+        'kanban': '/front/kanban',
+        'task-list': '/front/task-list',
+        'history': '/front/historical',
+        'tickets': '/front/ticket',
+        'ticket-detail': '/front/ticket-form',
+        'preview': '/front/maintenance-form',
+        'consolidated': '/front/consolidated',
+        'quotations': '/front/quotation',
+        'quotation-detail': '/front/quotation-form',
+        'sync': '/front/sync',
+        'config': '/front/config',
+        'login': '/front/login',
+        'form-preventive': '/front/maintenance-create?type=PREVENTIVO',
+        'form-corrective': '/front/maintenance-create?type=CORRECTIVO',
+        'form-delivery': '/front/maintenance-create?type=ENTREGA'
+    };
+
+    const PATH_TO_VIEW = {
+        '/front/dashboard': 'home',
+        '/front/kanban': 'kanban',
+        '/front/task-list': 'task-list',
+        '/front/historical': 'history',
+        '/front/ticket': 'tickets',
+        '/front/ticket-form': 'ticket-detail',
+        '/front/maintenance-form': 'preview',
+        '/front/consolidated': 'consolidated',
+        '/front/quotation': 'quotations',
+        '/front/quotation-form': 'quotation-detail',
+        '/front/sync': 'sync',
+        '/front/config': 'config',
+        '/front/login': 'login',
+        '/front/maintenance-create': 'form-preventive'
+    };
+
+    const getViewFromPath = (path) => {
+        if (path === '/') return 'home';
+        return PATH_TO_VIEW[path] || 'home';
+    };
+
+    const [view, setView] = useState(() => getViewFromPath(location.pathname));
+    const [selectedTicketId, setSelectedTicketId] = useState(() => searchParams.get('id') || localStorage.getItem('glpi_pro_ticket_id'));
+    const [selectedAct, setSelectedAct] = useState(null);
+    const [selectedQuotationId, setSelectedQuotationId] = useState(() => searchParams.get('id') || localStorage.getItem('glpi_pro_quotation_id'));
+
+    // Cargar Acta si hay ID en la URL
+    useEffect(() => {
+        const idFromUrl = searchParams.get('id');
+        if (view === 'preview' && idFromUrl) {
+            db.acts.get(Number(idFromUrl)).then(act => {
+                if (act) setSelectedAct(act);
+            });
+        }
+    }, [view, searchParams]);
+
     const [user, setUser] = useState(() => {
         try {
             return JSON.parse(localStorage.getItem('glpi_pro_user') || 'null');
-        } catch (e) {
-            return null;
-        }
+        } catch (e) { return null; }
     });
 
-    // Persistencia de navegación
+    // Sincronizar URL con el estado interno 'view'
     useEffect(() => {
+        const targetPathFull = VIEW_TO_PATH[view] || '/front/dashboard';
+        const [cleanPath, query] = targetPathFull.split('?');
+        let params = new URLSearchParams(query || '');
+
+        // Agregar ID si la vista lo requiere
+        if (['ticket-detail', 'preview', 'quotation-detail'].includes(view)) {
+            const id = view === 'preview' ? selectedAct?.id :
+                view === 'ticket-detail' ? selectedTicketId :
+                    selectedQuotationId;
+            if (id) params.set('id', id);
+        }
+
+        const newSearch = params.toString();
+        const currentSearch = location.search.replace('?', '');
+
+        if (location.pathname !== cleanPath || currentSearch !== newSearch) {
+            navigate(`${cleanPath}${newSearch ? '?' + newSearch : ''}`, { replace: true });
+        }
         localStorage.setItem('glpi_pro_view', view);
+
         if (selectedTicketId) localStorage.setItem('glpi_pro_ticket_id', selectedTicketId);
-        else localStorage.removeItem('glpi_pro_ticket_id');
-
         if (selectedQuotationId) localStorage.setItem('glpi_pro_quotation_id', selectedQuotationId);
-        else localStorage.removeItem('glpi_pro_quotation_id');
-
         if (selectedAct) localStorage.setItem('glpi_pro_act', JSON.stringify(selectedAct));
-        else localStorage.removeItem('glpi_pro_act');
-    }, [view, selectedTicketId, selectedQuotationId, selectedAct]);
+    }, [view, selectedTicketId, selectedQuotationId, selectedAct, navigate, location.pathname, location.search]);
+
+    // Manejar cambios en la URL (atrás/adelante)
+    useEffect(() => {
+        const newView = getViewFromPath(location.pathname);
+        if (newView !== view) {
+            setView(newView);
+            const id = searchParams.get('id');
+            if (id) {
+                if (newView === 'ticket-detail') setSelectedTicketId(id);
+                if (newView === 'quotation-detail') setSelectedQuotationId(id);
+            }
+        }
+    }, [location.pathname, searchParams]);
     const [isOnline, setIsOnline] = useState(window.navigator.onLine);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [globalSearchQuery, setGlobalSearchQuery] = useState('');
@@ -210,6 +289,7 @@ function App() {
         localStorage.removeItem('glpi_pro_user');
         setUser(null);
         setView('login');
+        navigate('/front/login');
     };
 
     const handleNavClick = (newView) => {
