@@ -96,13 +96,21 @@ const DashboardSummary = ({ onNavigate }) => {
     });
     const formattedTime = today.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
+    // Dynamic greeting based on current hour
+    const getGreeting = () => {
+        const hour = today.getHours();
+        if (hour < 12) return 'Buenos días';
+        if (hour < 18) return 'Buenas tardes';
+        return 'Buenas noches';
+    };
+
     return (
         <div className="animate-in fade-in duration-700">
             {/* Greeting Header */}
             <div className="flex justify-between items-start mb-8">
                 <div>
                     <h1 className="text-[28px] font-[800] text-text-primary flex items-center gap-2">
-                        Buenos días, {user.name?.split(' ')[0] || user.username} 👋
+                        {getGreeting()}, {user.name?.split(' ')[0] || user.username} 👋
                     </h1>
                     <p className="text-[14px] text-text-muted font-[500] mt-1">
                         {formattedDate} - {formattedTime}

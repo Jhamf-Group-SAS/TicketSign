@@ -78,11 +78,17 @@ class NotificationService {
             );
 
             if (isAssignedToMe) {
+                // Si la tarea se creó hace más de 1 hora, se considera una sincronización de "tareas viejas"
+                // No emitimos sonido ni popup para evitar saturar al usuario, pero la registramos.
+                const createdDate = new Date(task.createdAt || new Date());
+                const isOld = (new Date().getTime() - createdDate.getTime()) > (60 * 60 * 1000);
+
                 await this.notify({
                     title: 'Nueva Tarea Asignada',
                     message: task.title,
                     type: 'TASK',
-                    task: task
+                    task: task,
+                    silent: isOld
                 });
             }
         }
@@ -140,11 +146,16 @@ class NotificationService {
                     if (isAssignedToMe && wantsNotifications) {
                         this.notifyingSet.add(taskId); // Bloquear
                         try {
+                            const reminderDate = new Date(task.reminder_at);
+                            // Si el recordatorio fue hace más de 12 horas, lo silenciamos (es atrasado)
+                            const isOld = (now.getTime() - reminderDate.getTime()) > (12 * 60 * 60 * 1000);
+
                             await this.notify({
                                 title: '🔔 Recordatorio de Tarea',
                                 message: `${task.title} - Programada para: ${new Date(task.scheduled_at).toLocaleTimeString()}`,
                                 type: 'REMINDER',
-                                task: task
+                                task: task,
+                                silent: isOld
                             });
 
                             // Registrar que ya se notificó
@@ -169,11 +180,11 @@ class NotificationService {
     /**
      * Dispara una notificación inmediata (In-App + Browser + Sound + DB)
      */
-    async notify({ title, message, type = 'INFO', task = null }) {
+    async notify({ title, message, type = 'INFO', task = null, silent = false }) {
         const now = new Date();
         const wantsNotifications = task ? (task.sendWhatsApp !== false) : true;
 
-        // 1. Guardar en Historial de Notificaciones (Siempre se guarda en registro interno)
+        // 1. Guardar en Historial de Notificaciones (Siempre se guarda en registro interno de la UI)
         await db.notifications.add({
             title,
             message,
@@ -183,8 +194,8 @@ class NotificationService {
             createdAt: now.toISOString()
         });
 
-        // Si el usuario desactivó notificaciones para esta tarea, salimos antes de hacer ruido/visuales
-        if (!wantsNotifications) return;
+        // Si el usuario desactivó notificaciones para esta tarea O se solicitó silencio (ej. sync tardío), salimos.
+        if (!wantsNotifications || silent) return;
 
         // 2. Ejecutar Sonido
         try {
