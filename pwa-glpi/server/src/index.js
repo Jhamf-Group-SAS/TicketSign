@@ -75,6 +75,11 @@ const apiLimiter = rateLimit({
 });
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/ticketsign';
+
+if (!process.env.MONGO_URI && process.env.NODE_ENV === 'production') {
+    console.warn('[Database] ADVERTENCIA: No se detectó MONGO_URI en el entorno. Usando backup de localhost.');
+}
+
 const maskedURI = MONGO_URI.replace(/\/\/.*@/, '//****:****@');
 console.log(`[Database] Intentando conectar a: ${maskedURI}`);
 
