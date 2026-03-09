@@ -1,0 +1,14 @@
+version: "3.7"
+
+services:
+  mongo-dev:
+    image: mongo:latest
+    container_name: ticketsign-mongo-local
+    ports:
+      - "27017:27017"
+    volumes:
+      - ticketsign_db_local:/data/db
+    restart: always
+
+volumes:
+  ticketsign_db_local:

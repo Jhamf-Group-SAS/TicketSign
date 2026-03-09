@@ -24,6 +24,7 @@ import InDevelopment from './components/InDevelopment';
 import ConfigManager from './components/ConfigManager';
 import AutomaticUpdateHandler from './components/AutomaticUpdateHandler';
 import NotificationService from './services/NotificationService';
+import SyncService from './services/SyncService';
 import {
     ClipboardList,
     History,
@@ -58,6 +59,7 @@ function App() {
         'preview': '/front/maintenance-form',
         'consolidated': '/front/consolidated',
         'quotations': '/front/quotation',
+        'quotation-form': '/front/quotation-create',
         'quotation-detail': '/front/quotation-form',
         'sync': '/front/sync',
         'config': '/front/config',
@@ -77,6 +79,7 @@ function App() {
         '/front/maintenance-form': 'preview',
         '/front/consolidated': 'consolidated',
         '/front/quotation': 'quotations',
+        '/front/quotation-create': 'quotation-form',
         '/front/quotation-form': 'quotation-detail',
         '/front/sync': 'sync',
         '/front/config': 'config',
@@ -304,7 +307,16 @@ function App() {
     };
 
     if (!user) {
-        return <Login onLogin={(u) => { setUser(u); setView('home'); }} />;
+        return <Login onLogin={(u) => {
+            setUser(u);
+            setView('home');
+            // Sincronización inmediata al entrar
+            setTimeout(() => {
+                SyncService.pullRemoteChanges();
+                SyncService.syncPendingTasks();
+                SyncService.syncGLPICache();
+            }, 100);
+        }} />;
     }
 
     return (

@@ -7,6 +7,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
 import rateLimit from 'express-rate-limit';
+import fs from 'fs';
+import path from 'path';
 
 import syncRoutes from './routes/sync.js';
 import authRoutes from './routes/auth.js';
@@ -20,6 +22,13 @@ import reminderService from './services/reminder.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Asegurar que el directorio de uploads existe
+const uploadsDir = 'uploads';
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    console.log(`[System] Directorio '${uploadsDir}' creado.`);
+}
 
 // AUDIT-006: CORS con lista blanca de orígenes
 const allowedOrigins = [

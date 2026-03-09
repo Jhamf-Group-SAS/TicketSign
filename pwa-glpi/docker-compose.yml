@@ -40,6 +40,8 @@ services:
       # SEGURIDAD: Cuenta de emergencia (login sin GLPI configurado)
       - ADMIN_USER=${ADMIN_USER}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    volumes:
+      - ticketsign_uploads:/app/uploads
     deploy:
       mode: replicated
       replicas: 1
@@ -68,6 +70,7 @@ services:
 
 volumes:
   ticketsign_data:
+  ticketsign_uploads:
 
 
 networks:
