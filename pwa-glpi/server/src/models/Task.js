@@ -5,7 +5,7 @@ const taskSchema = new mongoose.Schema({
     description: String,
     type: {
         type: String,
-        enum: ['PREVENTIVO', 'CORRECTIVO'],
+        enum: ['PREVENTIVO', 'CORRECTIVO', 'MEJORA'],
         default: 'CORRECTIVO'
     },
     priority: {
