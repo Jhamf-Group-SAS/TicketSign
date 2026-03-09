@@ -74,10 +74,15 @@ const apiLimiter = rateLimit({
     legacyHeaders: false
 });
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/ticketsign';
+// [FALLBACK] En Docker/Producción, el host de la DB se llama 'mongo'
+const DEFAULT_MONGO = process.env.NODE_ENV === 'production'
+    ? 'mongodb://mongo:27017/ticketsign'
+    : 'mongodb://127.0.0.1:27017/ticketsign';
+
+const MONGO_URI = process.env.MONGO_URI || DEFAULT_MONGO;
 
 if (!process.env.MONGO_URI && process.env.NODE_ENV === 'production') {
-    console.warn('[Database] ADVERTENCIA: No se detectó MONGO_URI en el entorno. Usando backup de localhost.');
+    console.warn(`[Database] ⚠️ MONGO_URI no definida. Usando fallback de red Docker: ${MONGO_URI}`);
 }
 
 const maskedURI = MONGO_URI.replace(/\/\/.*@/, '//****:****@');
