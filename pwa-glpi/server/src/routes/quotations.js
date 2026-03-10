@@ -380,21 +380,46 @@ router.delete('/:id', authorizeRoles('Super-Admin', 'Admin-Mesa'), async (req, r
     }
 });
 
-// ─── GET /api/quotations/view/:filename ──────────────────────────────────────
-// [A-01 + C-04] SEGURIDAD: Requiere auth y previene Path Traversal
 router.get('/view/:filename', authenticateToken, async (req, res) => {
     try {
-        // [C-04] Sanitizar el nombre para prevenir path traversal (ej: ../../etc/passwd)
+        // [C-04] Sanitizar el nombre para prevenir path traversal
         const safeFilename = path.basename(req.params.filename);
-        const uploadsDir = path.resolve(process.cwd(), 'uploads', 'quotations');
-        const filePath = path.resolve(uploadsDir, safeFilename);
+        const baseUploadsDir = path.resolve(process.cwd(), 'uploads');
+        const quotationsDir = path.resolve(baseUploadsDir, 'quotations');
 
-        // Verificar que el path resultante está DENTRO del directorio permitido
-        if (!filePath.startsWith(uploadsDir + path.sep)) {
-            return res.status(403).json({ message: 'Ruta de archivo no permitida.' });
+        // Intentar encontrar el archivo en la carpeta de cotizaciones o en la raíz (compatibilidad con versiones previas)
+        let filePath = path.resolve(quotationsDir, safeFilename);
+        let exists = false;
+
+        try {
+            await fs.access(filePath);
+            exists = true;
+        } catch (e) {
+            // Fallback: buscar en la raíz de uploads por si el registro es antiguo
+            const fallbackPath = path.resolve(baseUploadsDir, safeFilename);
+            try {
+                await fs.access(fallbackPath);
+                filePath = fallbackPath;
+                exists = true;
+            } catch (e2) {
+                exists = false;
+            }
         }
 
-        await fs.access(filePath);
+        if (!exists) {
+            console.warn(`[Quotations] Archivo no encontrado localmente: ${safeFilename}`);
+            return res.status(404).json({ message: 'Archivo no encontrado' });
+        }
+
+        // [SEGURIDAD] Verificar que el path resultante está DENTRO de un directorio permitido
+        const normalizedPath = path.normalize(filePath);
+        const isSafe = normalizedPath.startsWith(path.normalize(baseUploadsDir)) ||
+            normalizedPath.startsWith(path.normalize(quotationsDir));
+
+        if (!isSafe) {
+            console.error(`[Quotations] Intento de acceso fuera de rango: ${normalizedPath}`);
+            return res.status(403).json({ message: 'Ruta de archivo no permitida.' });
+        }
 
         const ext = path.extname(safeFilename).toLowerCase();
         let mimetype = 'application/octet-stream';
@@ -404,19 +429,23 @@ router.get('/view/:filename', authenticateToken, async (req, res) => {
             '.jpg': 'image/jpeg',
             '.jpeg': 'image/jpeg',
             '.png': 'image/png',
-            '.webp': 'image/webp'
+            '.webp': 'image/webp',
+            '.doc': 'application/msword',
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            '.xls': 'application/vnd.ms-excel',
+            '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         };
 
         if (mimetypes[ext]) {
             mimetype = mimetypes[ext];
         } else {
-            // Si no tiene extensión, leer los primeros bytes para detectar PDF
-            const handle = await fs.open(filePath, 'r');
-            const { buffer } = await handle.read(Buffer.alloc(5), 0, 5, 0);
-            await handle.close();
-            if (buffer.toString() === '%PDF-') {
-                mimetype = 'application/pdf';
-            }
+            // Si no tiene extensión, intentar detectar PDF por firma
+            try {
+                const handle = await fs.open(filePath, 'r');
+                const { buffer } = await handle.read(Buffer.alloc(5), 0, 5, 0);
+                await handle.close();
+                if (buffer.toString() === '%PDF-') mimetype = 'application/pdf';
+            } catch (e) { }
         }
 
         res.setHeader('Content-Type', mimetype);
@@ -429,7 +458,8 @@ router.get('/view/:filename', authenticateToken, async (req, res) => {
 
         res.sendFile(filePath);
     } catch (error) {
-        res.status(404).json({ message: 'Archivo no encontrado' });
+        console.error('[Quotations] Error sirviendo archivo:', error.message);
+        res.status(500).json({ message: 'Error interno al procesar el archivo' });
     }
 });
 
