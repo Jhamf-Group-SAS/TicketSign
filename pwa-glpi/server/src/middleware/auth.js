@@ -3,11 +3,12 @@ import jwt from 'jsonwebtoken';
 export const authenticateToken = (req, res, next) => {
     // [C-02 - EXCEPCIÓN] Rutas que sirven archivos multimedia y descargas directas del navegador
     // (ej: <img src="...">) necesitan soportar token por URL temporalmente.
-    const isResourceRoute = req.originalUrl.includes('/view/') ||
-        req.originalUrl.includes('/export/csv') ||
-        req.originalUrl.includes('/export-csv') ||
-        req.originalUrl.endsWith('/pdf') ||
-        req.originalUrl.endsWith('consolidated'); // Por si se exporta el consolidado
+    const pathOnly = req.path || req.originalUrl.split('?')[0];
+    const isResourceRoute = pathOnly.includes('/view/') ||
+        pathOnly.includes('/export/csv') ||
+        pathOnly.includes('/export-csv') ||
+        pathOnly.endsWith('/pdf') ||
+        pathOnly.endsWith('consolidated'); // Por si se exporta el consolidado
 
     if (isResourceRoute) {
         return authenticateUrlToken(req, res, next);
