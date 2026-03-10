@@ -25,7 +25,7 @@ export const authenticateToken = (req, res, next) => {
     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
         if (err) {
             console.error('[Auth] Token verification failed:', err.message);
-            return res.status(403).json({ message: 'Token inválido o expirado.' });
+            return res.status(401).json({ message: 'Token inválido o expirado.' });
         }
         req.user = user;
         next();
@@ -45,7 +45,7 @@ export const authenticateUrlToken = (req, res, next) => {
     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
         if (err) {
             console.error('[Auth-URL] Token verification failed:', err.message);
-            return res.status(403).json({ message: 'Token inválido o expirado.' });
+            return res.status(401).json({ message: 'Token inválido o expirado.' });
         }
         req.user = user;
         next();
