@@ -8,6 +8,55 @@ class GLPIConnector {
         this.sessionToken = null;
         this.userCache = new Map(); // id -> { fullName, name }
         this.loginCache = new Map(); // login/name -> { fullName, id }
+
+        // [A-02] SEGURIDAD: Instancia privada de axios con interceptores 
+        // para manejo automático de sesión y reintentos.
+        this.api = axios.create();
+
+        // Interceptor de Petición: Inyectar App-Token y Session-Token
+        this.api.interceptors.request.use(async (config) => {
+            // No inyectar token en initSession para evitar recursión
+            if (config.url && config.url.includes('/initSession')) return config;
+
+            if (!this.sessionToken) await this.initSession();
+            const { appToken } = await this.getConfig();
+
+            config.headers['App-Token'] = appToken;
+            config.headers['Session-Token'] = this.sessionToken;
+
+            return config;
+        });
+
+        // Interceptor de Respuesta: Manejar expiración de sesión (401)
+        this.api.interceptors.response.use(
+            response => response,
+            async (error) => {
+                const originalRequest = error.config;
+
+                // Si recibimos 401 y no hemos reintentado ya...
+                if (error.response?.status === 401 && !originalRequest._retry) {
+                    const errorMsg = JSON.stringify(error.response.data);
+
+                    // Solo reintentar si es específicamente un error de sesión inválida
+                    if (errorMsg.includes('ERROR_SESSION_TOKEN_INVALID')) {
+                        console.warn('[GLPI] Sesión expirada o inválida, renovando token y reintentando...');
+                        originalRequest._retry = true;
+                        this.sessionToken = null; // Forzar regeneración
+
+                        try {
+                            await this.initSession();
+                            // Actualizar el header con el nuevo token
+                            originalRequest.headers['Session-Token'] = this.sessionToken;
+                            return this.api(originalRequest);
+                        } catch (initErr) {
+                            console.error('[GLPI] Error al renovar sesión en reintento:', initErr.message);
+                            return Promise.reject(error);
+                        }
+                    }
+                }
+                return Promise.reject(error);
+            }
+        );
     }
 
     async getConfig() {
@@ -27,7 +76,7 @@ class GLPIConnector {
         try {
             console.log(`[GLPI] Intentando conectar con App-Token: ${appToken ? 'OK' : 'MISSING'} y User-Token: ${userToken ? 'OK' : 'MISSING'}`);
 
-            const response = await axios.get(`${apiUrl}/initSession`, {
+            const response = await this.api.get(`${apiUrl}/initSession`, {
                 params: {
                     get_full_session: true
                 },
@@ -58,13 +107,8 @@ class GLPIConnector {
 
                 if (targetProfile && targetProfile.id !== activeProfileId) {
                     console.log(`[GLPI] Cambiando a perfil con mayores privilegios: ${targetProfile.name}`);
-                    await axios.post(`${apiUrl}/changeActiveProfile`, {
+                    await this.api.post(`${apiUrl}/changeActiveProfile`, {
                         profiles_id: targetProfile.id
-                    }, {
-                        headers: {
-                            'App-Token': appToken,
-                            'Session-Token': this.sessionToken
-                        }
                     });
                 }
             }
@@ -91,14 +135,9 @@ class GLPIConnector {
         try {
             const url = `${apiUrl}/changeActiveEntity`;
             console.log(`[GLPI] POST a ${url} con entities_id: ${entityId}`);
-            const success = await axios.post(url, {
+            const success = await this.api.post(url, {
                 entities_id: entityId,
                 is_recursive: recursive ? 1 : 0
-            }, {
-                headers: {
-                    'App-Token': appToken,
-                    'Session-Token': this.sessionToken
-                }
             });
             console.log(`[GLPI] Cambio de entidad exitoso: ${entityId}`);
             return true;
@@ -116,14 +155,10 @@ class GLPIConnector {
         const { apiUrl, appToken } = await this.getConfig();
 
         try {
-            const response = await axios.get(`${apiUrl}/Computer`, {
+            const response = await this.api.get(`${apiUrl}/Computer`, {
                 params: {
                     searchText: query,
                     is_deleted: 0
-                },
-                headers: {
-                    'App-Token': appToken,
-                    'Session-Token': this.sessionToken
                 }
             });
             return response.data[0] || null;
@@ -140,9 +175,7 @@ class GLPIConnector {
         try {
             // 1. Obtener el ticket para conocer su entidad
             console.log(`[GLPI] Obteniendo entidad para ${itemtype} #${itemId}...`);
-            const itemRes = await axios.get(`${apiUrl}/${itemtype}/${itemId}`, {
-                headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
-            });
+            const itemRes = await this.api.get(`${apiUrl}/${itemtype}/${itemId}`);
             const entityId = itemRes.data.entities_id;
             console.log(`[GLPI] El ${itemtype} #${itemId} pertenece a la entidad ID: ${entityId}`);
 
@@ -156,9 +189,7 @@ class GLPIConnector {
 
             // Verificar sesión actual (opcional, solo log)
             try {
-                const sessionRes = await axios.get(`${apiUrl}/getFullSession`, {
-                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
-                });
+                const sessionRes = await this.api.get(`${apiUrl}/getFullSession`);
                 const s = sessionRes.data.session;
                 console.log(`[GLPI] Contexto actual - User: ${s.glpiname}, Entity ID: ${s.glpiactiveentity}`);
             } catch (e) { }
@@ -174,11 +205,9 @@ class GLPIConnector {
             }));
             form.append('filename[0]', fs.createReadStream(filePath));
 
-            const response = await axios.post(`${apiUrl}/Document`, form, {
+            const response = await this.api.post(`${apiUrl}/Document`, form, {
                 headers: {
-                    ...form.getHeaders(),
-                    'App-Token': appToken,
-                    'Session-Token': this.sessionToken
+                    ...form.getHeaders()
                 }
             });
 
@@ -197,16 +226,11 @@ class GLPIConnector {
             for (const linkType of linkTypes) {
                 try {
                     console.log(`[GLPI] Intentando vinculación mediante ${linkType}...`);
-                    await axios.post(`${apiUrl}/${linkType}`, {
+                    await this.api.post(`${apiUrl}/${linkType}`, {
                         input: {
                             documents_id: docId,
                             items_id: itemId,
                             itemtype: itemtype
-                        }
-                    }, {
-                        headers: {
-                            'App-Token': appToken,
-                            'Session-Token': this.sessionToken
                         }
                     });
                     console.log(`[GLPI] Vinculación exitosa con ${linkType}`);
@@ -240,17 +264,12 @@ class GLPIConnector {
         if (itemtype !== 'Ticket') return;
 
         try {
-            await axios.post(`${apiUrl}/ITILFollowup`, {
+            await this.api.post(`${apiUrl}/ITILFollowup`, {
                 input: {
                     items_id: itemId,
                     itemtype: itemtype,
                     content: content,
                     is_private: 0
-                }
-            }, {
-                headers: {
-                    'App-Token': appToken,
-                    'Session-Token': this.sessionToken
                 }
             });
             console.log(`[GLPI] Seguimiento añadido al ${itemtype} #${itemId}`);
@@ -272,14 +291,10 @@ class GLPIConnector {
 
             // 1. Obtener todas las asociaciones de perfiles
             // Expandimos dropdowns para tener los nombres de perfiles y usuarios
-            const response = await axios.get(`${apiUrl}/Profile_User`, {
+            const response = await this.api.get(`${apiUrl}/Profile_User`, {
                 params: {
                     range: '0-1000',
                     expand_dropdowns: true
-                },
-                headers: {
-                    'App-Token': appToken,
-                    'Session-Token': this.sessionToken
                 }
             });
 
@@ -346,9 +361,7 @@ class GLPIConnector {
                 const batch = eligibleUsers.slice(i, i + BATCH_SIZE);
                 await Promise.all(batch.map(async (tech) => {
                     try {
-                        const userRes = await axios.get(`${apiUrl}/User/${tech.id}`, {
-                            headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
-                        });
+                        const userRes = await this.api.get(`${apiUrl}/User/${tech.id}`);
                         const userData = userRes.data;
 
                         // Construir nombre completo (Nombre Apellido)
@@ -401,12 +414,8 @@ class GLPIConnector {
                 await this.getUsers();
             }
 
-            const response = await axios.get(`${apiUrl}/Ticket`, {
-                params,
-                headers: {
-                    'App-Token': appToken,
-                    'Session-Token': this.sessionToken
-                }
+            const response = await this.api.get(`${apiUrl}/Ticket`, {
+                params
             });
 
             if (!Array.isArray(response.data)) {
@@ -475,25 +484,23 @@ class GLPIConnector {
                         let groupActors = [];
 
                         try {
-                            const aRes = await axios.get(`${apiUrl}/Ticket/${t.id}/Ticket_User`, { headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken } });
+                            const aRes = await this.api.get(`${apiUrl}/Ticket/${t.id}/Ticket_User`);
                             actors = Array.isArray(aRes.data) ? aRes.data : (aRes.data ? [aRes.data] : []);
                         } catch (e) {
                             try {
-                                const aResAlt = await axios.get(`${apiUrl}/Ticket_User`, {
-                                    params: { searchText: { tickets_id: t.id } },
-                                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                                const aResAlt = await this.api.get(`${apiUrl}/Ticket_User`, {
+                                    params: { searchText: { tickets_id: t.id } }
                                 });
                                 actors = Array.isArray(aResAlt.data) ? aResAlt.data : [];
                             } catch (e2) { }
                         }
                         try {
-                            const gaRes = await axios.get(`${apiUrl}/Ticket/${t.id}/Ticket_Group`, { headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken } });
+                            const gaRes = await this.api.get(`${apiUrl}/Ticket/${t.id}/Ticket_Group`);
                             groupActors = Array.isArray(gaRes.data) ? gaRes.data : (gaRes.data ? [gaRes.data] : []);
                         } catch (e) {
                             try {
-                                const gaResAlt = await axios.get(`${apiUrl}/Ticket_Group`, {
-                                    params: { searchText: { tickets_id: t.id } },
-                                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                                const gaResAlt = await this.api.get(`${apiUrl}/Ticket_Group`, {
+                                    params: { searchText: { tickets_id: t.id } }
                                 });
                                 groupActors = Array.isArray(gaResAlt.data) ? gaResAlt.data : [];
                             } catch (e2) { }
@@ -611,17 +618,15 @@ class GLPIConnector {
             const headers = { 'App-Token': appToken, 'Session-Token': this.sessionToken };
 
             // 1. Ticket Base
-            const ticketRes = await axios.get(`${apiUrl}/Ticket/${id}`, {
-                params: { expand_dropdowns: true },
-                headers
+            const ticketRes = await this.api.get(`${apiUrl}/Ticket/${id}`, {
+                params: { expand_dropdowns: true }
             });
 
             // 2. Seguimientos (Followups)
             let followups = [];
             try {
-                const fRes = await axios.get(`${apiUrl}/Ticket/${id}/ITILFollowup`, {
-                    params: { expand_dropdowns: true, range: '0-100' },
-                    headers
+                const fRes = await this.api.get(`${apiUrl}/Ticket/${id}/ITILFollowup`, {
+                    params: { expand_dropdowns: true, range: '0-100' }
                 });
                 followups = Array.isArray(fRes.data) ? fRes.data : [];
             } catch (e) { console.warn('No followups or error', e.message); }
@@ -629,9 +634,8 @@ class GLPIConnector {
             // 3. Soluciones (Solutions)
             let solutions = [];
             try {
-                const sRes = await axios.get(`${apiUrl}/Ticket/${id}/ITILSolution`, {
-                    params: { expand_dropdowns: true },
-                    headers
+                const sRes = await this.api.get(`${apiUrl}/Ticket/${id}/ITILSolution`, {
+                    params: { expand_dropdowns: true }
                 });
                 solutions = Array.isArray(sRes.data) ? sRes.data : [];
             } catch (e) { console.warn('No solutions or error', e.message); }
@@ -639,9 +643,8 @@ class GLPIConnector {
             // 4. Documentos
             let documents = [];
             try {
-                const dRes = await axios.get(`${apiUrl}/Ticket/${id}/Document_Item`, {
-                    params: { expand_dropdowns: true },
-                    headers
+                const dRes = await this.api.get(`${apiUrl}/Ticket/${id}/Document_Item`, {
+                    params: { expand_dropdowns: true }
                 });
                 documents = Array.isArray(dRes.data) ? dRes.data : [];
             } catch (e) { console.warn('No documents or error', e.message); }
@@ -651,15 +654,14 @@ class GLPIConnector {
 
             // 5a. Usuarios vinculados
             try {
-                const aRes = await axios.get(`${apiUrl}/Ticket/${id}/Ticket_User`, { headers });
+                const aRes = await this.api.get(`${apiUrl}/Ticket/${id}/Ticket_User`);
                 actors = Array.isArray(aRes.data) ? aRes.data : (aRes.data ? [aRes.data] : []);
             } catch (e) {
                 console.warn(`[GLPI] Ticket_User NO disponible mediante ruta anidada. Intentando búsqueda alternativa...`);
                 try {
                     // Intento alternativo via búsqueda filtrada
-                    const aResAlt = await axios.get(`${apiUrl}/Ticket_User`, {
-                        params: { searchText: { tickets_id: id } },
-                        headers
+                    const aResAlt = await this.api.get(`${apiUrl}/Ticket_User`, {
+                        params: { searchText: { tickets_id: id } }
                     });
                     actors = Array.isArray(aResAlt.data) ? aResAlt.data : [];
                 } catch (e2) {
@@ -669,14 +671,13 @@ class GLPIConnector {
 
             // 5b. Grupos vinculados
             try {
-                const gaRes = await axios.get(`${apiUrl}/Ticket/${id}/Ticket_Group`, { headers });
+                const gaRes = await this.api.get(`${apiUrl}/Ticket/${id}/Ticket_Group`);
                 groupActors = Array.isArray(gaRes.data) ? gaRes.data : (gaRes.data ? [gaRes.data] : []);
             } catch (e) {
                 console.warn(`[GLPI] Ticket_Group NO disponible mediante ruta anidada. Intentando búsqueda alternativa...`);
                 try {
-                    const gaResAlt = await axios.get(`${apiUrl}/Ticket_Group`, {
-                        params: { searchText: { tickets_id: id } },
-                        headers
+                    const gaResAlt = await this.api.get(`${apiUrl}/Ticket_Group`, {
+                        params: { searchText: { tickets_id: id } }
                     });
                     groupActors = Array.isArray(gaResAlt.data) ? gaResAlt.data : [];
                 } catch (e2) {
@@ -718,9 +719,7 @@ class GLPIConnector {
 
                 if (!isStored) {
                     try {
-                        const uRes = await axios.get(`${apiUrl}/User/${uid}`, {
-                            headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
-                        });
+                        const uRes = await this.api.get(`${apiUrl}/User/${uid}`);
                         const u = uRes.data;
 
                         // Soporte para formato numérico de GLPI (1=login, 9=firstname, 34=realname)
@@ -875,24 +874,20 @@ class GLPIConnector {
         try {
             // Asegurar entidad correcta
             try {
-                const ticketRes = await axios.get(`${apiUrl}/Ticket/${ticketId}`, {
-                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
-                });
+                const ticketRes = await this.api.get(`${apiUrl}/Ticket/${ticketId}`);
                 await this.changeActiveEntity(ticketRes.data.entities_id);
             } catch (e) { }
 
             console.log(`[GLPI] Creando solución para Ticket #${ticketId}`);
 
-            const response = await axios.post(`${apiUrl}/ITILSolution`, {
+            const response = await this.api.post(`${apiUrl}/ITILSolution`, {
                 input: {
                     items_id: ticketId,
                     itemtype: 'Ticket',
                     content: content,
                     status: 2, // Aprobada/Propuesta
-                    solutiontypes_id: solutionType
+                    solutiontypes_id: 0
                 }
-            }, {
-                headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
             });
 
             return response.data;
@@ -911,20 +906,16 @@ class GLPIConnector {
         try {
             // Asegurar entidad correcta
             try {
-                const ticketRes = await axios.get(`${apiUrl}/Ticket/${id}`, {
-                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
-                });
+                const ticketRes = await this.api.get(`${apiUrl}/Ticket/${id}`);
                 await this.changeActiveEntity(ticketRes.data.entities_id);
             } catch (e) { }
 
             console.log(`[GLPI] Actualizando Ticket #${id}`, input);
-            const response = await axios.put(`${apiUrl}/Ticket/${id}`, {
+            const response = await this.api.put(`${apiUrl}/Ticket/${id}`, {
                 input: {
                     id: id,
                     ...input
                 }
-            }, {
-                headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
             });
 
             return response.data;
@@ -942,13 +933,12 @@ class GLPIConnector {
         const { apiUrl, appToken } = await this.getConfig();
 
         try {
-            const response = await axios.get(`${apiUrl}/User`, {
+            const response = await this.api.get(`${apiUrl}/User`, {
                 params: {
                     range: '0-1000',
                     is_active: 1,
                     is_deleted: 0
-                },
-                headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                }
             });
 
             const data = Array.isArray(response.data) ? response.data : [];
@@ -986,13 +976,12 @@ class GLPIConnector {
         const { apiUrl, appToken } = await this.getConfig();
 
         try {
-            const response = await axios.get(`${apiUrl}/${itemtype}`, {
+            const response = await this.api.get(`${apiUrl}/${itemtype}`, {
                 params: {
                     range: '0-500',
                     is_deleted: 0,
                     ...criteria
-                },
-                headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                }
             });
             return Array.isArray(response.data) ? response.data : [];
         } catch (error) {
@@ -1009,13 +998,12 @@ class GLPIConnector {
         const { apiUrl, appToken } = await this.getConfig();
 
         try {
-            const response = await axios.get(`${apiUrl}/Group`, {
+            const response = await this.api.get(`${apiUrl}/Group`, {
                 params: {
                     range: '0-500',
                     is_assign: 1, // Solo grupos asignables
                     is_deleted: 0
-                },
-                headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
+                }
             });
 
             const data = Array.isArray(response.data) ? response.data : [];
@@ -1043,25 +1031,19 @@ class GLPIConnector {
 
         try {
             // Primero buscamos si ya existe un actor de ese tipo para no duplicar
-            const actorsRes = await axios.get(`${apiUrl}/Ticket/${ticketId}/${itemtype}`, {
-                headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
-            });
+            const actorsRes = await this.api.get(`${apiUrl}/Ticket/${ticketId}/${itemtype}`);
             const existingActors = Array.isArray(actorsRes.data) ? actorsRes.data : [];
             const existing = existingActors.find(a => a.type == type);
 
             if (existing) {
                 // Actualizar existente
-                await axios.put(`${apiUrl}/Ticket/${ticketId}/${itemtype}/${existing.id}`, {
+                await this.api.put(`${apiUrl}/Ticket/${ticketId}/${itemtype}/${existing.id}`, {
                     input: { id: existing.id, [idField]: actorId, type: type }
-                }, {
-                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
                 });
             } else {
                 // Crear nuevo
-                await axios.post(`${apiUrl}/Ticket/${ticketId}/${itemtype}`, {
+                await this.api.post(`${apiUrl}/Ticket/${ticketId}/${itemtype}`, {
                     input: { tickets_id: ticketId, [idField]: actorId, type: type }
-                }, {
-                    headers: { 'App-Token': appToken, 'Session-Token': this.sessionToken }
                 });
             }
             return { success: true };
