@@ -387,47 +387,54 @@ router.get('/view/:filename', authenticateToken, async (req, res) => {
         const baseUploadsDir = path.resolve(process.cwd(), 'uploads');
         const quotationsDir = path.resolve(baseUploadsDir, 'quotations');
 
-        // Intentar encontrar el archivo en la carpeta de cotizaciones o en la raíz (compatibilidad con versiones previas)
-        let filePath = path.resolve(quotationsDir, safeFilename);
+        // Intentar encontrar el archivo en la carpeta de cotizaciones o en la raíz
+        let filePath = path.resolve(quotationsDir, safeFilename); // Initialize filePath, will be updated
         let exists = false;
 
-        try {
-            await fs.access(filePath);
-            exists = true;
-        } catch (e) {
-            // Fallback: buscar en la raíz de uploads por si el registro es antiguo
-            const fallbackPath = path.resolve(baseUploadsDir, safeFilename);
+        const tryPaths = [
+            path.join(quotationsDir, safeFilename),
+            path.join(baseUploadsDir, safeFilename)
+        ];
+
+        for (const p of tryPaths) {
             try {
-                await fs.access(fallbackPath);
-                filePath = fallbackPath;
+                await fs.access(p);
+                filePath = p;
                 exists = true;
-            } catch (e2) {
-                exists = false;
-            }
+                break;
+            } catch (e) { }
+        }
+
+        // Búsqueda recursiva (Último recurso para archivos "perdidos" tras actualización)
+        if (!exists) {
+            try {
+                const allFiles = await fs.readdir(baseUploadsDir, { recursive: true });
+                const found = allFiles.find(f => path.basename(f) === safeFilename);
+                if (found) {
+                    filePath = path.resolve(baseUploadsDir, found);
+                    exists = true;
+                    console.info(`[Quotations] Archivo rescatado en ruta alternativa: ${filePath}`);
+                }
+            } catch (err) { }
         }
 
         if (!exists) {
             const currentCwd = process.cwd();
-            console.warn(`[Quotations] Archivo no encontrado: ${safeFilename}`);
-            console.warn(`[Quotations] CWD actual: ${currentCwd}`);
-            console.warn(`[Quotations] Intentado en: ${filePath}`);
+            console.warn(`[Quotations] ARCHIVO NO ENCONTRADO: ${safeFilename}`);
+            console.warn(`[Quotations] CWD: ${currentCwd} | Intentados: ${JSON.stringify(tryPaths)}`);
 
             return res.status(404).json({
-                message: 'Archivo no encontrado en el servidor local',
+                message: 'El archivo indicado no existe en el sistema de archivos del servidor',
                 filename: safeFilename,
-                debug_hint: 'Verificar que la carpeta uploads/quotations existe y contiene el archivo'
+                debug_info: 'Si el archivo aparece en el PDF, es posible que los permisos de lectura sean incorrectos.'
             });
         }
 
-        // [SEGURIDAD] Verificar que el path resultante está DENTRO de un directorio permitido
+        // [SEGURIDAD] Verificar que el path resultante está DENTRO de uploads
         const normalizedPath = path.normalize(filePath);
         const normUploads = path.normalize(baseUploadsDir) + path.sep;
-        const normQuotations = path.normalize(quotationsDir) + path.sep;
 
-        const isSafe = normalizedPath.startsWith(normUploads) ||
-            normalizedPath.startsWith(normQuotations);
-
-        if (!isSafe) {
+        if (!normalizedPath.startsWith(normUploads)) {
             console.error(`[Quotations] Intento de acceso fuera de rango: ${normalizedPath}`);
             return res.status(403).json({ message: 'Ruta de archivo no permitida.' });
         }
