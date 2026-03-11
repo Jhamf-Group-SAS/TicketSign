@@ -69,9 +69,13 @@ class GLPIConnector {
 
     async initSession() {
         const { apiUrl, appToken, userToken } = await this.getConfig();
-        console.log(`[GLPI] Iniciando sesión en: ${apiUrl}`);
 
-        if (!apiUrl) throw new Error('GLPI_API_URL no configurado');
+        // [AUDIT] SSRF: Validar esquema de URL
+        if (!apiUrl || !apiUrl.startsWith('https://')) {
+            throw new Error('GLPI_API_URL debe ser una URL segura (https://)');
+        }
+
+        console.log('[GLPI] Iniciando sesión en:', apiUrl);
 
         try {
             console.log(`[GLPI] Intentando conectar con App-Token: ${appToken ? 'OK' : 'MISSING'} y User-Token: ${userToken ? 'OK' : 'MISSING'}`);
@@ -157,7 +161,7 @@ class GLPIConnector {
         try {
             const response = await this.api.get(`${apiUrl}/Computer`, {
                 params: {
-                    searchText: query,
+                    searchText: String(query),
                     is_deleted: 0
                 }
             });
@@ -453,7 +457,7 @@ class GLPIConnector {
                     priority: t.priority,
                     urgency: t.urgency,
                     description: t.content
-                        ? t.content.replace(/<[^>]*>?/gm, '').substring(0, 150) + (t.content.length > 150 ? '...' : '')
+                        ? t.content.replace(/<\/?[^>]+(>|$)/g, "").substring(0, 150) + (t.content.length > 150 ? '...' : '')
                         : 'Sin descripción',
 
                     entity: t.entities_id,

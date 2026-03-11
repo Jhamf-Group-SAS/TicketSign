@@ -71,9 +71,9 @@ router.get('/', async (req, res) => {
             ]
         });
 
-        if (status) query.status = status;
-        if (priority) query.priority = priority;
-        if (assigned_to) query.assigned_to = assigned_to;
+        if (status) query.status = String(status);
+        if (priority) query.priority = String(priority);
+        if (assigned_to) query.assigned_to = String(assigned_to);
         if (from || to) {
             query.createdAt = {};
             if (from) query.createdAt.$gte = new Date(from);

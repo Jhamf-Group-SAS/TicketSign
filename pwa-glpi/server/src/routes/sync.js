@@ -48,7 +48,7 @@ router.post('/maintenance', async (req, res) => {
 
         // 0. Guardar en MongoDB
         try {
-            let act = await Act.findOne({ glpi_ticket_id: actData.glpi_ticket_id });
+            let act = await Act.findOne({ glpi_ticket_id: String(actData.glpi_ticket_id) });
             if (!act) {
                 act = new Act(actData);
             } else {

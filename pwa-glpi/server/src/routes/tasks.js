@@ -115,15 +115,15 @@ router.get('/', async (req, res) => {
             ]
         };
 
-        // Aplicar filtros opcionales
+        // Aplicar filtros opcionales (Sanitizados para evitar NoSQL Injection)
         if (technician) {
-            query.$and.push({ assigned_technicians: technician });
+            query.$and.push({ assigned_technicians: String(technician) });
         }
         if (status) {
-            query.$and.push({ status: status });
+            query.$and.push({ status: String(status) });
         }
         if (priority) {
-            query.$and.push({ priority: priority });
+            query.$and.push({ priority: String(priority) });
         }
 
         console.log(`[Tasks] Querying DB. Username: ${username}, Admin: ${isAdmin}`);
@@ -202,8 +202,8 @@ router.post('/sync', async (req, res) => {
 
             let task = null;
             try {
-                if (_id && _id.length === 24) { // MongoDB ID
-                    const existingOnServer = await Task.findById(_id);
+                if (_id && String(_id).length === 24) { // MongoDB ID
+                    const existingOnServer = await Task.findById(String(_id));
                     // Regla de Oro: Si ya se envió en el servidor, no permitir que el cliente lo resetee a false
                     if (existingOnServer?.reminder_sent === true) {
                         updateData.reminder_sent = true;
@@ -213,8 +213,8 @@ router.post('/sync', async (req, res) => {
                         updateData.reminder_sent = true;
                     }
 
-                    task = await Task.findByIdAndUpdate(_id, updateData, { new: true, upsert: false });
-                } else if (_id && _id.startsWith('temp_')) {
+                    task = await Task.findByIdAndUpdate(String(_id), updateData, { new: true, upsert: false });
+                } else if (_id && String(_id).startsWith('temp_')) {
                     // Actualizar en memoria
                     const index = memoryTasks.findIndex(t => t._id === _id);
                     if (index !== -1) {

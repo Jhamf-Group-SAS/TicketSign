@@ -29,7 +29,16 @@ const sanitizeHTML = (html) => {
         // Eliminar atributos on* (XSS)
         if (node.attributes) {
             Array.from(node.attributes).forEach(attr => {
-                if (attr.name.startsWith('on') || attr.name === 'style' || (attr.name === 'href' && attr.value.startsWith('javascript:'))) {
+                const attrName = attr.name.toLowerCase();
+                const attrValue = attr.value.toLowerCase().trim();
+
+                if (attrName.startsWith('on') || attrName === 'style' ||
+                    (attrName === 'href' && (
+                        attrValue.startsWith('javascript:') ||
+                        attrValue.startsWith('data:') ||
+                        attrValue.startsWith('vbscript:')
+                    ))
+                ) {
                     node.removeAttribute(attr.name);
                 }
             });

@@ -160,7 +160,13 @@ router.post('/tickets/:id/document', authorizeRoles('Super-Admin', 'Admin-Mesa',
 
         res.json(result);
     } catch (error) {
-        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        if (req.file) {
+            const absoluteUploadsDir = path.resolve(process.cwd(), 'uploads');
+            const absolutePath = path.resolve(req.file.path);
+            if (absolutePath.startsWith(absoluteUploadsDir) && fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
+        }
         res.status(500).json({ error: error.message });
     }
 });
