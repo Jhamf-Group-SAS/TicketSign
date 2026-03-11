@@ -407,14 +407,25 @@ router.get('/view/:filename', authenticateToken, async (req, res) => {
         }
 
         if (!exists) {
-            console.warn(`[Quotations] Archivo no encontrado localmente: ${safeFilename}`);
-            return res.status(404).json({ message: 'Archivo no encontrado' });
+            const currentCwd = process.cwd();
+            console.warn(`[Quotations] Archivo no encontrado: ${safeFilename}`);
+            console.warn(`[Quotations] CWD actual: ${currentCwd}`);
+            console.warn(`[Quotations] Intentado en: ${filePath}`);
+
+            return res.status(404).json({
+                message: 'Archivo no encontrado en el servidor local',
+                filename: safeFilename,
+                debug_hint: 'Verificar que la carpeta uploads/quotations existe y contiene el archivo'
+            });
         }
 
         // [SEGURIDAD] Verificar que el path resultante está DENTRO de un directorio permitido
         const normalizedPath = path.normalize(filePath);
-        const isSafe = normalizedPath.startsWith(path.normalize(baseUploadsDir)) ||
-            normalizedPath.startsWith(path.normalize(quotationsDir));
+        const normUploads = path.normalize(baseUploadsDir) + path.sep;
+        const normQuotations = path.normalize(quotationsDir) + path.sep;
+
+        const isSafe = normalizedPath.startsWith(normUploads) ||
+            normalizedPath.startsWith(normQuotations);
 
         if (!isSafe) {
             console.error(`[Quotations] Intento de acceso fuera de rango: ${normalizedPath}`);

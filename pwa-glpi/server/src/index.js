@@ -25,10 +25,13 @@ const PORT = process.env.PORT || 5000;
 
 // Asegurar que el directorio de uploads existe
 const uploadsDir = 'uploads';
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-    console.log(`[System] Directorio '${uploadsDir}' creado.`);
-}
+const quotationsUploadsDir = path.join(uploadsDir, 'quotations');
+[uploadsDir, quotationsUploadsDir].forEach(dir => {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+        console.log(`[System] Directorio '${dir}' asegurado.`);
+    }
+});
 
 // AUDIT-006: CORS con lista blanca de orígenes
 const allowedOrigins = [
