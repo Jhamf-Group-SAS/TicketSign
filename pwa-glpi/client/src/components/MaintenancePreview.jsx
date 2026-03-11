@@ -299,7 +299,7 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                             {act.photos.map((photo, i) => (
                                 <div key={i} className="aspect-square bg-tertiary rounded-xl border border-color overflow-hidden flex items-center justify-center p-1 relative group">
-                                    <img src={photo.data} alt={`Evidencia ${i + 1}`} className="w-full h-full object-cover rounded-lg" />
+                                    <img src={photo} alt={`Evidencia ${i + 1}`} className="w-full h-full object-cover rounded-lg" />
                                 </div>
                             ))}
                         </div>
