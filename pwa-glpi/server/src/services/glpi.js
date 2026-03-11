@@ -1020,9 +1020,30 @@ class GLPIConnector {
     }
 
     /**
+     * Valida que un identificador sea un entero positivo.
+     * Lanza un error si el valor no es válido.
+     */
+    _validateNumericId(id, fieldName) {
+        if (id === null || id === undefined) {
+            throw new Error(`[GLPI] ${fieldName} is required`);
+        }
+
+        const num = typeof id === 'number' ? id : Number(id);
+        if (!Number.isInteger(num) || num <= 0) {
+            throw new Error(`[GLPI] Invalid ${fieldName}: expected positive integer`);
+        }
+
+        return num;
+    }
+
+    /**
      * Actualiza o añade un actor a un ticket
      */
     async updateActor(ticketId, actorId, type, isGroup = false) {
+        // Validar identificadores para evitar manipulación de la ruta
+        const validTicketId = this._validateNumericId(ticketId, 'ticketId');
+        const validActorId = this._validateNumericId(actorId, 'actorId');
+
         if (!this.sessionToken) await this.initSession();
         const { apiUrl, appToken } = await this.getConfig();
 
@@ -1031,19 +1052,19 @@ class GLPIConnector {
 
         try {
             // Primero buscamos si ya existe un actor de ese tipo para no duplicar
-            const actorsRes = await this.api.get(`${apiUrl}/Ticket/${ticketId}/${itemtype}`);
+            const actorsRes = await this.api.get(`${apiUrl}/Ticket/${validTicketId}/${itemtype}`);
             const existingActors = Array.isArray(actorsRes.data) ? actorsRes.data : [];
             const existing = existingActors.find(a => a.type == type);
 
             if (existing) {
                 // Actualizar existente
-                await this.api.put(`${apiUrl}/Ticket/${ticketId}/${itemtype}/${existing.id}`, {
-                    input: { id: existing.id, [idField]: actorId, type: type }
+                await this.api.put(`${apiUrl}/Ticket/${validTicketId}/${itemtype}/${existing.id}`, {
+                    input: { id: existing.id, [idField]: validActorId, type: type }
                 });
             } else {
                 // Crear nuevo
-                await this.api.post(`${apiUrl}/Ticket/${ticketId}/${itemtype}`, {
-                    input: { tickets_id: ticketId, [idField]: actorId, type: type }
+                await this.api.post(`${apiUrl}/Ticket/${validTicketId}/${itemtype}`, {
+                    input: { tickets_id: validTicketId, [idField]: validActorId, type: type }
                 });
             }
             return { success: true };
