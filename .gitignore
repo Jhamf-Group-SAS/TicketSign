@@ -4,4 +4,4 @@ node-root/
 node.exe
 Backup/
 TicketSign/
-.env
+*.env
