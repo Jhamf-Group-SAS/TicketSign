@@ -2,6 +2,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import fs from 'fs';
 import configService from './configService.js';
+import sanitizeHtml from 'sanitize-html';
 
 class GLPIConnector {
     constructor() {
@@ -453,7 +454,11 @@ class GLPIConnector {
                     priority: t.priority,
                     urgency: t.urgency,
                     description: t.content
-                        ? t.content.replace(/<[^>]*>?/gm, '').substring(0, 150) + (t.content.length > 150 ? '...' : '')
+                        ? (() => {
+                            const plain = sanitizeHtml(t.content, { allowedTags: [], allowedAttributes: {} });
+                            const truncated = plain.substring(0, 150);
+                            return truncated + (plain.length > 150 ? '...' : '');
+                        })()
                         : 'Sin descripción',
 
                     entity: t.entities_id,
