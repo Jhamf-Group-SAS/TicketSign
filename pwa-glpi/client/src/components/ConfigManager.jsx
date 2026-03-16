@@ -19,7 +19,7 @@ import { db } from '../store/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { cn } from '../utils/cn';
 
-const ConfigManager = ({ onBack, onLogout }) => {
+const ConfigManager = ({ onBack, onLogout, onConfigUpdate }) => {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
     const [saved, setSaved] = useState(false);
@@ -123,6 +123,7 @@ const ConfigManager = ({ onBack, onLogout }) => {
                 await db.settings.put({ key: 'loginImage', value: uiSettings.loginImage });
                 await db.settings.put({ key: 'notificationSound', value: uiSettings.notificationSound });
 
+                if (onConfigUpdate) onConfigUpdate();
                 setTimeout(() => setSaved(false), 3000);
             }
         } catch (error) {

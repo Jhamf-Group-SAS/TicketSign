@@ -1,7 +1,6 @@
 import express from 'express';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
-import Configuration from '../models/Configuration.js';
-
+import Configuration, { ALLOWED_CONFIG_KEYS } from '../models/Configuration.js';
 import { encrypt } from '../utils/crypto.js';
 
 const router = express.Router();
@@ -61,7 +60,11 @@ router.post('/', authenticateToken, authorizeRoles('Super-Admin', 'Admin-Mesa'),
     try {
         const results = [];
         for (let [key, value] of Object.entries(updates)) {
-            // Validaciones básicas
+            // [SEC-DB1] Validar contra whitelist centralizada del modelo
+            if (!ALLOWED_CONFIG_KEYS.includes(key)) {
+                console.warn(`[Config] Clave rechazada (no permitida): ${key}`);
+                continue;
+            }
             if (typeof key !== 'string' || key.length > 100) continue;
             if (value && typeof value === 'string' && value.length > 5000) {
                 if (!['loginImage', 'notificationSound', 'pdfLogo'].includes(key)) {

@@ -26,14 +26,8 @@ services:
       - PORT=5000
       - NODE_ENV=production
       - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017/ticketsign}
-      - GLPI_API_URL=${GLPI_API_URL}
-      - GLPI_APP_TOKEN=${GLPI_APP_TOKEN}
-      - GLPI_USER_TOKEN=${GLPI_USER_TOKEN}
-      - WHATSAPP_PHONE_ID=${WHATSAPP_PHONE_ID}
-      - WHATSAPP_WABA_ID=${WHATSAPP_WABA_ID}
-      - WHATSAPP_TOKEN=${WHATSAPP_TOKEN}
-      - WHATSAPP_TEMPLATE_NAME=${WHATSAPP_TEMPLATE_NAME:-notificacion_tarea}
-      - WHATSAPP_LANG=${WHATSAPP_LANG:-es_CO}
+      # GLPI y WhatsApp se configuran exclusivamente desde el módulo de Configuración.
+      # [SEC-D01] NO incluir GLPI_* ni WHATSAPP_* aquí. Ver PROJECT_MEMORY.md - Decisión D-01.
       - JWT_SECRET=${JWT_SECRET}
       # SEGURIDAD [C-01]: OBLIGATORIO - clave AES-256 hex de 64 chars
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}

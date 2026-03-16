@@ -9,13 +9,19 @@ const IV_LENGTH = 16;
 let _key = null;
 function getKey() {
     if (_key) return _key;
-    if (!process.env.ENCRYPTION_KEY) {
+
+    const rawKey = (process.env.ENCRYPTION_KEY || '').trim();
+
+    if (!rawKey) {
         throw new Error('[CRÍTICO] ENCRYPTION_KEY no está definida en las variables de entorno.');
     }
-    if (process.env.ENCRYPTION_KEY.length !== 64) {
-        throw new Error('[CRÍTICO] ENCRYPTION_KEY debe ser una cadena hexadecimal de 64 caracteres (32 bytes).');
+
+    if (rawKey.length !== 64) {
+        console.error(`[Crypto] Error de longitud: Detectados ${rawKey.length} caracteres.`);
+        throw new Error(`[CRÍTICO] ENCRYPTION_KEY debe ser una cadena hexadecimal de 64 caracteres (32 bytes). Actual: ${rawKey.length}`);
     }
-    _key = Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
+
+    _key = Buffer.from(rawKey, 'hex');
     return _key;
 }
 

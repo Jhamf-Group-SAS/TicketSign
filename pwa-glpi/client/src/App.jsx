@@ -201,7 +201,6 @@ function App() {
     const [isConfigured, setIsConfigured] = useState(true);
     const [showSetupNotice, setShowSetupNotice] = useState(false);
 
-
     const checkConfig = async () => {
         const tokenToken = localStorage.getItem('glpi_pro_token');
         if (!tokenToken || tokenToken === 'undefined') return;
@@ -213,26 +212,30 @@ function App() {
                 handleLogout();
                 return;
             }
-            if (res.status === 403) return; // No tiene permiso para ver config, ignorar
+            if (res.status === 403) return;
             if (res.ok) {
                 const data = await res.json();
                 const hasGLPI = !!(data.glpi_api_url && data.glpi_app_token);
                 setIsConfigured(hasGLPI);
-                if (!hasGLPI && view !== 'config') setShowSetupNotice(true);
-                else setShowSetupNotice(false);
 
                 if (hasGLPI && navigator.onLine) {
-                    SyncService.syncGLPICache(); // Precarga silenciosa
+                    SyncService.syncGLPICache();
                 }
             }
-        } catch (err) {
-            // error checking config
-        }
+        } catch (err) { }
     };
 
     useEffect(() => {
         if (user) checkConfig();
-    }, [user, API_BASE_URL]);
+    }, [user, API_BASE_URL, view]);
+
+    useEffect(() => {
+        if (!isConfigured && view !== 'config' && user) {
+            setShowSetupNotice(true);
+        } else {
+            setShowSetupNotice(false);
+        }
+    }, [isConfigured, view, user]);
 
     // Sync state
     const pendingActs = useLiveQuery(() => db.acts.filter(a => a.status === 'PENDIENTE_SINCRONIZACION').toArray()) || [];
@@ -564,7 +567,7 @@ function App() {
                     {view === 'sync' && <SyncManager onBack={() => setView('home')} />}
                     {view === 'config' && (
                         ['Super-Admin', 'Admin-Mesa'].some(r => user?.profile?.includes(r)) ? (
-                            <ConfigManager onBack={() => setView('home')} onLogout={handleLogout} />
+                            <ConfigManager onBack={() => setView('home')} onLogout={handleLogout} onConfigUpdate={checkConfig} />
                         ) : (
                             <div className="flex flex-col items-center justify-center p-12 bg-secondary border border-color rounded-2xl animate-in fade-in duration-500">
                                 <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 mb-6">

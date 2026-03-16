@@ -22,7 +22,18 @@ class ConfigService {
             console.error(`[ConfigService] Error fetching ${key}:`, error.message);
         }
 
-        // Si no está en DB, usar .env como último recurso
+        // Listado de llaves que SOLO pueden venir de la DB (Integraciones)
+        const INTEGRATION_KEYS = [
+            'glpi_api_url', 'glpi_app_token', 'glpi_user_token',
+            'whatsapp_phone_id', 'whatsapp_token', 'whatsapp_template_name', 'whatsapp_lang'
+        ];
+
+        // Si es una llave de integración, NO permitir fallback al .env
+        if (INTEGRATION_KEYS.includes(key.toLowerCase()) || key.toLowerCase().startsWith('whatsapp_')) {
+            return defaultValue;
+        }
+
+        // Si no está en DB, usar .env como último recurso para llaves de sistema (JWT, DB, Encryption)
         const envVal = process.env[key.toUpperCase()] || process.env[key];
         return envVal || defaultValue;
     }

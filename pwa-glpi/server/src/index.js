@@ -61,7 +61,12 @@ const corsOptions = {
     exposedHeaders: ["Content-Disposition"]
 };
 
-// AUDIT-005: Rate limiting
+// [SEC-AUTH1] Validar que JWT_SECRET tiene longitud mínima segura
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+    console.error('[SECURITY] ⚠️  JWT_SECRET debe tener al menos 32 caracteres. Arrancando en modo degradado.');
+}
+
+// AUDIT-005: Rate limiting por tipo de endpoint
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutos
     max: 10,
@@ -73,6 +78,14 @@ const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 2000,
     message: { status: 'error', message: 'Límite de solicitudes API alcanzado. Intente de nuevo en 15 minutos.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+// [SEC-RL1] Rate limit específico para uploads (más permisivo en volumen pero acotado)
+const uploadLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hora
+    max: 100, // Max 100 uploads por hora por IP
+    message: { status: 'error', message: 'Límite de uploads alcanzado. Intente más tarde.' },
     standardHeaders: true,
     legacyHeaders: false
 });
@@ -107,15 +120,25 @@ mongoose.connect(MONGO_URI, {
 app.use(helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
     frameguard: false, // Permitir iframes (necesario para previsualización de PDF)
+    // [SEC-H1] HSTS: Forzar HTTPS por 1 año en producción
+    hsts: process.env.NODE_ENV === 'production'
+        ? { maxAge: 31536000, includeSubDomains: true, preload: true }
+        : false,
     contentSecurityPolicy: {
         directives: {
-            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            "default-src": ["'self'"],
             "frame-ancestors": ["'self'", ...allowedOrigins],
-            "img-src": ["'self'", "data:", "blob:", "*", "https:"],
-            "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            // [SEC-H2] Eliminado 'unsafe-eval'. Solo 'unsafe-inline' requerido por Vite en dev.
+            // En producción, el bundle de Vite no necesita unsafe-eval.
+            "script-src": ["'self'", "'unsafe-inline'"],
             "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            "img-src": ["'self'", "data:", "blob:", "https:"],
             "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
-            "media-src": ["'self'", "https://assets.mixkit.co", "https:", "*"]
+            "media-src": ["'self'", "https://assets.mixkit.co", "https:"],
+            "connect-src": ["'self'", ...allowedOrigins, "https://graph.facebook.com"],
+            "object-src": ["'none'"],
+            "base-uri": ["'self'"],
+            "form-action": ["'self'"]
         }
     }
 }));
@@ -138,6 +161,7 @@ app.use('/api/sync', syncRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/tasks', tasksRoutes);
 app.use('/api/glpi', glpiRoutes);
+app.use('/api/quotations/*/upload', uploadLimiter); // [SEC-RL1] limitar uploads
 app.use('/api/quotations', quotationsRoutes);
 app.use('/api/config', configRoutes);
 

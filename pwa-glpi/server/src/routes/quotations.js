@@ -48,6 +48,15 @@ const isAdminOrBuyer = (profile) => {
     return ['Super-Admin', 'Admin-Mesa', 'Compras'].some(r => roles.includes(r));
 };
 
+// [SEC-01] Validar que el ID es un ObjectId válido de MongoDB antes de consultar BD
+const validateObjectId = (id, res) => {
+    if (!id || !/^[a-fA-F0-9]{24}$/.test(id)) {
+        res.status(400).json({ message: 'ID de cotización inválido' });
+        return false;
+    }
+    return true;
+};
+
 // ─── GET /api/quotations ─────────────────────────────────────────────────────
 // Lista con filtros: status, priority, assigned_to, desde, hasta
 router.get('/', async (req, res) => {
@@ -136,6 +145,7 @@ router.get('/export/csv', authorizeRoles('Super-Admin', 'Admin-Mesa', 'Compras')
 // ─── GET /api/quotations/:id ──────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
     try {
+        if (!validateObjectId(req.params.id, res)) return;
         const q = await Quotation.findById(req.params.id);
         if (!q) return res.status(404).json({ message: 'Cotización no encontrada' });
 

@@ -263,7 +263,7 @@ export default function QuotationList({ onNew, onSelect }) {
                                         className="w-4 h-4 rounded text-primary-500 focus:ring-primary-500 bg-secondary border-color"
                                     />
                                 </th>
-                                <th className="px-4 py-4 text-[10px] font-[800] text-text-muted uppercase tracking-wider">EXPEDIENTE</th>
+                                <th className="px-4 py-4 text-[10px] font-[800] text-text-muted uppercase tracking-wider">ID</th>
                                 <th className="px-4 py-4 text-[10px] font-[800] text-text-muted uppercase tracking-wider">TÍTULO</th>
                                 <th className="px-4 py-4 text-[10px] font-[800] text-text-muted uppercase tracking-wider">EMPRESA / CLIENTE</th>
                                 <th className="px-4 py-4 text-[10px] font-[800] text-text-muted uppercase tracking-wider">ESTADO</th>

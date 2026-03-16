@@ -14,12 +14,13 @@ router.use(authenticateToken);
 // Nuevo endpoint para obtener historial
 router.get('/maintenance', async (req, res) => {
     try {
-        const limit = parseInt(req.query.limit) || 50;
+        // Aumentado a 200 para evitar truncar listas grandes de técnicos activos
+        const limit = parseInt(req.query.limit) || 200;
         let acts = [];
         try {
             acts = await Act.find().sort({ createdAt: -1 }).limit(limit);
         } catch (dbErr) {
-            console.warn('[Sync] No se pudo acceder a DB local, devolviendo lista vacía.');
+            console.warn('[Sync] No se pudo acceder a DB, devolviendo lista vacía.');
         }
         res.json(acts);
     } catch (error) {
@@ -47,17 +48,31 @@ router.post('/maintenance', async (req, res) => {
         await fs.writeFile(tempPath, pdfBuffer);
 
         // 0. Guardar en MongoDB
+        // BUG FIX: Siempre creamos un documento nuevo por acta.
+        // JAMÁS buscamos por glpi_ticket_id para decidir si crear o actualizar,
+        // porque un ticket puede tener múltiples actas (preventivo, correctivo, etc.).
+        // Si el cliente envía un _id válido (ya guardado por nosotros antes),
+        // actualizamos ESE documento específico. Si no, insertamos uno nuevo.
+        let savedAct = null;
         try {
-            let act = await Act.findOne({ glpi_ticket_id: String(actData.glpi_ticket_id) });
-            if (!act) {
-                act = new Act(actData);
-            } else {
-                Object.assign(act, actData);
-                act.updatedAt = new Date();
+            const { _id: clientId, id: dexieId, ...cleanData } = actData;
+            const isValidObjectId = clientId && /^[a-fA-F0-9]{24}$/.test(String(clientId));
+
+            if (isValidObjectId) {
+                // Actualizar un acta existente y conocida por su MongoDB ObjectId
+                savedAct = await Act.findByIdAndUpdate(
+                    clientId,
+                    { ...cleanData, updatedAt: new Date() },
+                    { new: true, upsert: false }
+                );
             }
-            await act.save();
+
+            if (!savedAct) {
+                // Crear siempre una acta nueva si no se encontró el id o no se envió
+                savedAct = await new Act(cleanData).save();
+            }
         } catch (dbErr) {
-            console.warn('[Sync] Saltando guardado en DB (modo local)');
+            console.warn('[Sync] Error guardando en DB:', dbErr.message);
         }
 
         // 2. Subir a GLPI
@@ -72,9 +87,14 @@ router.post('/maintenance', async (req, res) => {
         // 4. Limpiar temporal
         await fs.unlink(tempPath);
 
+        // BUG FIX: Retornar el _id del documento guardado para que el cliente
+        // pueda asociar el acta local con su contraparte en MongoDB.
+        // Sin esto, result._id era undefined y el acta nunca quedaba correctamente
+        // vinculada, impidiendo que otros dispositivos la vieran.
         res.status(200).json({
             status: 'success',
-            glpiId: docResult.id
+            glpiId: docResult.id,
+            _id: savedAct?._id ?? null
         });
 
     } catch (error) {
@@ -88,6 +108,10 @@ router.post('/maintenance', async (req, res) => {
 });
 
 router.delete('/maintenance/:id', async (req, res) => {
+    // [V-01 FIX] Validar ObjectId antes de findByIdAndDelete para prevenir CastError
+    if (!req.params.id || !/^[a-fA-F0-9]{24}$/.test(req.params.id)) {
+        return res.status(400).json({ status: 'error', message: 'ID de acta inválido' });
+    }
     try {
         const deletedAct = await Act.findByIdAndDelete(req.params.id);
         if (!deletedAct) {
