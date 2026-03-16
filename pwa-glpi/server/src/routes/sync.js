@@ -48,28 +48,35 @@ router.post('/maintenance', async (req, res) => {
         await fs.writeFile(tempPath, pdfBuffer);
 
         // 0. Guardar en MongoDB
-        // BUG FIX: Siempre creamos un documento nuevo por acta.
-        // JAMÁS buscamos por glpi_ticket_id para decidir si crear o actualizar,
-        // porque un ticket puede tener múltiples actas (preventivo, correctivo, etc.).
-        // Si el cliente envía un _id válido (ya guardado por nosotros antes),
-        // actualizamos ESE documento específico. Si no, insertamos uno nuevo.
+        // BUG FIX: Hacemos la operación idempotente.
+        // Verificamos si ya existe el acta por _id (si viene del cliente y es válido)
+        // o si es la misma acta para el mismo equipo en el mismo ticket y mismo tipo de mantenimiento.
         let savedAct = null;
         try {
             const { _id: clientId, id: dexieId, ...cleanData } = actData;
             const isValidObjectId = clientId && /^[a-fA-F0-9]{24}$/.test(String(clientId));
-
+            let query = {};
+            
             if (isValidObjectId) {
-                // Actualizar un acta existente y conocida por su MongoDB ObjectId
-                savedAct = await Act.findByIdAndUpdate(
-                    clientId,
-                    { ...cleanData, updatedAt: new Date() },
-                    { new: true, upsert: false }
-                );
+                query = { _id: clientId };
+            } else if (cleanData.glpi_ticket_id && cleanData.equipment_serial && cleanData.type) {
+                // Prevenir duplicados en envíos múltiples sin ID
+                query = {
+                    glpi_ticket_id: String(cleanData.glpi_ticket_id),
+                    equipment_serial: cleanData.equipment_serial,
+                    type: cleanData.type
+                };
             }
 
-            if (!savedAct) {
-                // Crear siempre una acta nueva si no se encontró el id o no se envió
-                savedAct = await new Act(cleanData).save();
+            if (Object.keys(query).length > 0) {
+                savedAct = await Act.findOneAndUpdate(
+                    query,
+                    { ...cleanData, updatedAt: new Date() },
+                    { new: true, upsert: true } // Upsert: inserta si no existe, actualiza si existe
+                );
+            } else {
+                 // Fallback si por alguna razón no tiene ticket, serial o tipo válido
+                 savedAct = await new Act(cleanData).save();
             }
         } catch (dbErr) {
             console.warn('[Sync] Error guardando en DB:', dbErr.message);

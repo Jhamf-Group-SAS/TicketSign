@@ -106,10 +106,12 @@ export const saveRemoteActs = async (acts) => {
         // Buscamos un acta local PENDIENTE que coincida exactamente
         const localMatch = await db.acts
             .where('glpi_ticket_id').equals(tid)
-            .and(a => a.status === 'PENDIENTE_SINCRONIZACION' && a.technical_name === remoteAct.technical_name)
+            .and(a => a.status === 'PENDIENTE_SINCRONIZACION' &&
+                      a.technical_name === remoteAct.technical_name &&
+                      a.equipment_serial === remoteAct.equipment_serial)
             .filter(a => {
-                // Si coinciden en un margen de 1 minuto, probablemente sean la misma
-                return Math.abs(new Date(a.createdAt) - new Date(createdAtDate)) < 60000;
+                // Si coinciden en un margen de 2 minutos, probablemente sean la misma
+                return Math.abs(new Date(a.createdAt) - new Date(createdAtDate)) < 120000;
             })
             .first();
 
