@@ -19,7 +19,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.13.1",
-    "serialize-javascript": "^7.0.3",
+    "serialize-javascript": "^7.0.5",
     "tailwind-merge": "^2.2.0"
   },
   "devDependencies": {
