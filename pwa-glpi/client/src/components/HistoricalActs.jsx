@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../store/db';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Search, MapPin, Eye, Trash2, Calendar, FileText, Download, CheckCircle, Clock, Loader2, User, ChevronLeft, AlertTriangle } from 'lucide-react';
+import { Search, Eye, Trash2, Calendar, FileText, Download, CheckCircle, Clock, Loader2, User, ChevronLeft, AlertTriangle } from 'lucide-react';
 import { toast } from './Toast';
 import { cn } from '../utils/cn';
 import { downloadBlob } from '../utils/download';
@@ -136,7 +136,7 @@ const HistoricalActs = ({ onViewAct, globalSearch }) => {
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={20} />
                     <input
                         type="text"
-                        placeholder="Buscar por cliente, contacto, referencia o ticket GLPI..."
+                        placeholder="Buscar por cliente, contacto o ticket GLPI..."
                         value={searchTerm}
                         onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                         className="w-full bg-tertiary border border-color rounded-xl pl-12 pr-4 h-12 text-sm text-text-primary focus:border-[#0695c4] focus:ring-1 focus:ring-[#0695c4]/30 transition-all outline-none"
@@ -161,7 +161,7 @@ const HistoricalActs = ({ onViewAct, globalSearch }) => {
                                     <tr className="bg-tertiary border-b border-color">
                                         <th className="px-5 py-4 text-[9px] font-[800] text-[#94a3b8] uppercase tracking-wider pl-5">TIPO</th>
                                         <th className="px-3 py-4 text-[9px] font-[800] text-[#94a3b8] uppercase tracking-wider">CLIENTE</th>
-                                        <th className="px-3 py-4 text-[9px] font-[800] text-[#94a3b8] uppercase tracking-wider">REFERENCIA / EQUIPO</th>
+                                        <th className="px-3 py-4 text-[9px] font-[800] text-[#94a3b8] uppercase tracking-wider">TÉCNICO</th>
                                         <th className="px-3 py-4 text-[9px] font-[800] text-[#94a3b8] uppercase tracking-wider">TICKET GLPI</th>
                                         <th className="px-3 py-4 text-[9px] font-[800] text-[#94a3b8] uppercase tracking-wider">CREADA EL</th>
                                         <th className="px-3 py-4 text-[9px] font-[800] text-[#94a3b8] uppercase tracking-wider">ESTADO</th>
@@ -176,7 +176,7 @@ const HistoricalActs = ({ onViewAct, globalSearch }) => {
                                                     <div className={cn(
                                                         "w-1.5 h-1.5 rounded-full shrink-0",
                                                         act.type === 'PREVENTIVO' ? "bg-primary-500" : act.type === 'ENTREGA' ? "bg-purple-500" : "bg-orange-500"
-                                                    )} />
+                                                     )} />
                                                     <span className="text-[10px] font-black uppercase text-text-muted tracking-widest">{act.type}</span>
                                                 </div>
                                             </td>
@@ -185,9 +185,9 @@ const HistoricalActs = ({ onViewAct, globalSearch }) => {
                                                     {act.client_name || 'Sin Cliente'}
                                                 </span>
                                             </td>
-                                            <td className="px-3 py-3 align-middle text-[11px] text-text-secondary font-[500] max-w-[150px] truncate" title={`${act.project_name || 'Sin Sede'} ${act.contact_name ? '- ' + act.contact_name : ''}`}>
-                                                <span className="flex items-center gap-1.5">
-                                                    <MapPin size={12} className="text-text-muted" /> {act.project_name || 'Sin Ref'}
+                                            <td className="px-3 py-3 align-middle text-[11px] text-text-secondary font-[600] max-w-[150px] truncate" title={act.technical_name || 'Sin Técnico'}>
+                                                <span className="flex items-center gap-1.5 uppercase">
+                                                    <User size={12} className="text-text-muted shrink-0" /> {act.technical_name || 'Sin Técnico'}
                                                 </span>
                                             </td>
                                             <td className="px-3 py-3 align-middle">
@@ -208,8 +208,13 @@ const HistoricalActs = ({ onViewAct, globalSearch }) => {
                                                         <CheckCircle size={10} />
                                                         <span className="text-[9px] font-bold uppercase tracking-widest">Sincronizado</span>
                                                     </div>
-                                                ) : (
+                                                ) : act.status === 'BORRADOR' ? (
                                                     <div className="flex items-center gap-1.5 w-max text-amber-500 px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                                                        <FileText size={10} />
+                                                        <span className="text-[9px] font-bold uppercase tracking-widest">Borrador</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-1.5 w-max text-orange-500 px-2 py-0.5 bg-orange-500/10 border border-orange-500/20 rounded-md">
                                                         <Clock size={10} />
                                                         <span className="text-[9px] font-bold uppercase tracking-widest">Pendiente</span>
                                                     </div>
@@ -262,8 +267,13 @@ const HistoricalActs = ({ onViewAct, globalSearch }) => {
                                                     <CheckCircle size={10} />
                                                     <span className="text-[9px] font-bold uppercase tracking-widest">Sincroniz.</span>
                                                 </div>
-                                            ) : (
+                                            ) : act.status === 'BORRADOR' ? (
                                                 <div className="flex items-center gap-1 text-amber-500 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded">
+                                                    <FileText size={10} />
+                                                    <span className="text-[9px] font-bold uppercase tracking-widest">Borrador</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-1 text-orange-500 px-2 py-1 bg-orange-500/10 border border-orange-500/20 rounded">
                                                     <Clock size={10} />
                                                     <span className="text-[9px] font-bold uppercase tracking-widest">Pendiente</span>
                                                 </div>
@@ -284,8 +294,8 @@ const HistoricalActs = ({ onViewAct, globalSearch }) => {
                                             <span className="text-[11px] font-bold">{new Date(act.createdAt).toLocaleDateString()}</span>
                                         </div>
                                         <div className="flex items-center gap-1.5 text-text-muted max-w-full">
-                                            <MapPin size={13} className="shrink-0" />
-                                            <span className="text-[11px] font-bold truncate">{act.project_name || 'Sin Sede'} {act.contact_name ? `- ${act.contact_name}` : ''}</span>
+                                            <User size={13} className="shrink-0" />
+                                            <span className="text-[11px] font-bold truncate uppercase">{act.technical_name || 'Sin Técnico'}</span>
                                         </div>
                                     </div>
                                     <div className="flex items-center justify-end gap-2 mt-2 pt-3 border-t border-color">

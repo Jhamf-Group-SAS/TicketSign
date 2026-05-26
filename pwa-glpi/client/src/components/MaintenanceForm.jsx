@@ -115,8 +115,17 @@ const DELIVERY_CHECKLISTS = {
     'OTRO': GENERIC_CHECKLIST
 };
 
-const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
+const MaintenanceForm = ({ type, onCancel, onSave, theme, act }) => {
     const [formData, setFormData] = useState(() => {
+        if (act) {
+            return {
+                ...act,
+                checklist: act.checklist || {},
+                signatures: act.signatures || { technical: null, client: null },
+                photos: act.photos || []
+            };
+        }
+
         let initialChecklist = {};
         if (type === 'PREVENTIVO') {
             PREVENTIVE_CHECKLIST.forEach(item => initialChecklist[item.id] = false);
@@ -135,7 +144,6 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
         };
     });
 
-    // const [toast, setToast] = useState(null); // REMOVED
     const [errors, setErrors] = useState([]);
     const [entities, setEntities] = useState([]);
     const [technicians, setTechnicians] = useState([]);
@@ -143,6 +151,18 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
     const [isSearchingTicket, setIsSearchingTicket] = useState(false);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [datePickerAnchor, setDatePickerAnchor] = useState(null);
+
+    // Resetear formulario si llega un acta asincrónicamente (ej. desde URL / F5)
+    useEffect(() => {
+        if (act) {
+            setFormData({
+                ...act,
+                checklist: act.checklist || {},
+                signatures: act.signatures || { technical: null, client: null },
+                photos: act.photos || []
+            });
+        }
+    }, [act]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -164,14 +184,14 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
                     setTechnicians(await SyncService.getCachedTechnicians());
                     setTickets(await SyncService.getCachedTickets());
                 }
-            } catch (error) {
-                console.error('[MaintenanceForm] Error fetching GLPI data', error);
+            } catch (e) {
+                console.error('Error al inicializar datos del formulario:', e);
             }
         };
         fetchData();
     }, []);
 
-    const handleTicketSelect = async (ticketId) => {
+    async function handleTicketSelect(ticketId) {
         const selectedTicket = tickets.find(t => t.id === ticketId);
         if (selectedTicket) {
             const ticket = selectedTicket.original;
@@ -188,7 +208,7 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
                 } else setFormData(prev => ({ ...prev, glpi_ticket_id: ticketId }));
             } catch (error) { setFormData(prev => ({ ...prev, glpi_ticket_id: ticketId })); } finally { setIsSearchingTicket(false); }
         }
-    };
+    }
 
     const handleInputChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     const handleChecklistChange = (key, value) => setFormData(prev => ({ ...prev, checklist: { ...prev.checklist, [key]: value } }));
@@ -215,16 +235,53 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
     };
 
     const handleSaveDraft = async () => {
-        if (!validateForm()) { toast.error('Complete los campos obligatorios'); return; }
+        if (!formData.client_name && !formData.glpi_ticket_id) {
+            toast.error('Ingrese al menos el cliente o el número de ticket para guardar un borrador');
+            return;
+        }
+        try {
+            const draftData = { ...formData, type, status: 'BORRADOR' };
+            await saveDraftAct(draftData);
+            toast.success('Borrador guardado localmente con éxito');
+            setTimeout(() => onSave(), 1500);
+        } catch (error) {
+            console.error('Error al guardar borrador:', error);
+            toast.error('Error al intentar guardar el borrador local');
+        }
+    };
+
+    const handleFinalize = async () => {
+        if (!validateForm()) {
+            toast.error('Complete los campos obligatorios antes de finalizar');
+            return;
+        }
         let actId;
         try {
-            actId = await saveDraftAct({ ...formData, type });
+            const finalizeData = { ...formData, type, status: 'PENDIENTE_SINCRONIZACION' };
+            if (formData.id) {
+                await db.acts.update(formData.id, {
+                    ...finalizeData,
+                    updatedAt: new Date().toISOString()
+                });
+                actId = formData.id;
+            } else {
+                actId = await db.acts.add({
+                    ...finalizeData,
+                    glpi_ticket_id: finalizeData.glpi_ticket_id ? String(finalizeData.glpi_ticket_id) : '',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                });
+            }
+
             if (navigator.onLine) {
-                toast.info('Sincronizando...');
+                toast.info('Sincronizando con el servidor...');
                 const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/sync/maintenance`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}` },
-                    body: JSON.stringify({ ...formData, type, createdAt: new Date() })
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('glpi_pro_token')}`
+                    },
+                    body: JSON.stringify({ ...finalizeData, id: undefined, _id: undefined, createdAt: new Date() })
                 });
                 if (response.ok) {
                     const result = await response.json();
@@ -233,17 +290,20 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
                         status: 'SINCRONIZADO',
                         updatedAt: new Date().toISOString()
                     });
-                    toast.success('¡Sincronizado con éxito!');
+                    toast.success('¡Acta finalizada y sincronizada correctamente!');
                     setTimeout(() => onSave(), 1500);
-                } else throw new Error('Error en sincronización');
+                } else {
+                    throw new Error('Error en sincronización remota');
+                }
             } else {
                 await markForSync(actId);
-                toast.warning('Guardado localmente (Offline)');
+                toast.warning('Guardado localmente. Sincronización pendiente (Offline)');
                 setTimeout(() => onSave(), 1500);
             }
         } catch (error) {
+            console.error('Error al finalizar acta:', error);
             if (actId) await markForSync(actId);
-            toast.warning('Guardado local (Sync pendiente)');
+            toast.warning('Guardado localmente. Sincronización pendiente.');
             setTimeout(() => onSave(), 2000);
         }
     };
@@ -539,7 +599,7 @@ const MaintenanceForm = ({ type, onCancel, onSave, theme }) => {
                     Cancelar
                 </button>
                 <button
-                    onClick={handleSaveDraft}
+                    onClick={handleFinalize}
                     className="flex-[3] bg-primary-500 text-white flex items-center justify-center gap-3 rounded-[14px] h-[52px] font-[700] text-[16px] shadow-lg hover:bg-primary-600 transition-all"
                 >
                     <Save size={20} className="text-white" />

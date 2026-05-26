@@ -102,11 +102,12 @@ function App() {
     const [selectedTicketId, setSelectedTicketId] = useState(() => searchParams.get('id') || localStorage.getItem('glpi_pro_ticket_id'));
     const [selectedAct, setSelectedAct] = useState(null);
     const [selectedQuotationId, setSelectedQuotationId] = useState(() => searchParams.get('id') || localStorage.getItem('glpi_pro_quotation_id'));
+    const [previewBackView, setPreviewBackView] = useState('history');
 
     // Cargar Acta si hay ID en la URL
     useEffect(() => {
         const idFromUrl = searchParams.get('id');
-        if (view === 'preview' && idFromUrl) {
+        if ((view === 'preview' || ['form-preventive', 'form-corrective', 'form-delivery'].includes(view)) && idFromUrl) {
             db.acts.get(Number(idFromUrl)).then(act => {
                 if (act) setSelectedAct(act);
             });
@@ -126,8 +127,8 @@ function App() {
         let params = new URLSearchParams(query || '');
 
         // Agregar ID si la vista lo requiere
-        if (['ticket-detail', 'preview', 'quotation-detail'].includes(view)) {
-            const id = view === 'preview' ? selectedAct?.id :
+        if (['ticket-detail', 'preview', 'quotation-detail', 'form-preventive', 'form-corrective', 'form-delivery'].includes(view)) {
+            const id = (view === 'preview' || ['form-preventive', 'form-corrective', 'form-delivery'].includes(view)) ? selectedAct?.id :
                 view === 'ticket-detail' ? selectedTicketId :
                     selectedQuotationId;
             if (id) params.set('id', id);
@@ -305,6 +306,9 @@ function App() {
     };
 
     const handleNavClick = (newView) => {
+        if (['form-preventive', 'form-corrective', 'form-delivery'].includes(newView)) {
+            setSelectedAct(null);
+        }
         setView(newView);
         setIsMobileSidebarOpen(false);
     };
@@ -445,11 +449,18 @@ function App() {
 
                                     <div className="space-y-3">
                                         {recentActs.length > 0 ? recentActs.map(act => (
-                                            <RecentActCard key={act.id} act={act} onClick={() => { setSelectedAct(act); setView('preview'); }} />
+                                            <RecentActCard key={act.id} act={act} onClick={() => {
+                                                setSelectedAct(act);
+                                                if (act.status === 'BORRADOR') {
+                                                    const formView = act.type === 'PREVENTIVO' ? 'form-preventive' : act.type === 'ENTREGA' ? 'form-delivery' : 'form-corrective';
+                                                    setView(formView);
+                                                } else {
+                                                    setView('preview');
+                                                }
+                                            }} />
                                         )) : (
                                             <div className="p-8 bg-secondary border border-color rounded-[12px] flex items-center shadow-sm relative overflow-hidden h-[120px]">
-                                                <div className="w-[4px] absolute left-0 top-3 bottom-3 bg-primary-500 rounded-r-lg" />
-                                                <div className="flex-1 ml-4">
+                                                <div className="flex-1">
                                                     <p className="text-text-primary text-[13.5px] font-[800]">No hay actividades registradas aún</p>
                                                     <p className="text-text-muted text-[12px] font-[500] mt-0.5">Las actas sincronizadas aparecerán aquí automáticamente.</p>
                                                     <span className="inline-block mt-3 px-3 py-1 bg-tertiary text-text-muted text-[10px] font-[700] rounded-full uppercase tracking-wide">Sin datos</span>
@@ -517,22 +528,37 @@ function App() {
 
                     {(view === 'form-preventive' || view === 'form-corrective' || view === 'form-delivery') && (
                         <MaintenanceForm
-                            key={view}
+                            key={`${view}-${selectedAct?.id || 'new'}`}
                             type={view === 'form-preventive' ? 'PREVENTIVO' : view === 'form-delivery' ? 'ENTREGA' : 'CORRECTIVO'}
-                            onCancel={() => setView('home')}
-                            onSave={() => setView('home')}
+                            onCancel={() => {
+                                setView(selectedAct ? 'history' : 'home');
+                                setSelectedAct(null);
+                            }}
+                            onSave={() => {
+                                setView('history');
+                                setSelectedAct(null);
+                            }}
                             theme={theme}
+                            act={selectedAct}
                         />
                     )}
 
                     {view === 'preview' && selectedAct && (
                         <MaintenancePreview act={selectedAct} onBack={() => {
-                            // If we opened this from history, go back to history. Else home.
-                            setView('history')
+                            setView(previewBackView || 'history')
                         }} theme={theme} />
                     )}
 
-                    {view === 'consolidated' && <ClientConsolidated onBack={() => setView('home')} />}
+                    {view === 'consolidated' && (
+                        <ClientConsolidated 
+                            onBack={() => setView('home')} 
+                            onViewAct={(act) => {
+                                setSelectedAct(act);
+                                setPreviewBackView('consolidated');
+                                setView('preview');
+                            }}
+                        />
+                    )}
                     {view === 'kanban' && <TaskBoard onBack={() => setView('home')} />}
                     {view === 'task-list' && <TaskList onBack={() => setView('home')} />}
                     {view === 'history' && (
@@ -544,7 +570,13 @@ function App() {
                                     setView('quotation-detail');
                                 } else {
                                     setSelectedAct(act);
-                                    setView('preview');
+                                    setPreviewBackView('history');
+                                    if (act.status === 'BORRADOR') {
+                                        const formView = act.type === 'PREVENTIVO' ? 'form-preventive' : act.type === 'ENTREGA' ? 'form-delivery' : 'form-corrective';
+                                        setView(formView);
+                                    } else {
+                                        setView('preview');
+                                    }
                                 }
                             }}
                         />
@@ -622,8 +654,6 @@ const RecentActCard = ({ act, onClick }) => {
             onClick={onClick}
             className="bg-secondary rounded-[20px] p-[20px] shadow-sm lg:hover:shadow-md flex items-center gap-[20px] border border-color transition-all cursor-pointer group relative overflow-hidden"
         >
-            <div className={cn("w-[4px] absolute left-0 top-3 bottom-3 rounded-r-full", accentColor)} />
-
             <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform", iconBg)}>
                 <ClipboardList size={22} className={iconColor} />
             </div>

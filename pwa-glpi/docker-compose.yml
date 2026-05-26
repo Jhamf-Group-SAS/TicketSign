@@ -42,6 +42,11 @@ services:
       placement:
         constraints:
           - node.role == manager
+      resources:
+        limits:
+          memory: 1024M
+        reservations:
+          memory: 512M
       labels:
         - traefik.enable=true
         - traefik.http.routers.ticketsign-api.rule=Host(`api-ticketsign.jhamf.com`)

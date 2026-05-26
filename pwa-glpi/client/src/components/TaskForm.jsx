@@ -250,6 +250,9 @@ const TaskForm = ({ onCancel, onClose, onSave, onSaved, initialData, task }) => 
                     if (response.ok) {
                         const saved = await response.json();
                         tasksToSave[0]._id = saved._id;
+                        tasksToSave[0].sincronizado = true;
+                    } else {
+                        tasksToSave[0].sincronizado = false;
                     }
                 } else {
                     // Batch sync para recurrencias
@@ -262,9 +265,18 @@ const TaskForm = ({ onCancel, onClose, onSave, onSaved, initialData, task }) => 
                     if (response.ok) {
                         const savedTasks = await response.json();
                         // Actualizar IDs para IndexedDB
-                        savedTasks.forEach((s, i) => { if (tasksToSave[i]) tasksToSave[i]._id = s._id; });
+                        savedTasks.forEach((s, i) => {
+                            if (tasksToSave[i]) {
+                                tasksToSave[i]._id = s._id;
+                                tasksToSave[i].sincronizado = true;
+                            }
+                        });
+                    } else {
+                        tasksToSave.forEach(t => t.sincronizado = false);
                     }
                 }
+            } else {
+                tasksToSave.forEach(t => t.sincronizado = false);
             }
 
             // Guardar en IndexedDB

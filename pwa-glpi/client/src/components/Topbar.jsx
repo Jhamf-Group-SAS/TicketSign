@@ -315,25 +315,6 @@ const Topbar = ({
                                     <p className="text-xs font-black text-text-primary truncate uppercase">{user?.name || user?.username}</p>
                                 </div>
                                 <button
-                                    onClick={() => { setIsUserMenuOpen(false); /* Navegar a perfil */ }}
-                                    className="w-full flex items-center gap-3 px-4 py-3 text-text-secondary hover:text-text-primary hover:bg-tertiary rounded-xl transition-all text-left group"
-                                >
-                                    <div className="p-2 rounded-lg bg-tertiary group-hover:bg-secondary group-hover:border group-hover:border-primary-500/30 transition-colors">
-                                        <User size={16} className="group-hover:text-primary-500 transition-colors" />
-                                    </div>
-                                    <span className="text-xs font-black uppercase tracking-widest text-[10px]">Mi Perfil</span>
-                                </button>
-                                <button
-                                    onClick={() => { setIsUserMenuOpen(false); }}
-                                    className="w-full flex items-center gap-3 px-4 py-3 text-text-secondary hover:text-text-primary hover:bg-tertiary rounded-xl transition-all text-left group"
-                                >
-                                    <div className="p-2 rounded-lg bg-tertiary group-hover:bg-blue-500/10 transition-colors">
-                                        <Settings size={16} className="group-hover:text-blue-500 transition-colors" />
-                                    </div>
-                                    <span className="text-xs font-black uppercase tracking-widest text-[10px]">Ajustes</span>
-                                </button>
-                                <div className="h-4" />
-                                <button
                                     onClick={onLogout}
                                     className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-tertiary rounded-xl transition-all text-left group"
                                 >

@@ -1,6 +1,7 @@
 import { db } from '../store/db';
-import { Package, ClipboardList, User, Building2, Monitor, Calendar, Clock, Tag, CheckCircle, Save, X, ChevronLeft, Building, Trash2, ShieldCheck, Settings2, Globe, FileCheck, Keyboard, Mouse, Laptop, HardDrive, Image as ImageIcon, UploadCloud, FileText, MessageSquare, Printer, Wifi, Zap, Layers, Power, ClipboardCheck, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { Package, ClipboardList, User, Building2, Monitor, Calendar, Clock, Tag, CheckCircle, Save, X, ChevronLeft, Building, Trash2, ShieldCheck, Settings2, Globe, FileCheck, Keyboard, Mouse, Laptop, HardDrive, Image as ImageIcon, UploadCloud, FileText, MessageSquare, Printer, Wifi, Zap, Layers, Power, ClipboardCheck, Loader2, ZoomIn, ZoomOut, Maximize, Download } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from './Toast';
 import { cn } from '../utils/cn';
 import { downloadBlob } from '../utils/download';
@@ -69,8 +70,37 @@ const DELIVERY_CHECKLISTS = {
 const MaintenancePreview = ({ act, onBack, theme }) => {
     const [isExporting, setIsExporting] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [activePhoto, setActivePhoto] = useState(null);
+    const [zoomScale, setZoomScale] = useState(1);
+
+    useEffect(() => {
+        if (activePhoto) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [activePhoto]);
 
     if (!act) return null;
+
+    const handleDownloadPhoto = (e) => {
+        if (e) e.stopPropagation();
+        try {
+            const link = document.createElement('a');
+            link.href = activePhoto;
+            link.download = `evidencia_ticket_${act.glpi_ticket_id || 'acta'}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            toast.success('Imagen descargada con éxito');
+        } catch (error) {
+            console.error('Error al descargar imagen:', error);
+            toast.error('Error al intentar descargar la imagen');
+        }
+    };
 
     const handleSyncManual = async () => {
         if (!navigator.onLine) {
@@ -298,7 +328,12 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
                         </h3>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                             {act.photos.map((photo, i) => (
-                                <div key={i} className="aspect-square bg-tertiary rounded-xl border border-color overflow-hidden flex items-center justify-center p-1 relative group">
+                                <div 
+                                    key={i} 
+                                    onClick={() => setActivePhoto(photo)}
+                                    className="aspect-square bg-tertiary rounded-xl border border-color overflow-hidden flex items-center justify-center p-1 relative group cursor-pointer hover:border-blue-500 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                    title="Click para ver en grande"
+                                >
                                     <img src={photo} alt={`Evidencia ${i + 1}`} className="w-full h-full object-cover rounded-lg" />
                                 </div>
                             ))}
@@ -310,9 +345,14 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
                 <section className="grid grid-cols-2 gap-4">
                     <div className="bg-secondary p-5 rounded-2xl border border-color shadow-sm space-y-3">
                         <p className="text-[9px] uppercase font-bold text-text-muted tracking-widest text-center">Técnico</p>
-                        <div className="h-24 bg-slate-200 rounded-xl flex items-center justify-center p-2">
+                        <div className="h-24 bg-tertiary rounded-xl flex items-center justify-center p-2 border border-color/40">
                             {act.signatures.technical ? (
-                                <img src={act.signatures.technical} className="h-full object-contain" alt="firma tecnico" />
+                                <img 
+                                    src={act.signatures.technical} 
+                                    className="h-full object-contain" 
+                                    style={{ filter: theme === 'dark' ? 'brightness(0) invert(1)' : 'brightness(0)' }}
+                                    alt="firma tecnico" 
+                                />
                             ) : (
                                 <span className="text-[10px] text-slate-500 italic">Sin firma</span>
                             )}
@@ -320,9 +360,14 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
                     </div>
                     <div className="bg-secondary p-5 rounded-2xl border border-color shadow-sm space-y-3">
                         <p className="text-[9px] uppercase font-bold text-text-muted tracking-widest text-center">Cliente</p>
-                        <div className="h-24 bg-slate-200 rounded-xl flex items-center justify-center p-2">
+                        <div className="h-24 bg-tertiary rounded-xl flex items-center justify-center p-2 border border-color/40">
                             {act.signatures.client ? (
-                                <img src={act.signatures.client} className="h-full object-contain" alt="firma cliente" />
+                                <img 
+                                    src={act.signatures.client} 
+                                    className="h-full object-contain" 
+                                    style={{ filter: theme === 'dark' ? 'brightness(0) invert(1)' : 'brightness(0)' }}
+                                    alt="firma cliente" 
+                                />
                             ) : (
                                 <span className="text-[10px] text-slate-500 italic">Sin firma</span>
                             )}
@@ -353,6 +398,93 @@ const MaintenancePreview = ({ act, onBack, theme }) => {
                     </button>
                 </div>
             </div>
+
+            {/* Lightbox Modal for Large Image View */}
+            {activePhoto && createPortal(
+                <div 
+                    className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-in fade-in duration-300"
+                    onClick={() => {
+                        setActivePhoto(null);
+                        setZoomScale(1);
+                    }}
+                >
+                    {/* Top Premium Toolbar */}
+                    <div 
+                        className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-3 bg-white/5 border border-white/10 rounded-full backdrop-blur-md shadow-2xl animate-in slide-in-from-top-4 duration-300"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Zoom Out Button */}
+                        <button
+                            onClick={() => setZoomScale(prev => Math.max(0.5, prev - 0.25))}
+                            className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all active:scale-95 cursor-pointer"
+                            title="Reducir Zoom"
+                        >
+                            <ZoomOut size={18} />
+                        </button>
+                        
+                        {/* Zoom Indicator */}
+                        <span className="text-[12px] font-bold text-white/90 font-mono w-12 text-center select-none">
+                            {Math.round(zoomScale * 100)}%
+                        </span>
+                        
+                        {/* Zoom In Button */}
+                        <button
+                            onClick={() => setZoomScale(prev => Math.min(3, prev + 0.25))}
+                            className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all active:scale-95 cursor-pointer"
+                            title="Aumentar Zoom"
+                        >
+                            <ZoomIn size={18} />
+                        </button>
+
+                        {/* Reset Zoom Button */}
+                        <button
+                            onClick={() => setZoomScale(1)}
+                            className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all active:scale-95 border-r border-white/10 pr-4 mr-2 cursor-pointer"
+                            title="Restablecer Vista"
+                        >
+                            <Maximize size={18} />
+                        </button>
+
+                        {/* Download Button */}
+                        <button
+                            onClick={handleDownloadPhoto}
+                            className="p-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15 rounded-full transition-all active:scale-95 mr-2 cursor-pointer"
+                            title="Descargar Imagen"
+                        >
+                            <Download size={18} />
+                        </button>
+
+                        {/* Close Button */}
+                        <button
+                            onClick={() => {
+                                setActivePhoto(null);
+                                setZoomScale(1);
+                            }}
+                            className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-full transition-all active:scale-95 cursor-pointer"
+                            title="Cerrar"
+                        >
+                            <X size={18} />
+                        </button>
+                    </div>
+
+                    {/* Image Container with Scroll for Zoomed Image */}
+                    <div 
+                        className="w-full h-full max-w-5xl max-h-[75vh] mt-16 flex items-center justify-center overflow-auto no-scrollbar"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <img 
+                            src={activePhoto} 
+                            alt="Evidencia Ampliada" 
+                            className="object-contain rounded-2xl shadow-2xl transition-transform duration-200 ease-out select-none max-w-full max-h-full"
+                            style={{ 
+                                transform: `scale(${zoomScale})`,
+                                transformOrigin: 'center center'
+                            }}
+                        />
+                    </div>
+                </div>,
+                document.body
+            )}
             <br />
         </div>
     );

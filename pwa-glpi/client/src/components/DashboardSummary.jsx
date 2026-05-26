@@ -58,7 +58,6 @@ const DashboardSummary = ({ onNavigate }) => {
             value: stats.actsToday,
             icon: ClipboardList,
             color: "text-primary-500",
-            borderColor: "border-l-primary-500",
             description: "Actas generadas hoy"
         },
         {
@@ -66,7 +65,6 @@ const DashboardSummary = ({ onNavigate }) => {
             value: stats.tasksToday,
             icon: CalendarIcon,
             color: "text-[#f97316]",
-            borderColor: "border-l-[#f97316]",
             description: "Programadas en calendario"
         },
         {
@@ -74,7 +72,6 @@ const DashboardSummary = ({ onNavigate }) => {
             value: stats.pendingSync,
             icon: RefreshCw,
             color: "text-primary-500",
-            borderColor: "border-l-emerald-500",
             description: "Esperando conexión"
         },
         {
@@ -82,7 +79,6 @@ const DashboardSummary = ({ onNavigate }) => {
             value: stats.tasksNext,
             icon: CheckCircle2,
             color: "text-[#22c55e]",
-            borderColor: "border-l-[#22c55e]",
             description: "Siguientes días"
         }
     ];
@@ -123,10 +119,7 @@ const DashboardSummary = ({ onNavigate }) => {
                 {cards.map((card, i) => (
                     <div
                         key={i}
-                        className={cn(
-                            "bg-secondary rounded-[12px] p-[20px] shadow-sm border-l-4 relative overflow-hidden group hover:shadow-md transition-all border-color",
-                            card.borderColor
-                        )}
+                        className="bg-secondary rounded-[12px] p-[20px] shadow-sm border border-color relative overflow-hidden group hover:shadow-md transition-all"
                     >
                         <div className="flex flex-col relative z-10">
                             <div className="flex items-center gap-2 mb-3">
@@ -154,7 +147,7 @@ const DashboardSummary = ({ onNavigate }) => {
                 <div className="absolute top-0 right-0 w-[150px] md:w-[300px] h-full bg-blue-600 skew-x-[-20deg] translate-x-10 opacity-50 md:opacity-100" />
 
                 <div className="w-12 h-12 md:w-[56px] md:h-[56px] bg-secondary border border-white/20 rounded-2xl flex items-center justify-center shrink-0 shadow-lg relative z-10">
-                    <TrendingUp size={24} className="text-white md:w-[30px] md:h-[30px]" />
+                    <TrendingUp size={24} className="text-blue-600 dark:text-white md:w-[30px] md:h-[30px]" />
                 </div>
 
                 <div className="flex-1 relative z-10">

@@ -30,11 +30,11 @@ function StatusBadge({ status }) {
     );
 }
 
-function MetricCard({ title, value, icon: Icon, accentClass }) {
+function MetricCard({ title, value, icon: Icon, className }) {
     return (
         <div className={cn(
-            "bg-secondary rounded-[12px] p-[16px_20px] shadow-sm border border-color border-l-4 flex items-center justify-between",
-            accentClass
+            "bg-secondary rounded-[12px] p-[16px_20px] shadow-sm border border-color flex items-center justify-between",
+            className
         )}>
             <div>
                 <p className="text-[11px] font-[600] text-text-muted uppercase tracking-[1px] mb-1">{title}</p>
@@ -175,12 +175,12 @@ export default function QuotationList({ onNew, onSelect }) {
 
             {/* Metrics Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <MetricCard title="Pendientes" value={quotations.filter(q => q.status === 'PENDIENTE').length} icon={Clock} accentClass="border-l-[#f59e0b]" />
-                <MetricCard title="En Revisión" value={quotations.filter(q => q.status === 'EN_REVISION').length} icon={Eye} accentClass="border-l-[#0695c4]" />
-                <MetricCard title="Aprobadas" value={quotations.filter(q => q.status === 'APROBADA').length} icon={CheckCircle2} accentClass="border-l-[#22c55e]" />
-                <MetricCard title="Compradas" value={quotations.filter(q => q.status === 'COMPRADA').length} icon={ShoppingCart} accentClass="border-l-[#8b5cf6]" />
-                <MetricCard title="Rechazadas" value={quotations.filter(q => q.status === 'RECHAZADA').length} icon={AlertCircle} accentClass="border-l-[#ef4444]" />
-                <MetricCard title="Canceladas" value={quotations.filter(q => q.status === 'CANCELADA').length} icon={XCircle} accentClass="border-l-[#94a3b8] opacity-80" />
+                <MetricCard title="Pendientes" value={quotations.filter(q => q.status === 'PENDIENTE').length} icon={Clock} />
+                <MetricCard title="En Revisión" value={quotations.filter(q => q.status === 'EN_REVISION').length} icon={Eye} />
+                <MetricCard title="Aprobadas" value={quotations.filter(q => q.status === 'APROBADA').length} icon={CheckCircle2} />
+                <MetricCard title="Compradas" value={quotations.filter(q => q.status === 'COMPRADA').length} icon={ShoppingCart} />
+                <MetricCard title="Rechazadas" value={quotations.filter(q => q.status === 'RECHAZADA').length} icon={AlertCircle} />
+                <MetricCard title="Canceladas" value={quotations.filter(q => q.status === 'CANCELADA').length} icon={XCircle} className="opacity-80" />
             </div>
 
             {/* List Container */}

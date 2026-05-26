@@ -17,6 +17,7 @@ import {
     Check
 } from 'lucide-react';
 import { cn } from '../utils/cn';
+import { toast } from './Toast';
 
 const SyncManager = ({ onBack }) => {
     const [isSyncing, setIsSyncing] = useState(false);
@@ -24,7 +25,7 @@ const SyncManager = ({ onBack }) => {
 
     // Fetch pending data
     const pendingActs = useLiveQuery(() => db.acts.filter(a => a.status === 'PENDIENTE_SINCRONIZACION').toArray()) || [];
-    const pendingTasks = useLiveQuery(() => db.tasks.filter(t => t.status === 'PENDIENTE_SINCRONIZACION' || !t.sincronizado).toArray()) || []; // Mocking task sync property
+    const pendingTasks = useLiveQuery(() => db.tasks.filter(t => t.sincronizado === false || !t._id).toArray()) || [];
 
     // Fetch logs
     const syncLogs = useLiveQuery(() => db.sync_logs.reverse().limit(10).toArray()) || [];
@@ -43,8 +44,36 @@ const SyncManager = ({ onBack }) => {
     const handleForceSync = async () => {
         if (!isOnline) return;
         setIsSyncing(true);
-        // Simulate sync logic
-        setTimeout(() => setIsSyncing(false), 2000);
+        try {
+            const { default: SyncService } = await import('../services/SyncService');
+            // Ejecutar sincronizaciones reales
+            await SyncService.syncPendingActs();
+            await SyncService.syncPendingTasks();
+            await SyncService.pullRemoteChanges();
+            
+            // Registrar log de éxito localmente en la base de datos
+            await db.sync_logs.add({
+                act_id: 0,
+                timestamp: new Date().toISOString(),
+                status: 'SUCCESS',
+                message: 'Sincronización forzada completada',
+                details: 'Iniciada manualmente por el especialista'
+            });
+            toast.success('¡Sincronización manual completada con éxito!');
+        } catch (error) {
+            console.error('Error durante sincronización forzada:', error);
+            // Registrar log de error si algo falla
+            await db.sync_logs.add({
+                act_id: 0,
+                timestamp: new Date().toISOString(),
+                status: 'ERROR',
+                message: 'Error en sincronización forzada',
+                details: error.message || 'Error de red'
+            });
+            toast.error('Ocurrió un error al forzar la sincronización');
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
     const totalPending = pendingActs.length + pendingTasks.length;

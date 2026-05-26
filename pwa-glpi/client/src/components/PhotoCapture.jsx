@@ -1,13 +1,28 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Camera, X, ImageIcon } from 'lucide-react';
 import { cn } from '../utils/cn';
 
-const PhotoCapture = ({ onPhotosUpdate }) => {
-    const [photos, setPhotos] = useState([]);
+const PhotoCapture = ({ onPhotosUpdate, initialPhotos = [] }) => {
+    const [photos, setPhotos] = useState(initialPhotos);
 
-    const handleCapture = (e) => {
-        const file = e.target.files[0];
-        if (file) {
+    useEffect(() => {
+        if (initialPhotos && initialPhotos.length > 0) {
+            setPhotos(initialPhotos);
+        }
+    }, [initialPhotos]);
+
+    const handleFiles = (fileList) => {
+        if (!fileList || fileList.length === 0) return;
+
+        const remainingSlots = 4 - photos.length;
+        const filesToProcess = Array.from(fileList).slice(0, remainingSlots);
+
+        if (filesToProcess.length === 0) return;
+
+        let processedPhotos = [];
+        let loadedCount = 0;
+
+        filesToProcess.forEach((file) => {
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = (event) => {
@@ -31,12 +46,33 @@ const PhotoCapture = ({ onPhotosUpdate }) => {
                     ctx.drawImage(img, 0, 0, width, height);
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
 
-                    const newPhotos = [...photos, dataUrl];
-                    setPhotos(newPhotos);
-                    onPhotosUpdate(newPhotos);
+                    processedPhotos.push(dataUrl);
+                    loadedCount++;
+
+                    if (loadedCount === filesToProcess.length) {
+                        const newPhotos = [...photos, ...processedPhotos].slice(0, 4);
+                        setPhotos(newPhotos);
+                        onPhotosUpdate(newPhotos);
+                    }
+                };
+                img.onerror = () => {
+                    loadedCount++;
+                    if (loadedCount === filesToProcess.length) {
+                        const newPhotos = [...photos, ...processedPhotos].slice(0, 4);
+                        setPhotos(newPhotos);
+                        onPhotosUpdate(newPhotos);
+                    }
                 };
             };
-        }
+            reader.onerror = () => {
+                loadedCount++;
+                if (loadedCount === filesToProcess.length) {
+                    const newPhotos = [...photos, ...processedPhotos].slice(0, 4);
+                    setPhotos(newPhotos);
+                    onPhotosUpdate(newPhotos);
+                }
+            };
+        });
     };
 
     const removePhoto = (index) => {
@@ -48,36 +84,64 @@ const PhotoCapture = ({ onPhotosUpdate }) => {
     return (
         <div className="flex flex-col w-full">
             <label className="text-[12px] font-[600] text-text-muted block mb-3 uppercase tracking-wide">
-                Evidencias Fotográficas
+                Evidencias Fotográficas (Máx. 4 fotos)
             </label>
 
-            <div className="grid grid-cols-4 gap-3 w-full">
-                {photos.map((photo, index) => (
-                    <div key={index} className="relative aspect-square rounded-[12px] overflow-hidden border border-color shadow-sm group">
-                        <img src={photo} alt={`Evidence ${index}`} className="w-full h-full object-cover" />
-                        <button
-                            onClick={() => removePhoto(index)}
-                            className="absolute top-1.5 right-1.5 bg-red-500 text-white rounded-md p-1 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-600 shadow-md"
-                        >
-                            <X size={12} strokeWidth={3} />
-                        </button>
-                    </div>
-                ))}
+            {/* Thumbnail grid */}
+            {photos.length > 0 && (
+                <div className="grid grid-cols-4 gap-3 w-full mb-4">
+                    {photos.map((photo, index) => (
+                        <div key={index} className="relative aspect-square rounded-[12px] overflow-hidden border border-color shadow-sm group">
+                            <img src={photo} alt={`Evidence ${index}`} className="w-full h-full object-cover" />
+                            <button
+                                onClick={() => removePhoto(index)}
+                                className="absolute top-1.5 right-1.5 bg-red-500 text-white rounded-md p-1 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-600 shadow-md"
+                            >
+                                <X size={12} strokeWidth={3} />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
 
-                {photos.length < 4 && (
-                    <label className="flex flex-col items-center justify-center aspect-square rounded-[12px] border-2 border-dashed border-color bg-tertiary cursor-pointer hover:border-primary-500 hover:bg-primary-500/10 transition-all group">
-                        <Camera className="text-text-muted group-hover:text-primary-500 transition-colors" size={22} />
-                        <span className="text-[10px] text-text-muted font-[700] tracking-widest uppercase group-hover:text-primary-500 transition-colors">Capturar</span>
+            {/* Upload action buttons */}
+            {photos.length < 4 ? (
+                <div className="flex flex-col sm:flex-row gap-3 w-full">
+                    {/* Camera Capture Button */}
+                    <label className="flex-1 flex items-center justify-center gap-2 h-[48px] rounded-[12px] border-2 border-dashed border-color bg-tertiary cursor-pointer hover:border-primary-500 hover:bg-primary-500/10 transition-all group px-4">
+                        <Camera className="text-text-muted group-hover:text-primary-500 transition-colors" size={20} />
+                        <span className="text-[11px] text-text-muted font-[700] tracking-wider uppercase group-hover:text-primary-500 transition-colors">
+                            Tomar Foto
+                        </span>
                         <input
                             type="file"
                             accept="image/*"
                             capture="environment"
                             className="hidden"
-                            onChange={handleCapture}
+                            onChange={(e) => handleFiles(e.target.files)}
                         />
                     </label>
-                )}
-            </div>
+
+                    {/* Device File Selection Button */}
+                    <label className="flex-1 flex items-center justify-center gap-2 h-[48px] rounded-[12px] border-2 border-dashed border-color bg-tertiary cursor-pointer hover:border-primary-500 hover:bg-primary-500/10 transition-all group px-4">
+                        <ImageIcon className="text-text-muted group-hover:text-primary-500 transition-colors" size={20} />
+                        <span className="text-[11px] text-text-muted font-[700] tracking-wider uppercase group-hover:text-primary-500 transition-colors">
+                            Seleccionar del Dispositivo
+                        </span>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={(e) => handleFiles(e.target.files)}
+                        />
+                    </label>
+                </div>
+            ) : (
+                <div className="text-center py-2 px-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[11px] font-bold rounded-lg uppercase tracking-wider">
+                    Límite máximo de fotos alcanzado (4/4)
+                </div>
+            )}
         </div>
     );
 };

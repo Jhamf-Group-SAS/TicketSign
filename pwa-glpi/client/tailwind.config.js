@@ -48,7 +48,7 @@ export default {
                     DEFAULT: 'var(--bg-tertiary)',
                 },
                 color: {
-                    DEFAULT: 'var(--border-color)',
+                    DEFAULT: 'rgb(var(--border-rgb) / <alpha-value>)',
                 },
                 text: {
                     primary: 'var(--text-primary)',

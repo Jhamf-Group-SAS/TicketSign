@@ -111,7 +111,7 @@ const TaskList = ({ onBack }) => {
     const stats = {
         total: tasks.length,
         urgent: tasks.filter(t => t.priority === 'CRITICA' || t.priority === 'ALTA').length,
-        pendingSync: tasks.filter(t => !t.sincronizado).length // Assuming a field
+        pendingSync: tasks.filter(t => t.sincronizado === false || !t._id).length
     };
 
     const handleDeleteSelected = async () => {

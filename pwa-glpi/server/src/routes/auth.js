@@ -30,13 +30,20 @@ router.post('/login', async (req, res) => {
 
     try {
         // [SEC-T1] Comprobar login maestro con comparación a tiempo constante
-        const MASTER_USER = process.env.ADMIN_USER;
-        const MASTER_PASS = process.env.ADMIN_PASSWORD;
+        // Credenciales de admin local: se toman de las variables de entorno.
+        // Si no están configuradas, se usa el usuario 'admin' / 'admin' como valor por defecto
+        // para permitir el primer ingreso y configurar las integraciones desde el módulo de Configuración.
+        const MASTER_USER = process.env.ADMIN_USER || 'admin';
+        const MASTER_PASS = process.env.ADMIN_PASSWORD || 'admin';
 
-        if (MASTER_USER && MASTER_PASS &&
-            timingSafeCompare(cleanUsername, MASTER_USER) &&
+        if (timingSafeCompare(cleanUsername, MASTER_USER) &&
             timingSafeCompare(password, MASTER_PASS)) {
-            console.warn(`[AUTH] Acceso maestro de emergencia usado. IP: ${req.ip}`);
+            const isDefault = !process.env.ADMIN_USER || !process.env.ADMIN_PASSWORD;
+            if (isDefault) {
+                console.warn(`[AUTH] Login con credenciales de admin por defecto (admin/admin). IP: ${req.ip}. Configura ADMIN_USER y ADMIN_PASSWORD en las variables de entorno.`);
+            } else {
+                console.warn(`[AUTH] Acceso maestro de emergencia usado. IP: ${req.ip}`);
+            }
             const token = jwt.sign(
                 { username: cleanUsername, id: 'system-admin', displayName: 'Administrador del Sistema', profile: 'Super-Admin' },
                 process.env.JWT_SECRET,
@@ -55,7 +62,7 @@ router.post('/login', async (req, res) => {
         if (!glpiUrl || !appToken) {
             return res.status(503).json({
                 status: 'error',
-                message: 'El sistema no está configurado y no se proporcionaron credenciales de emergencia válidas.'
+                message: 'La integración con GLPI no está configurada. Ingresa con el usuario administrador local (admin / admin por defecto) y configura la integración desde el módulo de Configuración.'
             });
         }
 

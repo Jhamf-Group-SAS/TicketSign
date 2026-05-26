@@ -118,11 +118,11 @@ export const SyncService = {
                             const localMatch = localMap.get(remoteTask._id);
                             if (localMatch) {
                                 // ACTUALIZAR: Mantener el ID local (Dexie PK)
-                                return { ...remoteTask, id: localMatch.id };
+                                return { ...remoteTask, id: localMatch.id, sincronizado: true };
                             } else {
                                 // INSERTAR: Asegurar que id sea undefined para autoincrement
                                 const { id, ...rest } = remoteTask;
-                                return { ...rest, id: undefined };
+                                return { ...rest, id: undefined, sincronizado: true };
                             }
                         });
 
@@ -215,7 +215,7 @@ export const SyncService = {
                             (!t._id && t.createdAt === remote.createdAt && t.title === remote.title)
                         );
                         if (localMatch) {
-                            updates.push({ ...remote, id: localMatch.id });
+                            updates.push({ ...remote, id: localMatch.id, sincronizado: true });
                         }
                     }
                 }

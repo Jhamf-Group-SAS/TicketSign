@@ -23,10 +23,12 @@ db.version(13).stores({
 export const saveDraftAct = async (actData) => {
     const timestamp = new Date().toISOString();
     if (actData.id) {
-        return await db.acts.update(actData.id, {
+        await db.acts.update(actData.id, {
             ...actData,
+            status: 'BORRADOR',
             updatedAt: timestamp
         });
+        return actData.id;
     }
     return await db.acts.add({
         ...actData,

@@ -7,9 +7,11 @@ node_modules/
 .env.local
 .env.production
 .env.staging
+.env.bak
 **/.env
 **/.env.local
 **/.env.production
+**/.env.bak
 # NOTA: .env.example SÍ se incluye (es la plantilla pública sin valores reales)
 
 # ─── Logs ──────────────────────────────────────────────────────────────────────
@@ -17,23 +19,41 @@ node_modules/
 *.out
 logs/
 **/logs/
+
+# ─── Build artifacts ───────────────────────────────────────────────────────────
+dist/
+**/dist/
+dev-dist/
+**/dev-dist/
+client/build/
+build_*.txt
 build_*.log
 
-# ─── Uploads, PDFs y archivos generados (datos sensibles de clientes) ──────────
+# ─── Uploads, PDFs generados y archivos temporales (datos sensibles de clientes) ─
 server/uploads/
 server/temp/
 
-# ─── Archivos de diagnóstico / scripts de prueba (datos sensibles) ─────────────
+# ─── Archivos de diagnóstico / debugging / scripts temporales ──────────────────
+server/*.log
+server/*.json
+server/tmp_*.js
+server/test_*.js
+server/debug_*.log
+server/session_*.log
+server/session_*.json
+server/diag_*.json
+server/*_dump.json
+server/*_out.log
+server/*_out*.log
+!server/package.json
+!server/package-lock.json
+
+# ─── Archivos de diagnóstico raíz ──────────────────────────────────────────────
 *.json
 !package.json
 !package-lock.json
 !**/package.json
 !**/package-lock.json
-
-# ─── Build artifacts ───────────────────────────────────────────────────────────
-dist/
-**/dist/
-client/build/
 
 # ─── Sistema operativo / IDE ───────────────────────────────────────────────────
 .DS_Store
@@ -41,3 +61,7 @@ Thumbs.db
 .vscode/settings.json
 *.swp
 *.suo
+*.tmp
+
+# ─── Caché de Vite ─────────────────────────────────────────────────────────────
+client/node_modules/.vite/
