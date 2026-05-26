@@ -91,9 +91,12 @@ router.post('/', authenticateToken, authorizeRoles('Super-Admin', 'Admin-Mesa'),
         }
         res.json({ message: 'Configuración actualizada correctamente', results });
     } catch (error) {
-        console.error('[Config] Error en POST /:', error.message);
-        // [M-05] No exponer detalles internos al cliente
-        res.status(500).json({ message: 'Error al guardar la configuración' });
+        console.error('❌ [Config] Error en POST / (Posible falta de ENCRYPTION_KEY en producción):', error);
+        // [M-05] No exponer detalles internos al cliente en producción
+        res.status(500).json({ 
+            message: 'Error al guardar la configuración',
+            error: error.message 
+        });
     }
 });
 

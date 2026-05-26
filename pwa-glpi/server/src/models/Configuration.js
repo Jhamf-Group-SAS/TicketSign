@@ -31,7 +31,7 @@ const ConfigurationSchema = new mongoose.Schema({
             message: (props) => `'${props.value}' no es una clave de configuración permitida`
         }
     },
-    value: { type: mongoose.Schema.Types.Mixed, required: true },
+    value: { type: mongoose.Schema.Types.Mixed, required: false },
     updatedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
 
