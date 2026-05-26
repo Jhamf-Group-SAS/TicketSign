@@ -1,3 +1,4 @@
+# Trigger build to bypass GitHub Actions network download glitch
 name: Docker Professional CI/CD
 
 on:
