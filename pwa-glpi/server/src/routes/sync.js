@@ -14,8 +14,8 @@ router.use(authenticateToken);
 // Nuevo endpoint para obtener historial
 router.get('/maintenance', async (req, res) => {
     try {
-        // Aumentado a 200 para evitar truncar listas grandes de técnicos activos
-        const limit = parseInt(req.query.limit) || 200;
+        // Aumentado a 5000 para evitar truncar listas grandes de actas y técnicos activos
+        const limit = parseInt(req.query.limit) || 5000;
         let acts = [];
         try {
             acts = await Act.find().sort({ createdAt: -1 }).limit(limit);

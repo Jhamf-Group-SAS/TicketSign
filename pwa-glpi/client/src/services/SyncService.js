@@ -79,7 +79,7 @@ export const SyncService = {
         try {
             // --- Sincronizar Actas ---
             try {
-                const responseActs = await fetch(`${API_BASE_URL}/sync/maintenance?limit=50`, {
+                const responseActs = await fetch(`${API_BASE_URL}/sync/maintenance?limit=5000`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (responseActs.ok) {
