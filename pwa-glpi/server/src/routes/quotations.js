@@ -8,6 +8,7 @@ const { Parser } = pkg;
 import Quotation from '../models/Quotation.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 import { generateQuotationPDF } from '../services/pdf.js';
+import glpi from '../services/glpi.js';
 
 const router = express.Router();
 
@@ -179,6 +180,7 @@ router.post('/', upload.fields([{ name: 'file', maxCount: 1 }, { name: 'images',
         } = req.body;
 
         if (!title) return res.status(400).json({ message: 'El título es obligatorio' });
+        if (!glpi_ticket_id) return res.status(400).json({ message: 'El Ticket de Origen es obligatorio' });
 
         const quotationData = {
             title,
@@ -224,6 +226,38 @@ router.post('/', upload.fields([{ name: 'file', maxCount: 1 }, { name: 'images',
         await quotation.save();
 
         console.log(`[Quotations] Nueva cotización creada: ${quotation._id} por ${req.user.username}`);
+
+        // --- Generar PDF de la cotización y subirlo a GLPI ---
+        if (glpi_ticket_id) {
+            try {
+                console.log(`[Quotations] Generando PDF y vinculando al ticket GLPI #${glpi_ticket_id}`);
+                const pdfBuffer = await generateQuotationPDF(quotation);
+                const safeTitle = (title || 'Cotizacion').substring(0, 30).replace(/[^a-zA-Z0-9_-]/g, '_');
+                const fileName = `Cotizacion_${quotation.quotation_number || quotation._id}_${safeTitle}.pdf`;
+                const tempPath = path.join(process.cwd(), 'temp', fileName);
+
+                // Asegurar directorio temporal
+                await fs.mkdir(path.dirname(tempPath), { recursive: true });
+                await fs.writeFile(tempPath, pdfBuffer);
+
+                // Subir a GLPI
+                const docResult = await glpi.uploadDocument(glpi_ticket_id, tempPath, fileName);
+
+                // Agregar seguimiento en GLPI
+                await glpi.addFollowup(
+                    glpi_ticket_id,
+                    `Se ha registrado una nueva Solicitud de Cotización (No. ${quotation.quotation_number || quotation._id}). Artículo/Concepto: ${title}. Documento ID: ${docResult.id}`
+                );
+
+                // Limpiar temporal
+                await fs.unlink(tempPath);
+                console.log(`[Quotations] PDF de cotización adjuntado correctamente al ticket #${glpi_ticket_id}`);
+            } catch (glpiErr) {
+                console.error(`[Quotations] Error subiendo PDF a GLPI para el ticket #${glpi_ticket_id}:`, glpiErr.message);
+                // No bloqueamos la respuesta al cliente si falla la integración GLPI, para que no se pierda la cotización en local
+            }
+        }
+
         res.status(201).json(quotation);
     } catch (error) {
         // Cleanup all files if error

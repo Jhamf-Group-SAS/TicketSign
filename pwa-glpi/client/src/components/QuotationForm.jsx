@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import CustomSelect from './CustomSelect';
+import SyncService from '../services/SyncService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
@@ -69,6 +70,8 @@ export default function QuotationForm({ onBack, onCreated }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [technicians, setTechnicians] = useState([]);
+    const [entities, setEntities] = useState([]);
+    const [tickets, setTickets] = useState([]);
     const fileInputRef = useRef(null);
     const imagesInputRef = useRef(null);
 
@@ -87,9 +90,22 @@ export default function QuotationForm({ onBack, onCreated }) {
         }
     }, []);
 
+    const loadCachedData = useCallback(async () => {
+        try {
+            const cachedEnt = await SyncService.getCachedEntities();
+            if (cachedEnt?.length) setEntities(cachedEnt);
+
+            const cachedTick = await SyncService.getCachedTickets();
+            if (cachedTick?.length) setTickets(cachedTick);
+        } catch (e) {
+            console.error('Error loading cached entities/tickets:', e);
+        }
+    }, []);
+
     useEffect(() => {
         fetchTechnicians();
-    }, [fetchTechnicians]);
+        loadCachedData();
+    }, [fetchTechnicians, loadCachedData]);
 
     const set = (field) => (e) => {
         const val = e?.target ? e.target.value : e;
@@ -108,7 +124,9 @@ export default function QuotationForm({ onBack, onCreated }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!form.title.trim()) { setError('Indique el artículo o servicio requerido'); return; }
+        if (!form.company) { setError('Debe seleccionar la Empresa / Entidad'); return; }
         if (!form.assigned_to) { setError('Debe asignar un responsable para esta cotización'); return; }
+        if (!form.glpi_ticket_id) { setError('El Ticket de Origen es obligatorio para poder vincular la cotización'); return; }
         setLoading(true);
         setError('');
 
@@ -162,7 +180,16 @@ export default function QuotationForm({ onBack, onCreated }) {
 
                     <div className="space-y-5">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <InputGroup label="Empresa / Entidad" icon={Building} value={form.company} onChange={set('company')} placeholder="Ej: Jhamf Group" required />
+                            <CustomSelect
+                                label="Empresa / Entidad"
+                                placeholder="Seleccionar Entidad..."
+                                value={entities.find(e => e.entityName === form.company)?.id || form.company}
+                                onChange={(id) => setForm(f => ({ ...f, company: entities.find(e => e.id === id)?.entityName || id }))}
+                                options={entities}
+                                withSearch={true}
+                                icon={Building}
+                                required
+                            />
                             <InputGroup label="Concepto / Artículo" icon={Tag} value={form.title} onChange={set('title')} placeholder="Ej: Laptop Dell XPS" required />
                         </div>
 
@@ -223,7 +250,16 @@ export default function QuotationForm({ onBack, onCreated }) {
                             withSearch={true}
                             required
                         />
-                        <InputGroup label="Ticket de Origen (Opcional)" icon={Hash} value={form.glpi_ticket_id} onChange={set('glpi_ticket_id')} placeholder="Nº Ticket GLPI" />
+                        <CustomSelect
+                            label="Ticket de Origen"
+                            placeholder="Buscar o ingresar número de ticket..."
+                            value={form.glpi_ticket_id}
+                            onChange={(id) => setForm(f => ({ ...f, glpi_ticket_id: id }))}
+                            options={tickets}
+                            withSearch={true}
+                            icon={Hash}
+                            required
+                        />
                     </div>
                 </section>
 
