@@ -1,6 +1,7 @@
 import axios from 'axios';
 import FormData from 'form-data';
 import fs from 'fs';
+import path from 'path';
 import configService from './configService.js';
 
 class GLPIConnector {
@@ -173,6 +174,20 @@ class GLPIConnector {
     }
 
     async uploadDocument(itemId, filePath, fileName, itemtype = 'Ticket') {
+        // Validar que la ruta del archivo se mantenga dentro de directorios controlados
+        const resolvedPath = path.resolve(filePath);
+        const tempRoot = path.resolve(process.cwd(), 'temp');
+        const uploadsRoot = path.resolve(process.cwd(), 'uploads');
+
+        if (
+            !resolvedPath.startsWith(tempRoot + path.sep) &&
+            resolvedPath !== tempRoot &&
+            !resolvedPath.startsWith(uploadsRoot + path.sep) &&
+            resolvedPath !== uploadsRoot
+        ) {
+            throw new Error('Ruta de archivo no permitida');
+        }
+
         if (!this.sessionToken) await this.initSession();
         const { apiUrl, appToken } = await this.getConfig();
 
