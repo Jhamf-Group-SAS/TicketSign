@@ -1030,24 +1030,30 @@ class GLPIConnector {
         if (!this.sessionToken) await this.initSession();
         const { apiUrl, appToken } = await this.getConfig();
 
+        // Validar y normalizar el ID del ticket para evitar manipulación de la ruta
+        const safeTicketId = Number(ticketId);
+        if (!Number.isInteger(safeTicketId) || safeTicketId <= 0) {
+            throw new Error('Invalid ticket ID');
+        }
+
         const itemtype = isGroup ? 'Ticket_Group' : 'Ticket_User';
         const idField = isGroup ? 'groups_id' : 'users_id';
 
         try {
             // Primero buscamos si ya existe un actor de ese tipo para no duplicar
-            const actorsRes = await this.api.get(`${apiUrl}/Ticket/${ticketId}/${itemtype}`);
+            const actorsRes = await this.api.get(`${apiUrl}/Ticket/${safeTicketId}/${itemtype}`);
             const existingActors = Array.isArray(actorsRes.data) ? actorsRes.data : [];
             const existing = existingActors.find(a => a.type == type);
 
             if (existing) {
                 // Actualizar existente
-                await this.api.put(`${apiUrl}/Ticket/${ticketId}/${itemtype}/${existing.id}`, {
+                await this.api.put(`${apiUrl}/Ticket/${safeTicketId}/${itemtype}/${existing.id}`, {
                     input: { id: existing.id, [idField]: actorId, type: type }
                 });
             } else {
                 // Crear nuevo
-                await this.api.post(`${apiUrl}/Ticket/${ticketId}/${itemtype}`, {
-                    input: { tickets_id: ticketId, [idField]: actorId, type: type }
+                await this.api.post(`${apiUrl}/Ticket/${safeTicketId}/${itemtype}`, {
+                    input: { tickets_id: safeTicketId, [idField]: actorId, type: type }
                 });
             }
             return { success: true };
